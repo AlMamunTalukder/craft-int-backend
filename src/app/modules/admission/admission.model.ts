@@ -45,8 +45,6 @@ const AdmissionSchema: Schema = new Schema<IAdmission>(
       policeStation: { type: String, required: true },
       district: { type: String, required: true },
     },
-
-    // parmanent Address
     permanentAddress: {
       village: { type: String, required: true },
       postOffice: { type: String, required: true },
