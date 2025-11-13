@@ -58,7 +58,14 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
 };
 
 const getAllStudents = async (query: Record<string, unknown>) => {
-  const studentQuery = new QueryBuilder(Student.find(), query)
+  const studentQuery = new QueryBuilder(
+    Student.find()
+      .populate({
+        path: 'fees',
+        model: 'Fees',
+      }),
+    query
+  )
     .search(studentSearchableFields)
     .filter()
     .sort()
@@ -73,6 +80,8 @@ const getAllStudents = async (query: Record<string, unknown>) => {
     data,
   };
 };
+
+
 
 export const getSingleStudent = async (id: string): Promise<IStudent> => {
   const student = await Student.findById(id)

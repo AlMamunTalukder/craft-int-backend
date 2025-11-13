@@ -82,6 +82,7 @@ const getSingleEnrollment = async (id: string) => {
 };
 
 export const createEnrollment = async (payload: any) => {
+  console.log(payload)
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -199,7 +200,7 @@ export const createEnrollment = async (payload: any) => {
           const userData = {
             name: payload.studentName || 'Unnamed Student',
             email: studentEmail,
-            password: 'student123', // default password
+            password: 'student123',
             role: 'student',
           };
 
@@ -280,7 +281,7 @@ export const createEnrollment = async (payload: any) => {
     const feeDocs: mongoose.Types.ObjectId[] = [];
 
     for (const fee of feeItems) {
-      if (!fee.feeType || !fee.className) continue; // Skip invalid fees
+      if (!fee.feeType || !fee.className) continue;
 
       const normalizedType = (() => {
         const type = (fee.feeType?.toLowerCase() || '').trim();

@@ -13,11 +13,10 @@ export const createFeeSchema = z.object({
   body: z.object({
     enrollment: objectId,
     student: objectId,
-    feeType: z.enum(['admission', 'monthly', 'exam', 'homework', 'other']),
+    feeType: z.string({ required_error: 'Fee type is required' }),
     month: z.string().optional(),
-    amount: z.number().min(0, 'Amount must be >= 0'),
-    paymentMethod: z.enum(['cash', 'bkash', 'bank', 'online']).optional(),
-    // If you want to accept immediate payment during creating:
+    amount: z.number({ required_error: 'Amount is required' }),
+    paymentMethod: z.string().optional(),
     paidAmount: z.number().min(0).optional().default(0),
     transactionId: z.string().optional(),
     receiptNo: z.string().optional(),

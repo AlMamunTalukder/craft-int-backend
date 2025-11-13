@@ -4,10 +4,11 @@ import { Document, Types } from 'mongoose';
 export interface IFees extends Document {
   enrollment: Types.ObjectId;
   student: Types.ObjectId;
-  feeType: 'admission' | 'monthly' | 'exam' | 'homework' | 'other';
+  feeType: string;
   month?: string;
   amount: number;
   paidAmount: number;
+  advance: number;
   dueAmount: number;
   status: 'paid' | 'partial' | 'unpaid';
   paymentMethod?: 'cash' | 'bkash' | 'bank' | 'online';

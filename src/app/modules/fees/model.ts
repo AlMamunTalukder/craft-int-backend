@@ -17,11 +17,11 @@ const feeSchema = new Schema<IFees>(
     },
     feeType: {
       type: String,
-      enum: ['admission', 'monthly', 'exam', 'homework', 'other'],
       required: true,
     },
     month: { type: String },
     amount: { type: Number, required: true },
+    advance: { type: Number },
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number, default: 0 },
     status: {
