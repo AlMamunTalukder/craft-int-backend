@@ -9,8 +9,8 @@ import mongoose from 'mongoose';
 import { User } from '../user/user.model';
 
 const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
-  const {  name } = payload;
-console.log(payload)
+  const { name } = payload;
+  console.log(payload)
   // Check if mobile, name, and email are provided
   if (!name) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Required fields are missing');
@@ -37,7 +37,7 @@ console.log(payload)
     await User.create(
       [
         {
-          email: payload.email || 'student@gmail.com', 
+          email: payload.email || 'student@gmail.com',
           password: 'student123',
           name: name,
           role: 'student',
@@ -58,7 +58,14 @@ console.log(payload)
 };
 
 const getAllStudents = async (query: Record<string, unknown>) => {
-  const studentQuery = new QueryBuilder(Student.find(), query)
+  const studentQuery = new QueryBuilder(
+    Student.find()
+      .populate({
+        path: 'fees',
+        model: 'Fees',
+      }),
+    query
+  )
     .search(studentSearchableFields)
     .filter()
     .sort()
@@ -74,11 +81,16 @@ const getAllStudents = async (query: Record<string, unknown>) => {
   };
 };
 
-const getSingleStudent = async (id: string): Promise<IStudent> => {
+
+
+export const getSingleStudent = async (id: string): Promise<IStudent> => {
   const student = await Student.findById(id)
-    // .populate('classId')
-    // .populate('parentId')
-    // .populate('guardianId');
+    .populate({
+      path: 'fees',
+    })
+    .populate({
+      path: 'className',
+    });
 
   if (!student) {
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');

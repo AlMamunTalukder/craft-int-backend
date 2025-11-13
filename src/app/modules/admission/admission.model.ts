@@ -79,6 +79,7 @@ const AdmissionSchema: Schema = new Schema<IAdmission>(
     // Terms
     termsAccepted: { type: Boolean, required: true },
   },
+  // others information
   {
     timestamps: true,
   },

@@ -1,64 +1,101 @@
-import { Document } from 'mongoose';
-import { Gender, StudentStatus, StudentType } from './student.utils';
+import { Document, Types } from 'mongoose';
+import { Gender, StudentStatus } from './student.utils';
 
-
-export enum Designation {
-  CHAIRMAN = 'Chairman',
-  TEACHER = 'Teacher',
-  COOK = 'Cook',
+export interface IGuardianInfo {
+  guardianName?: string;
+  guardianMobile?: string;
+  relation?: string;
+  address?: string;
 }
+
+export interface IAddress {
+  village?: string;
+  postOffice?: string;
+  postCode?: string;
+  policeStation?: string;
+  district?: string;
+}
+
 export interface IStudent extends Document {
-  studentId: string;
-  smartIdCard: string;
+  _id: Types.ObjectId;
+  studentId?: string;
+  smartIdCard?: string;
   name: string;
-  email: string;
-  birthDate: string;
-  birthRegistrationNo: string;
-  gender: Gender;
-  mobile: string;
-  bloodGroup: string;
-  studentPhoto: string;
+  nameBangla?: string;
+  email?: string;
+  studentDepartment: 'hifz' | 'academic';
+  birthDate?: string;
+  birthRegistrationNo?: string;
+  gender?: Gender;
+  mobile?: string;
+  bloodGroup?: string;
+  studentPhoto?: string;
+  fatherName?: string;
+  fatherMobile?: string;
+  fatherProfession?: string;
+  motherName?: string;
+  motherMobile?: string;
+  motherProfession?: string;
+  sameAsPermanent?: boolean;
 
-  // Family Information
-  fatherName: string;
-  motherName: string;
-  guardianName: string;
-  guardianMobile: string;
-  relation: string;
-  nidFatherMotherGuardian: string;
+  className?: Types.ObjectId[];
+  section?: string[];
+  batch?: string;
+  activeSession?: string[];
+  studentClassRoll?: string;
+  studentType: string;
+  status?: StudentStatus;
+  admissionFee?: number;
+  monthlyFee?: number;
+  sessionFee?: number;
+  residenceFee?: number;
+  transportFee?: number;
+  otherFee?: number;
+  previousDues?: number;
+  guardianInfo?: {
+    name?: string;
+    relation?: string;
+    mobile?: string;
+    address?: string;
+  };
 
-  // Address Information
-  permanentAddress: string;
-  permanentDistrict: string;
-  permanentThana: string;
-  sameAsPermanent: boolean;
-  presentAddress: string;
-  presentDistrict: string;
-  presentThana: string;
+  presentAddress?: {
+    village?: string;
+    postOffice?: string;
+    postCode?: string;
+    policeStation?: string;
+    district?: string;
+  };
 
-  // Academic Information
-  className: [string];
-  studentClassRoll: string;
-  batch: string;
-  section: [string];
-  activeSession: [string];
-  status: StudentStatus;
-  studentType: StudentType;
-  additionalNote: string;
+  permanentAddress?: {
+    village?: string;
+    postOffice?: string;
+    postCode?: string;
+    policeStation?: string;
+    district?: string;
+  };
 
-  // Fee Information
-  admissionFee: number;
-  monthlyFee: number;
-  previousDues: number;
-  sessionFee: number;
-  residenceFee: number;
-  otherFee: number;
-  transportFee: number;
-  boardingFee: number;
-  monthlySalary: number;
+  documents?: {
+    birthCertificate?: boolean;
+    transferCertificate?: boolean;
+    characterCertificate?: boolean;
+    markSheet?: boolean;
+    photographs?: boolean;
+  };
 
-  // Settings
-  sendAdmissionSMS: boolean;
-  studentSerial: string;
-  sendAttendanceSMS: boolean;
+  previousSchool?: {
+    institution?: string;
+    address?: string;
+  };
+  sendAdmissionSMS?: boolean;
+  sendAttendanceSMS?: boolean;
+  studentSerial?: string;
+  additionalNote?: string;
+
+  fees?: Types.ObjectId[];
+  boardingFee?: number;
+  monthlySalary?: number;
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
