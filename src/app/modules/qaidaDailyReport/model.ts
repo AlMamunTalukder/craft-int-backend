@@ -13,6 +13,7 @@ const dayEntrySchema = new Schema({
   qaidaRevision: { type: String, default: "" },
   teacherSignature: { type: String, default: "" },
   comment: { type: String, default: "" },
+  mask: { type: String, default: "" },
 });
 
 const dailyEntriesSchema = new Schema({

@@ -8,17 +8,13 @@ export enum Gender {
 }
 
 export enum StudentStatus {
-  ACTIVE = 'Active',
-  INACTIVE = 'Inactive',
-  GRADUATED = 'Graduated',
+  ACTIVE = 'active',
+  PASSED = 'passed',
+  GRADUATED = 'failed',
+  LEFT = 'left',
 }
 
-export enum StudentType {
-  RESIDENTIAL = 'Residential',
-  DAY = 'Non-residential',
-  Care = 'Day-Care',
-  '' = '',
-}
+
 
 const findLastStudentNo = async () => {
   const lastStudent = await Student.findOne(

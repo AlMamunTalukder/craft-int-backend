@@ -26,7 +26,7 @@ jobs:
             echo "Starting deployment to VPS..."
 
             # Navigate to the project directory
-            cd /var/www/html/craft-international/craft-int-backend || exit
+            cd /var/www/html/craft/school/api || exit
 
             # Ensure Git is available
             if ! command -v git &> /dev/null; then
@@ -53,7 +53,7 @@ jobs:
             # Restart application using PM2
             if command -v pm2 &> /dev/null; then
               echo "Restarting application using PM2..."
-              pm2 restart  craft-int-backend || pm2 start npm --name "craft-int-backend" -- run start
+              pm2 restart  api || pm2 start npm --name "api" -- run start
             else
               echo "PM2 not found. Please install it using 'npm install -g pm2'."
               exit 1

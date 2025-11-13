@@ -10,11 +10,12 @@ export interface IDayEntry {
   qaidaRevision: string;
   teacherSignature: string;
   comment: string;
+  mashq: string,
 }
 
 export interface IQaidaDailyReport {
   studentName: string;
-  teacherName:string;
+  teacherName: string;
   reportDate: Date;
   month: string;
   weeklyTarget: string;

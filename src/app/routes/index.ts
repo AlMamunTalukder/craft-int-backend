@@ -38,6 +38,10 @@ import { QaidaDailyReportRoutes } from '../modules/qaidaDailyReport/route';
 import { sunaniReportRoutes } from '../modules/sunaniReport/route';
 import { sobokiDailyReportRoutes } from '../modules/sobokiDailyReport/route';
 import { amparaDailyReportRoutes } from '../modules/amparaDailyReport/route';
+import { weeklyReportRoutes } from '../modules/weeklyReport/route';
+import { feesRoutes } from '../modules/fees/route';
+import { enrollmentRoutes } from '../modules/enrollment/route';
+import { feeCategoryRoutes } from '../modules/feeCategory/route';
 const router = Router();
 
 const moduleRoutes = [
@@ -185,6 +189,22 @@ const moduleRoutes = [
   {
     path: '/ampara-daily-report',
     route: amparaDailyReportRoutes,
+  },
+  {
+    path: '/weekly-report',
+    route: weeklyReportRoutes,
+  },
+  {
+    path: '/fee-category',
+    route: feeCategoryRoutes,
+  },
+  {
+    path: '/fees',
+    route: feesRoutes,
+  },
+  {
+    path: '/enrollment',
+    route: enrollmentRoutes,
   },
   {
     path: '/meta',
