@@ -52,18 +52,5 @@ export const createStudentValidation = z.object({
     studentClassRoll: z.string().optional(),
     studentType: z.string().optional(),
     status: z.string().optional(),
-
-    admissionFee: z.coerce.number().default(0),
-    monthlyFee: z.coerce.number().default(0),
-    sessionFee: z.coerce.number().default(0),
-    residenceFee: z.coerce.number().default(0),
-    transportFee: z.coerce.number().default(0),
-    otherFee: z.coerce.number().default(0),
-    previousDues: z.coerce.number().default(0),
-
-    sendAdmissionSMS: z.boolean().default(false),
-    sendAttendanceSMS: z.boolean().default(false),
-    studentSerial: z.string().optional(),
-    additionalNote: z.string().optional(),
   }),
 });
