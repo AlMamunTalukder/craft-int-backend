@@ -20,13 +20,13 @@ router.get('/:id', studentControllers.getSingleStudent);
 
 router.delete(
   '/:id',
-  auth('admin', 'super_admin', 'teacher'),
+  // auth('admin', 'super_admin', 'teacher'),
   studentControllers.deleteStudent,
 );
 
 router.patch(
   '/:id',
-  auth('admin', 'super_admin', 'teacher', 'student'),
+  // auth('admin', 'super_admin', 'teacher', 'student'),
 
   studentControllers.updateStudent,
 );

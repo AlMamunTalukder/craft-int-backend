@@ -1,15 +1,17 @@
-// interfaces/IFees.ts
 import { Document, Types } from 'mongoose';
 
+// interface.ts
 export interface IFees extends Document {
-  enrollment: Types.ObjectId;
   student: Types.ObjectId;
-  feeType: string;
-  month?: string;
-  amount: number;
+  enrollment: Types.ObjectId;
+  class: string;
+  month: string; // "March-2025"
+  amount: number; // monthly fee
   paidAmount: number;
-  advance: number;
+  advanceUsed: number; // advance applied to this month
   dueAmount: number;
+  discount?: number; // monthly discount
+  waiver?: number; // monthly waiver
   status: 'paid' | 'partial' | 'unpaid';
   paymentMethod?: 'cash' | 'bkash' | 'bank' | 'online';
   transactionId?: string;

@@ -1,55 +1,28 @@
 import { Schema, model } from 'mongoose';
 import { IFees } from './interface';
 
-const feeSchema = new Schema<IFees>(
+const FeesSchema = new Schema<IFees>(
   {
-    enrollment: {
-      type: Schema.Types.ObjectId,
-      ref: 'Enrollment',
-      required: true,
-      index: true,
-    },
-    student: {
-      type: Schema.Types.ObjectId,
-      ref: 'Student',
-      required: true,
-      index: true,
-    },
-    feeType: {
-      type: String,
-      required: true,
-    },
-    month: { type: String },
+    student: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
+    enrollment: { type: Schema.Types.ObjectId, ref: 'Enrollment', required: true },
+    class: { type: String, required: true },
+    month: { type: String, required: true },
     amount: { type: Number, required: true },
-    advance: { type: Number },
     paidAmount: { type: Number, default: 0 },
-    dueAmount: { type: Number, default: 0 },
-    status: {
-      type: String,
-      enum: ['paid', 'partial', 'unpaid'],
-      default: 'unpaid',
-    },
-    paymentMethod: {
-      type: String,
-      enum: ['cash', 'bkash', 'bank', 'online'],
-      default: 'cash',
-    },
+    advanceUsed: { type: Number, default: 0 },
+    dueAmount: { type: Number, required: true },
+    discount: { type: Number, default: 0 },
+    waiver: { type: Number, default: 0 },
+    status: { type: String, enum: ['paid', 'partial', 'unpaid'], default: 'unpaid' },
+    paymentMethod: { type: String, enum: ['cash', 'bkash', 'bank', 'online'] },
     transactionId: { type: String },
-    receiptNo: { type: String, index: true },
+    receiptNo: { type: String },
     paymentDate: { type: Date },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
-feeSchema.pre('save', function (next) {
-  if (this.amount != null) {
-    const paid = this.paidAmount ?? 0;
-    this.dueAmount = Math.max(0, this.amount - paid);
-    if (paid === 0) this.status = 'unpaid';
-    else if (paid >= this.amount) this.status = 'paid';
-    else this.status = 'partial';
-  }
-  next();
-});
+// Index for faster query
+FeesSchema.index({ student: 1, month: 1 });
 
-export const Fees = model<IFees>('Fees', feeSchema);
+export const Fees = model<IFees>('Fees', FeesSchema);

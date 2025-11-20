@@ -28,6 +28,7 @@ export interface IStudent extends Document {
   birthRegistrationNo?: string;
   gender?: Gender;
   mobile?: string;
+  advanceBalance: number;
   bloodGroup?: string;
   studentPhoto?: string;
   fatherName?: string;
@@ -45,13 +46,6 @@ export interface IStudent extends Document {
   studentClassRoll?: string;
   studentType: string;
   status?: StudentStatus;
-  admissionFee?: number;
-  monthlyFee?: number;
-  sessionFee?: number;
-  residenceFee?: number;
-  transportFee?: number;
-  otherFee?: number;
-  previousDues?: number;
   guardianInfo?: {
     name?: string;
     relation?: string;
@@ -86,16 +80,6 @@ export interface IStudent extends Document {
   previousSchool?: {
     institution?: string;
     address?: string;
-  };
-  sendAdmissionSMS?: boolean;
-  sendAttendanceSMS?: boolean;
-  studentSerial?: string;
-  additionalNote?: string;
-
+  }
   fees?: Types.ObjectId[];
-  boardingFee?: number;
-  monthlySalary?: number;
-
-  createdAt?: Date;
-  updatedAt?: Date;
 }

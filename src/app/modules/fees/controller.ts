@@ -1,18 +1,103 @@
-import httpStatus from 'http-status';
-import sendResponse from '../../../utils/sendResponse';
+// controller.ts
 import { catchAsync } from '../../../utils/catchAsync';
+import sendResponse from '../../../utils/sendResponse';
+import httpStatus from 'http-status';
 import { feesServices } from './service';
 
-const createFees = catchAsync(async (req, res) => {
-  const result = await feesServices.createFees(req.body);
+const createMonthlyFees = catchAsync(async (req, res) => {
+  const { studentId, enrollmentId, studentClass, yearlyFee, startYear } = req.body;
+  const result = await feesServices.generateMonthlyFees(
+    studentId,
+    enrollmentId,
+    studentClass,
+    yearlyFee,
+    startYear
+  );
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: 'Fee record created successfully',
+    message: 'Monthly fees created successfully',
     data: result,
   });
 });
 
+const createBulkMonthlyFees = catchAsync(async (req, res) => {
+  const { feeData } = req.body;
+  const result = await feesServices.generateBulkMonthlyFees(feeData);
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: 'Bulk monthly fees created successfully',
+    data: result,
+  });
+});
+
+const payFee = catchAsync(async (req, res) => {
+  const { feeId, amountPaid, paymentMethod, transactionId, receiptNo } = req.body;
+  const result = await feesServices.payFee(
+    feeId,
+    amountPaid,
+    paymentMethod,
+    transactionId,
+    receiptNo
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Fee payment processed successfully',
+    data: result,
+  });
+});
+
+const payFeeWithAdvance = catchAsync(async (req, res) => {
+  const { feeId, cashPaid, advanceUsed, paymentMethod, transactionId, receiptNo } = req.body;
+  const result = await feesServices.payFeeWithAdvance(
+    feeId,
+    cashPaid,
+    advanceUsed,
+    paymentMethod,
+    transactionId,
+    receiptNo
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Fee payment with advance processed successfully',
+    data: result,
+  });
+});
+
+const getStudentDueFees = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
+  const { year } = req.query;
+  const result = await feesServices.getStudentDueFees(
+    studentId,
+    year ? parseInt(year as string) : undefined
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Student due fees retrieved successfully',
+    data: result,
+  });
+});
+
+const getMonthlyFeeStatus = catchAsync(async (req, res) => {
+  const { studentId, month, year } = req.params;
+  const result = await feesServices.getMonthlyFeeStatus(
+    studentId,
+    month,
+    parseInt(year)
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Monthly fee status retrieved successfully',
+    data: result,
+  });
+});
+
+// আগের কন্ট্রোলারগুলো একই থাকবে
 const getAllFees = catchAsync(async (req, res) => {
   const result = await feesServices.getAllFees(req.query);
   sendResponse(res, {
@@ -23,8 +108,8 @@ const getAllFees = catchAsync(async (req, res) => {
   });
 });
 
-const getSingleFees = catchAsync(async (req, res) => {
-  const result = await feesServices.getSingleFees(req.params.id);
+const getSingleFee = catchAsync(async (req, res) => {
+  const result = await feesServices.getSingleFee(req.params.id);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -33,8 +118,8 @@ const getSingleFees = catchAsync(async (req, res) => {
   });
 });
 
-const updateFees = catchAsync(async (req, res) => {
-  const result = await feesServices.updateFees(req.params.id, req.body);
+const updateFee = catchAsync(async (req, res) => {
+  const result = await feesServices.updateFee(req.params.id, req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -43,8 +128,8 @@ const updateFees = catchAsync(async (req, res) => {
   });
 });
 
-const deleteFees = catchAsync(async (req, res) => {
-  const result = await feesServices.deleteFees(req.params.id);
+const deleteFee = catchAsync(async (req, res) => {
+  const result = await feesServices.deleteFee(req.params.id);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -54,9 +139,14 @@ const deleteFees = catchAsync(async (req, res) => {
 });
 
 export const feesControllers = {
-  createFees,
+  createMonthlyFees,
+  createBulkMonthlyFees,
+  payFee,
+  payFeeWithAdvance,
+  getStudentDueFees,
+  getMonthlyFeeStatus,
   getAllFees,
-  getSingleFees,
-  updateFees,
-  deleteFees,
+  getSingleFee,
+  updateFee,
+  deleteFee,
 };
