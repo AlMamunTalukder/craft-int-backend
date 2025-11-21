@@ -1,6 +1,7 @@
 import { Document, Types } from 'mongoose';
 
 export interface IFees extends Document {
+
   student: Types.ObjectId;
   enrollment: Types.ObjectId;
 

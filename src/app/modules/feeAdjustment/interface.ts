@@ -13,3 +13,4 @@ export interface IFeeAdjustment {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
