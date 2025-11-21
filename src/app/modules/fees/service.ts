@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// service.ts
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import QueryBuilder from '../../builder/QueryBuilder';
@@ -7,6 +6,7 @@ import { Fees } from './model';
 import { IFees } from './interface';
 import { Enrollment } from '../enrollment/model';
 import { Student } from '../student/student.model';
+import { Payment } from '../payment/model';
 import mongoose from 'mongoose';
 
 /**
@@ -38,6 +38,7 @@ const generateMonthlyFees = async (
     discount: 0,
     waiver: 0,
     status: 'unpaid' as const,
+    academicYear: startYear.toString(),
   }));
 
   const createdFees = await Fees.insertMany(feeRecords);
@@ -106,9 +107,30 @@ const payFee = async (
     fee.paymentDate = new Date();
 
     await fee.save({ session });
+
+    // পেমেন্ট রেকর্ড তৈরি
+    const paymentData = {
+      student: fee.student,
+      enrollment: fee.enrollment,
+      fee: fee._id,
+      amountPaid: amountPaid,
+      paymentMethod: paymentMethod,
+      paymentDate: new Date(),
+      transactionId: transactionId || `TXN-${Date.now()}`,
+      receiptNo: receiptNo || `RCP-${Date.now()}`,
+      note: `Payment for ${fee.feeType} - ${fee.month}`,
+      collectedBy: 'System'
+    };
+
+    const payment = await Payment.create([paymentData], { session });
+
     await session.commitTransaction();
 
-    return fee;
+    // আপডেটেড ফি রেকর্ড এবং পেমেন্ট রেকর্ড রিটার্ন
+    return {
+      fee,
+      payment: payment[0]
+    };
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -167,9 +189,30 @@ const payFeeWithAdvance = async (
     }
 
     await fee.save({ session });
+
+    // পেমেন্ট রেকর্ড তৈরি
+    const paymentData = {
+      student: fee.student,
+      enrollment: fee.enrollment,
+      fee: fee._id,
+      amountPaid: totalPaid,
+      paymentMethod: paymentMethod,
+      paymentDate: new Date(),
+      transactionId: transactionId || `TXN-${Date.now()}`,
+      receiptNo: receiptNo || `RCP-${Date.now()}`,
+      note: `Payment for ${fee.feeType} - ${fee.month}`,
+      collectedBy: 'System'
+    };
+
+    const payment = await Payment.create([paymentData], { session });
+
     await session.commitTransaction();
 
-    return fee;
+    // আপডেটেড ফি রেকর্ড এবং পেমেন্ট রেকর্ড রিটার্ন
+    return {
+      fee,
+      payment: payment[0]
+    };
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -187,14 +230,14 @@ const getStudentDueFees = async (studentId: string, year?: number) => {
   const dueFees = await Fees.find({
     student: studentId,
     dueAmount: { $gt: 0 },
-    month: { $regex: `${currentYear}$` }
+    academicYear: currentYear.toString()
   }).sort({ month: 1 });
 
   const totalDue = dueFees.reduce((sum, fee) => sum + fee.dueAmount, 0);
   const paidFees = await Fees.find({
     student: studentId,
     dueAmount: 0,
-    month: { $regex: `${currentYear}$` }
+    academicYear: currentYear.toString()
   }).sort({ month: 1 });
 
   return {
@@ -267,6 +310,8 @@ const generateBulkMonthlyFees = async (feeData: Array<{
   }
 };
 
+
+
 // অন্যান্য ফাংশনগুলো আগের মতোই থাকবে
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
@@ -306,6 +351,119 @@ const deleteFee = async (id: string) => {
   return fee;
 };
 
+
+export const getAllDueFees = async (query: Record<string, any>) => {
+  const { year, class: className } = query;
+  const academicYear = (year || new Date().getFullYear()).toString();
+
+  const matchStage: any = {
+    academicYear,
+  };
+  if (className) matchStage.class = className;
+
+  const pipeline: any[] = [
+    { $match: matchStage },
+    {
+      $addFields: {
+        computedDue: {
+          $subtract: [
+            '$amount',
+            { $add: [{ $ifNull: ['$paidAmount', 0] }, { $ifNull: ['$discount', 0] }, { $ifNull: ['$waiver', 0] }, { $ifNull: ['$advanceUsed', 0] }] }
+          ]
+        }
+      }
+    },
+    // filter only records that have computedDue > 0.009 (basically > 0)
+    { $match: { computedDue: { $gt: 0.009 } } },
+    // Populate student and enrollment
+    {
+      $lookup: {
+        from: 'students',
+        localField: 'student',
+        foreignField: '_id',
+        as: 'studentDoc'
+      }
+    },
+    { $unwind: '$studentDoc' },
+    {
+      $lookup: {
+        from: 'enrollments',
+        localField: 'enrollment',
+        foreignField: '_id',
+        as: 'enrollDoc'
+      }
+    },
+    { $unwind: { path: '$enrollDoc', preserveNullAndEmptyArrays: true } },
+    // sort by student and month
+    { $sort: { 'student': 1, month: 1 } },
+    // group by student
+    {
+      $group: {
+        _id: '$student',
+        student: { $first: '$studentDoc' },
+        enrollment: { $first: '$enrollDoc' },
+        fees: {
+          $push: {
+            _id: '$_id',
+            feeType: '$feeType',
+            month: '$month',
+            class: '$class',
+            amount: '$amount',
+            paidAmount: { $ifNull: ['$paidAmount', 0] },
+            discount: { $ifNull: ['$discount', 0] },
+            waiver: { $ifNull: ['$waiver', 0] },
+            advanceUsed: { $ifNull: ['$advanceUsed', 0] },
+            computedDue: '$computedDue',
+            status: '$status',
+            paymentDate: '$paymentDate'
+          }
+        },
+        totalDue: { $sum: '$computedDue' },
+        totalPaid: { $sum: { $ifNull: ['$paidAmount', 0] } },
+        totalAmount: { $sum: { $ifNull: ['$amount', 0] } },
+        count: { $sum: 1 }
+      }
+    },
+    // project final shape
+    {
+      $project: {
+        _id: 0,
+        student: {
+          _id: '$student._id',
+          name: '$student.name',
+          studentId: '$student.studentId',
+          mobile: '$student.mobile'
+        },
+        enrollment: {
+          _id: '$enrollment._id',
+          rollNumber: '$enrollment.rollNumber'
+        },
+        fees: 1,
+        totalDue: { $round: ['$totalDue', 2] },
+        totalPaid: 1,
+        totalAmount: 1,
+        feesCount: '$count'
+      }
+    }
+  ];
+
+  const students = await Fees.aggregate(pipeline).allowDiskUse(true);
+
+  // summary
+  const summary = {
+    totalStudents: students.length,
+    totalFees: students.reduce((s: number, st: any) => s + (st.feesCount || 0), 0),
+    totalDueAmount: students.reduce((s: number, st: any) => s + (st.totalDue || 0), 0),
+    totalPaidAmount: students.reduce((s: number, st: any) => s + (st.totalPaid || 0), 0),
+    totalAmount: students.reduce((s: number, st: any) => s + (st.totalAmount || 0), 0),
+    academicYear
+  };
+
+  return { summary, students };
+};
+
+
+
 export const feesServices = {
   generateMonthlyFees,
   generateBulkMonthlyFees,
@@ -317,4 +475,5 @@ export const feesServices = {
   getSingleFee,
   updateFee,
   deleteFee,
+  getAllDueFees,
 };

@@ -1,9 +1,9 @@
-// route.ts
 import express from 'express';
 import { feesControllers } from './controller';
 
 const router = express.Router();
 
+router.get('/due', feesControllers.getAllDueFees);
 router.post('/create-monthly', feesControllers.createMonthlyFees);
 router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);
 router.post('/pay', feesControllers.payFee);

@@ -16,6 +16,10 @@ const studentSchema = new Schema<IStudent>(
     gender: { type: String, },
     mobile: { type: String },
     fees: [{ type: Schema.Types.ObjectId, ref: 'Fees' }],
+    payments: {
+      type: Schema.Types.ObjectId,
+      ref: 'Payment',
+    },
     advanceBalance: {
       type: Number,
       default: 0
@@ -77,5 +81,6 @@ const studentSchema = new Schema<IStudent>(
   },
   { timestamps: true },
 );
+
 
 export const Student = model<IStudent>('Student', studentSchema);

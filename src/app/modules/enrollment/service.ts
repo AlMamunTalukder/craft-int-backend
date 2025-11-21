@@ -3,10 +3,12 @@ import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { Enrollment } from './model';
 import QueryBuilder from '../../builder/QueryBuilder';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { Student } from '../student/student.model';
 import { Fees } from '../fees/model';
 import { User } from '../user/user.model';
+import { IEnrollment } from './interface';
+import { IStudent } from '../student/student.interface';
 
 const promoteEnrollment = async (
   studentId: string,
@@ -274,14 +276,15 @@ export const createEnrollment = async (payload: any) => {
       { session },
     );
 
-    // --- STEP 4: Process Fees with REQUIRED month field ---
+    // --- STEP 4: Process Fees with improved monthly fee logic ---
     const feeDocs: mongoose.Types.ObjectId[] = [];
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     const currentDate = new Date();
-    const currentMonth = monthNames[currentDate.getMonth()];
+    const currentMonthIndex = currentDate.getMonth();
+    const currentMonth = monthNames[currentMonthIndex];
     const currentYear = currentDate.getFullYear();
 
     // Process all fees from payload
@@ -296,38 +299,52 @@ export const createEnrollment = async (payload: any) => {
         const actualFeeType = typeof feeTypeValue === 'object' ? feeTypeValue.label || feeTypeValue.value || feeTypeValue : feeTypeValue;
         const actualClassName = typeof classNameValue === 'object' ? classNameValue.label || classNameValue.value || classNameValue : classNameValue;
 
-        const normalizedType = (() => {
-          const type = String(actualFeeType).toLowerCase();
-          if (type.includes('admission')) return 'admission';
-          if (type.includes('monthly') || type.includes('yearly') || type.includes('annual')) return 'monthly';
-          if (type.includes('exam')) return 'exam';
-          if (type.includes('homework') || type.includes('home work')) return 'homework';
-          return 'other';
-        })();
+        // Keep feeType as is (dynamic string)
+        const feeType = String(actualFeeType);
 
         const feeAmount = Number(fee.feeAmount) || 0;
         const paidAmount = Number(fee.paidAmount) || 0;
 
+        // Check if this is a monthly fee based on feeType name
+        const isMonthlyFee = feeType.toLowerCase().includes('monthly') ||
+          feeType.toLowerCase().includes('yearly') ||
+          feeType.toLowerCase().includes('annual');
+
         // For monthly fees, generate records for all 12 months
-        if (normalizedType === 'monthly' && feeAmount > 0) {
+        if (isMonthlyFee && feeAmount > 0) {
+          // Calculate monthly amount from yearly amount
+          const monthlyAmount = feeAmount / 12;
+
           // Generate monthly fees for all months of the current year
           for (let i = 0; i < 12; i++) {
+            const isCurrentMonth = i === currentMonthIndex;
+            const isPastMonth = i < currentMonthIndex;
+
+            // For past months, mark as paid by default (or you could leave them unpaid)
+            // For current month, apply payment if any
+            // For future months, mark as unpaid
+
+            const monthPaidAmount = isCurrentMonth ? paidAmount : (isPastMonth ? monthlyAmount : 0);
+            const monthDueAmount = monthlyAmount - monthPaidAmount;
+
             const monthFeeData: any = {
               enrollment: newEnrollment._id,
               student: studentId,
-              feeType: normalizedType,
+              feeType: feeType, // Use the dynamic feeType as is
               class: actualClassName,
-              month: monthNames[i], // REQUIRED FIELD - providing for each month
-              amount: feeAmount,
-              paidAmount: i === 0 ? paidAmount : 0, // Apply payment only to current month
-              dueAmount: i === 0 ? Math.max(0, feeAmount - paidAmount) : feeAmount,
+              month: monthNames[i],
+              amount: monthlyAmount,
+              paidAmount: monthPaidAmount,
+              dueAmount: monthDueAmount,
               discount: 0,
               waiver: 0,
-              status: i === 0 ? (paidAmount >= feeAmount ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid') : 'unpaid',
+              status: monthDueAmount <= 0 ? 'paid' : monthPaidAmount > 0 ? 'partial' : 'unpaid',
+              academicYear: currentYear.toString(),
+              isCurrentMonth: isCurrentMonth,
             };
 
             // Add payment info if payment was made for current month
-            if (i === 0 && paidAmount > 0) {
+            if (isCurrentMonth && paidAmount > 0) {
               monthFeeData.paymentMethod = 'cash';
               monthFeeData.paymentDate = new Date();
             }
@@ -342,15 +359,17 @@ export const createEnrollment = async (payload: any) => {
             const feeData: any = {
               enrollment: newEnrollment._id,
               student: studentId,
-              feeType: normalizedType,
+              feeType: feeType, // Use the dynamic feeType as is
               class: actualClassName,
-              month: currentMonth, // REQUIRED FIELD - using current month for one-time fees
+              month: currentMonth,
               amount: feeAmount,
               paidAmount: paidAmount,
               dueAmount: Math.max(0, feeAmount - paidAmount),
               discount: 0,
               waiver: 0,
               status: paidAmount >= feeAmount ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
+              academicYear: currentYear.toString(),
+              isCurrentMonth: true,
             };
 
             // Add payment info if payment was made
@@ -419,105 +438,213 @@ export const updateEnrollment = async (id: string, payload: any) => {
   session.startTransaction();
 
   try {
-    const enrollment = await Enrollment.findById(id).session(session);
-    if (!enrollment) {
-      throw new Error('Enrollment not found');
+    const enrollment = await Enrollment.findById(id).session(session)
+    if (!enrollment) throw new Error("Enrollment not found");
+
+    const student = await Student.findById(enrollment.student).session(session) as (mongoose.Document<unknown, IStudent> & IStudent & { _id: Types.ObjectId, className?: Types.ObjectId[] });
+    if (!student) throw new Error("Linked student not found");
+
+    // --- STEP 2: CLASS HANDLING ---
+    let classIds: string[] = [];
+    if (Array.isArray(payload.className)) {
+      classIds = payload.className.filter((cls: any) => cls && cls !== "");
+    } else if (payload.className) {
+      classIds = [payload.className].filter((cls: any) => cls && cls !== "");
+    } else if (enrollment.className) {
+      classIds = [enrollment.className.toString()];
     }
 
-    // Update enrollment fields - FIXED TYPE ERROR
-    const updateableFields = [
-      'studentName', 'nameBangla', 'studentPhoto', 'mobileNo', 'rollNumber',
-      'gender', 'birthDate', 'birthRegistrationNo', 'bloodGroup', 'nationality',
-      'section', 'roll', 'session', 'batch', 'studentType', 'studentDepartment',
-      'fatherName', 'fatherNameBangla', 'fatherMobile', 'fatherNid', 'fatherProfession', 'fatherIncome',
-      'motherName', 'motherNameBangla', 'motherMobile', 'motherNid', 'motherProfession', 'motherIncome',
-      'guardianInfo', 'presentAddress', 'permanentAddress', 'documents', 'previousSchool',
-      'termsAccepted', 'admissionType', 'paymentStatus', 'status'
-    ];
-
-    updateableFields.forEach(key => {
-      if (payload[key] !== undefined) {
-        (enrollment as any)[key] = payload[key];
+    classIds.forEach(cls => {
+      if (!mongoose.Types.ObjectId.isValid(cls)) {
+        throw new Error(`Invalid class ID: ${cls}`);
       }
+    });
+
+    // --- STEP 3: UPDATE ENROLLMENT ---
+    const updateFields: Partial<IEnrollment> = {
+      studentName: payload.studentName,
+      nameBangla: payload.nameBangla,
+      studentPhoto: payload.studentPhoto,
+      mobileNo: payload.mobileNo,
+      rollNumber: payload.rollNumber,
+      gender: payload.gender,
+      birthDate: payload.birthDate,
+      birthRegistrationNo: payload.birthRegistrationNo,
+      bloodGroup: payload.bloodGroup,
+      nationality: payload.nationality,
+      className: classIds.length ? new Types.ObjectId(classIds[0]) : enrollment.className,
+      section: payload.section,
+      roll: payload.roll || payload.rollNumber,
+      session: payload.session,
+      batch: payload.batch,
+      studentType: payload.studentType,
+      studentDepartment: payload.studentDepartment,
+      fatherName: payload.fatherName,
+      fatherNameBangla: payload.fatherNameBangla,
+      fatherMobile: payload.fatherMobile,
+      fatherNid: payload.fatherNid,
+      fatherProfession: payload.fatherProfession,
+      fatherIncome: payload.fatherIncome,
+      motherName: payload.motherName,
+      motherNameBangla: payload.motherNameBangla,
+      motherMobile: payload.motherMobile,
+      motherNid: payload.motherNid,
+      motherProfession: payload.motherProfession,
+      motherIncome: payload.motherIncome,
+      guardianInfo: payload.guardianInfo,
+      presentAddress: payload.presentAddress,
+      permanentAddress: payload.permanentAddress,
+      documents: payload.documents,
+      previousSchool: payload.previousSchool,
+      termsAccepted: payload.termsAccepted,
+      admissionType: payload.admissionType,
+      paymentStatus: payload.paymentStatus,
+      status: payload.status,
+    };
+
+    Object.entries(updateFields).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) (enrollment as any)[k] = v;
     });
 
     await enrollment.save({ session });
 
-    // Update fees if provided
-    if (payload.fees && Array.isArray(payload.fees)) {
-      // Remove existing fees
-      await Fees.deleteMany({ enrollment: id }).session(session);
+    // --- STEP 4: UPDATE STUDENT ---
+    student.name = payload.studentName || student.name;
+    student.nameBangla = payload.nameBangla || student.nameBangla;
+    student.mobile = payload.mobileNo || student.mobile;
+    student.gender = payload.gender || student.gender;
+    student.birthDate = payload.birthDate || student.birthDate;
+    student.bloodGroup = payload.bloodGroup || student.bloodGroup;
+    student.studentDepartment = payload.studentDepartment || student.studentDepartment;
 
-      // Create new fees
-      const feeDocs = [];
-      for (const fee of payload.fees) {
-        if (fee.feeType && fee.className) {
-          // Extract fee type from array or string
-          let feeTypeValue = '';
-          if (Array.isArray(fee.feeType) && fee.feeType.length > 0) {
-            feeTypeValue = fee.feeType[0]?.label || fee.feeType[0] || '';
-          } else {
-            feeTypeValue = fee.feeType || '';
-          }
+    const existingClasses = Array.isArray(student.className) ? student.className.map(c => c.toString()) : [];
+    const newClasses = classIds.filter(id => !existingClasses.includes(id));
+    student.className = [...existingClasses, ...newClasses].map(id => new Types.ObjectId(id));
 
-          const normalizedType = (() => {
-            const type = feeTypeValue.toLowerCase();
-            if (type.includes('admission')) return 'admission';
-            if (type.includes('monthly') || type.includes('yearly')) return 'monthly';
-            if (type.includes('exam')) return 'exam';
-            return 'other';
-          })();
+    await student.save({ session });
 
-          // Extract class name
-          let classNameValue = '';
-          if (Array.isArray(fee.className) && fee.className.length > 0) {
-            classNameValue = fee.className[0]?.label || fee.className[0] || '';
-          } else {
-            classNameValue = fee.className || '';
-          }
-
-          const feeData = {
-            enrollment: id,
-            student: enrollment.student,
-            feeType: normalizedType,
-            class: classNameValue,
-            amount: Number(fee.feeAmount) || 0,
-            paidAmount: Number(fee.paidAmount) || 0,
-            dueAmount: (Number(fee.feeAmount) || 0) - (Number(fee.paidAmount) || 0),
-            paymentMethod: 'cash',
-            paymentDate: Number(fee.paidAmount) > 0 ? new Date() : undefined,
-            status: Number(fee.paidAmount) >= Number(fee.feeAmount) ? 'paid' : Number(fee.paidAmount) > 0 ? 'partial' : 'unpaid',
-          };
-
-          const newFee = await Fees.create([feeData], { session });
-          feeDocs.push(newFee[0]._id);
-        }
-      }
-
-      enrollment.fees = feeDocs;
-      await enrollment.save({ session });
+    // --- STEP 5: DELETE OLD FEES ---
+    if (enrollment.fees?.length) {
+      await Fees.deleteMany({ _id: { $in: enrollment.fees } }).session(session);
     }
 
+    // --- STEP 6: REBUILD FEES ---
+    const feeDocs: Types.ObjectId[] = [];
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const now = new Date();
+    const currIndex = now.getMonth();
+    const currMonth = monthNames[currIndex];
+    const currYear = now.getFullYear();
+
+    if (Array.isArray(payload.fees)) {
+      for (const fee of payload.fees) {
+        if (!fee.feeType || !fee.className) continue;
+
+        const feeTypeRaw = Array.isArray(fee.feeType) ? fee.feeType[0] : fee.feeType;
+        const classRaw = Array.isArray(fee.className) ? fee.className[0] : fee.className;
+
+        const feeType = typeof feeTypeRaw === "object" ? feeTypeRaw.label || feeTypeRaw.value || feeTypeRaw : feeTypeRaw;
+        const className = typeof classRaw === "object" ? classRaw.label || classRaw.value || classRaw : classRaw;
+
+        const totalAmount = Number(fee.feeAmount) || 0;
+        const paidAmount = Number(fee.paidAmount) || 0;
+        const isMonthly = /monthly|yearly|annual/i.test(feeType);
+
+        if (isMonthly && totalAmount > 0) {
+          const monthly = totalAmount / 12;
+          for (let i = 0; i < 12; i++) {
+            const isCurr = i === currIndex;
+            const isPast = i < currIndex;
+            const paid = isCurr ? paidAmount : isPast ? monthly : 0;
+            const due = monthly - paid;
+
+            const [rec] = await Fees.create([{
+              enrollment: enrollment._id,
+              student: student._id,
+              feeType,
+              class: className,
+              month: monthNames[i],
+              year: currYear,
+              amount: monthly,
+              paidAmount: paid,
+              advanceUsed: 0,
+              dueAmount: due,
+              discount: 0,
+              waiver: 0,
+              status: due <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid",
+              academicYear: currYear.toString(),
+              isCurrentMonth: isCurr,
+              paymentMethod: isCurr && paidAmount > 0 ? "cash" : undefined,
+              paymentDate: isCurr && paidAmount > 0 ? new Date() : undefined,
+            }], { session });
+
+            feeDocs.push(rec._id as Types.ObjectId);
+          }
+        } else if (totalAmount > 0) {
+          const [rec] = await Fees.create([{
+            enrollment: enrollment._id,
+            student: student._id,
+            feeType,
+            class: className,
+            month: currMonth,
+            year: currYear,
+            amount: totalAmount,
+            paidAmount,
+            advanceUsed: 0,
+            dueAmount: Math.max(0, totalAmount - paidAmount),
+            discount: 0,
+            waiver: 0,
+            status: paidAmount >= totalAmount ? "paid" : paidAmount > 0 ? "partial" : "unpaid",
+            academicYear: currYear.toString(),
+            isCurrentMonth: true,
+            paymentMethod: paidAmount > 0 ? "cash" : undefined,
+            paymentDate: paidAmount > 0 ? new Date() : undefined,
+          }], { session });
+
+          feeDocs.push(rec._id as Types.ObjectId);
+        }
+      }
+    }
+
+    // --- STEP 7: LINK FEES ---
+    enrollment.fees = feeDocs;
+    student.fees = feeDocs;
+
+    await enrollment.save({ session });
+    await student.save({ session });
+
+    // --- STEP 8: COMMIT ---
     await session.commitTransaction();
     session.endSession();
 
-    const updatedEnrollment = await Enrollment.findById(id)
-      .populate('student')
-      .populate('fees')
-      .populate('className');
+    const populated = await Enrollment.findById(id)
+      .populate("student")
+      .populate("fees")
+      .populate("className");
 
     return {
       success: true,
-      message: 'Enrollment updated successfully',
-      data: updatedEnrollment,
+      message: "Enrollment updated successfully",
+      data: populated,
     };
-  } catch (error: any) {
+
+  } catch (err: any) {
     await session.abortTransaction();
     session.endSession();
-    console.error('Enrollment Update Failed:', error);
-    throw new Error(error.message || 'Failed to update enrollment');
+    console.error("Update Enrollment Error:", err);
+
+    throw {
+      status: 500,
+      data: {
+        success: false,
+        message: err.message || "Failed to update enrollment",
+        errorMessages: err.message || "Failed to update enrollment",
+      },
+    };
   }
 };
+
+
 export const deleteEnrollment = async (id: string) => {
   const session = await mongoose.startSession();
   session.startTransaction();

@@ -1,8 +1,10 @@
-// controller.ts
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { catchAsync } from '../../../utils/catchAsync';
 import sendResponse from '../../../utils/sendResponse';
 import httpStatus from 'http-status';
 import { feesServices } from './service';
+import mongoose from 'mongoose';
+import { AppError } from '../../error/AppError';
 
 const createMonthlyFees = catchAsync(async (req, res) => {
   const { studentId, enrollmentId, studentClass, yearlyFee, startYear } = req.body;
@@ -33,38 +35,70 @@ const createBulkMonthlyFees = catchAsync(async (req, res) => {
 });
 
 const payFee = catchAsync(async (req, res) => {
-  const { feeId, amountPaid, paymentMethod, transactionId, receiptNo } = req.body;
-  const result = await feesServices.payFee(
-    feeId,
-    amountPaid,
-    paymentMethod,
-    transactionId,
-    receiptNo
-  );
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: 'Fee payment processed successfully',
-    data: result,
-  });
+  const { feeId, amountPaid, paymentMethod, paymentDate, transactionId, receiptNo } = req.body;
+
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Update fee record and create payment record
+    const result = await feesServices.payFee(
+      feeId,
+      amountPaid,
+      paymentMethod,
+      transactionId,
+      receiptNo
+    );
+
+    await session.commitTransaction();
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Fee payment processed successfully',
+      data: result,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 });
 
 const payFeeWithAdvance = catchAsync(async (req, res) => {
   const { feeId, cashPaid, advanceUsed, paymentMethod, transactionId, receiptNo } = req.body;
-  const result = await feesServices.payFeeWithAdvance(
-    feeId,
-    cashPaid,
-    advanceUsed,
-    paymentMethod,
-    transactionId,
-    receiptNo
-  );
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: 'Fee payment with advance processed successfully',
-    data: result,
-  });
+
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Update fee record and create payment record
+    const result = await feesServices.payFeeWithAdvance(
+      feeId,
+      cashPaid,
+      advanceUsed,
+      paymentMethod,
+      transactionId,
+      receiptNo
+    );
+
+    await session.commitTransaction();
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Fee payment with advance processed successfully',
+      data: result,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 });
 
 const getStudentDueFees = catchAsync(async (req, res) => {
@@ -138,6 +172,35 @@ const deleteFee = catchAsync(async (req, res) => {
   });
 });
 
+// সঠিকভাবে getAllDueFees কন্ট্রোলার - প্যারামিটার ভ্যালিডেশন সহ
+const getAllDueFees = catchAsync(async (req, res) => {
+  // Query parameters for filtering
+  const { year, class: className, status } = req.query;
+
+  // Validate year if provided
+  let filterYear;
+  if (year) {
+    filterYear = parseInt(year as string);
+    if (isNaN(filterYear)) {
+      new Error('Invalid year')
+    }
+  }
+
+
+  const result = await feesServices.getAllDueFees({
+    year: filterYear,
+    class: className,
+    status: status || 'unpaid'
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'All due fees retrieved successfully',
+    data: result,
+  });
+});
+
 export const feesControllers = {
   createMonthlyFees,
   createBulkMonthlyFees,
@@ -149,4 +212,5 @@ export const feesControllers = {
   getSingleFee,
   updateFee,
   deleteFee,
+  getAllDueFees, // সঠিক করা ফাংশন
 };
