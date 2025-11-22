@@ -1,3 +1,4 @@
+// feeAdjustment/controller.ts
 import httpStatus from "http-status";
 import sendResponse from "../../../utils/sendResponse";
 import { catchAsync } from "../../../utils/catchAsync";
@@ -8,11 +9,54 @@ const createFeeAdjustment = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "FeeAdjustment created successfully",
+    message: "Fee Adjustment created and applied successfully",
     data: result,
   });
 });
 
+const applyBulkAdjustments = catchAsync(async (req, res) => {
+  const { studentId, ...adjustmentData } = req.body;
+  const result = await feeAdjustmentServices.applyAdjustmentToStudentFees(studentId, adjustmentData);
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: "Fee Adjustments applied to all student fees successfully",
+    data: result,
+  });
+});
+
+const getStudentAdjustments = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
+  const { academicYear } = req.query;
+
+  const result = await feeAdjustmentServices.getStudentActiveAdjustments(
+    studentId,
+    academicYear as string
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Student fee adjustments retrieved successfully",
+    data: result,
+  });
+});
+
+const getFeeReport = catchAsync(async (req, res) => {
+  const { studentId, academicYear } = req.params;
+
+  const result = await feeAdjustmentServices.getFeeReportWithAdjustments(
+    studentId,
+    academicYear
+  );
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Fee report with adjustments retrieved successfully",
+    data: result,
+  });
+});
+
+// আগের controller functions গুলো একই থাকবে
 const getAllFeeAdjustments = catchAsync(async (req, res) => {
   const result = await feeAdjustmentServices.getAllFeeAdjustments(req.query);
   sendResponse(res, {
@@ -60,4 +104,7 @@ export const feeAdjustmentControllers = {
   getSingleFeeAdjustment,
   updateFeeAdjustment,
   deleteFeeAdjustment,
+  applyBulkAdjustments,
+  getStudentAdjustments,
+  getFeeReport,
 };
