@@ -14,16 +14,17 @@ const paymentSchema = new Schema(
     },
     fee: {
       type: Schema.Types.ObjectId,
-      ref: 'Fee',
+      ref: 'Fees',
       required: true,
     },
     amountPaid: {
       type: Number,
       required: true,
     },
+
     paymentMethod: {
       type: String,
-      enum: ['cash', 'bkash', 'nagad', 'bank', 'card'],
+      enum: ['cash', 'bkash', 'nagad', 'bank', 'card', 'online'],
       default: 'cash',
     },
     paymentDate: {
@@ -32,7 +33,9 @@ const paymentSchema = new Schema(
     },
     receiptNo: {
       type: String,
-      unique: true,
+    },
+    transactionId: {
+      type: String,
     },
     note: {
       type: String,

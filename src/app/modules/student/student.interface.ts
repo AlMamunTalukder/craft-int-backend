@@ -82,4 +82,5 @@ export interface IStudent extends Document {
     address?: string;
   }
   fees?: Types.ObjectId[];
+  payments?: Types.ObjectId[]
 }

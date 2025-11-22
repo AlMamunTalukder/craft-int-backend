@@ -1,15 +1,19 @@
-import { Types } from "mongoose";
-
 export interface IFeeAdjustment {
-  student: Types.ObjectId;
-  fee: Types.ObjectId;
+  _id:string;
+  student: string;
+  fee: string;
+  enrollment: string;
   type: "discount" | "waiver";
-  amount: number;
-  reason?: string;
-  approvedBy?: Types.ObjectId;
+  adjustmentType: "percentage" | "flat";
+  value: number;
+  reason: string;
+  approvedBy?: string;
   approvedDate?: Date;
-  startMonth?: string;
+  startMonth: string;
   endMonth?: string;
+  isActive: boolean;
+  isRecurring: boolean;
+  academicYear: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

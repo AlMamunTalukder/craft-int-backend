@@ -1,5 +1,4 @@
 import httpStatus from 'http-status';
-
 import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 import { paymentServices } from './service';
