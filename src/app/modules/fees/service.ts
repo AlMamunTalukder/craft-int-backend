@@ -73,6 +73,13 @@ const payFee = async (
 
     const payment = await Payment.create([paymentData], { session });
 
+    // Update student with the new payment
+    await Student.findByIdAndUpdate(
+      fee.student,
+      { $push: { payments: payment[0]._id } },
+      { session },
+    );
+
     await session.commitTransaction();
 
     return {
@@ -148,7 +155,6 @@ const generateMonthlyFees = async (
   return createdFees;
 };
 
-// বাকি ফাংশনগুলো একই থাকবে...
 const payFeeWithAdvance = async (
   feeId: string,
   cashPaid: number = 0,
@@ -227,7 +233,6 @@ const payFeeWithAdvance = async (
   }
 };
 
-// বাকি ফাংশনগুলো একই রেখে দিন...
 const getStudentDueFees = async (studentId: string, year?: number) => {
   const currentYear = year || new Date().getFullYear();
 
