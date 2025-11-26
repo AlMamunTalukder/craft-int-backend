@@ -85,14 +85,12 @@ export const createEnrollment = async (payload: any) => {
   session.startTransaction();
 
   try {
-    // --- Extract class IDs as array ---
     let classIds: string[] = [];
 
     if (Array.isArray(payload.className)) {
       classIds = payload.className
         .filter((cls: any) => cls && cls !== '')
         .map((cls: any) => {
-          // Extract value from object if it's an object
           return typeof cls === 'object' ? cls.value || cls._id || cls : cls;
         });
     } else if (payload.className) {
@@ -114,7 +112,7 @@ export const createEnrollment = async (payload: any) => {
       }
     }
 
-    // --- STEP 1: Normalize data to match schema ---
+    // Normalize data to match schema ---
     const enrollmentData: any = {
       studentName: payload.studentName || '',
       nameBangla: payload.nameBangla || '',
@@ -175,17 +173,9 @@ export const createEnrollment = async (payload: any) => {
       }
     });
 
-    // --- STEP 2: Create or find Student ---
+    //  Create or find Student ---
     let studentDoc = null;
     let studentId = payload.student;
-
-    console.log('🔍 Looking for existing student...', {
-      mobile: payload.mobileNo,
-      name: payload.studentName,
-      nameBangla: payload.nameBangla,
-      providedStudentId: payload.student,
-    });
-
     if (!studentId) {
       // Try to find existing student by mobile or name
       studentDoc = await Student.findOne({
@@ -196,18 +186,13 @@ export const createEnrollment = async (payload: any) => {
         ],
       }).session(session);
 
-      console.log('📋 Existing student found:', studentDoc ? 'YES' : 'NO');
-
       if (!studentDoc) {
-        console.log('👤 Creating new student and user...');
 
         // Generate unique student email
         const studentEmail =
           payload.email ||
           `${payload.mobileNo}@student.craft.edu` ||
           `student${Date.now()}@craft.edu`;
-
-        console.log('📧 Creating user with email:', studentEmail);
 
         // Create user first
         let user = await User.findOne({ email: studentEmail }).session(session);
@@ -220,11 +205,9 @@ export const createEnrollment = async (payload: any) => {
             role: 'student',
             needsPasswordChange: true,
           };
-          console.log('🆕 Creating new user:', userData);
 
           const [newUser] = await User.create([userData], { session });
           user = newUser;
-          console.log('✅ User created successfully:', user._id);
         } else {
           console.log('ℹ️ User already exists:', user._id);
         }
@@ -369,20 +352,12 @@ export const createEnrollment = async (payload: any) => {
           }
         });
 
-        console.log('🎯 Creating student with data:', {
-          name: studentData.name,
-          mobile: studentData.mobile,
-          className: studentData.className,
-          studentId: studentData.studentId,
-        });
+
 
         const [newStudent] = await Student.create([studentData], { session });
         studentDoc = newStudent;
         studentId = newStudent._id;
-
-        console.log('✅ Student created successfully:', studentId);
       } else {
-        console.log('🔄 Updating existing student with new classes');
         // Update existing student with new classes
         const existingClassIds = studentDoc.className
           ? studentDoc.className.map((id: any) => id.toString())
@@ -397,27 +372,25 @@ export const createEnrollment = async (payload: any) => {
             (id) => new mongoose.Types.ObjectId(id),
           );
           await studentDoc.save({ session });
-          console.log('✅ Student classes updated');
         }
 
         studentId = studentDoc._id;
       }
     } else {
-      console.log('🔍 Finding student by provided ID:', studentId);
+
       studentDoc = await Student.findById(studentId).session(session);
       if (!studentDoc) throw new Error('Invalid Student ID');
-      console.log('✅ Student found by ID');
+
     }
 
-    // --- STEP 3: Create Enrollment ---
-    console.log('📝 Creating enrollment for student:', studentId);
+    //  Create Enrollment ---
+
     const [newEnrollment] = await Enrollment.create(
       [{ ...enrollmentData, student: studentId }],
       { session },
     );
-    console.log('✅ Enrollment created:', newEnrollment._id);
 
-    // --- STEP 4: Process Fees with DISCOUNT/WAIVER SUPPORT ---
+    //  Process Fees with MONTHLY FEE FIX ---
     const feeDocs: mongoose.Types.ObjectId[] = [];
     const monthNames = [
       'January',
@@ -438,11 +411,8 @@ export const createEnrollment = async (payload: any) => {
     const currentMonth = monthNames[currentMonthIndex];
     const currentYear = currentDate.getFullYear();
 
-    console.log('💰 Processing fees...');
-
     // Process all fees from payload
     if (payload.fees && Array.isArray(payload.fees)) {
-      console.log(`📋 Found ${payload.fees.length} fee entries`);
 
       for (const fee of payload.fees) {
         if (
@@ -451,7 +421,6 @@ export const createEnrollment = async (payload: any) => {
           fee.feeType.length === 0 ||
           fee.className.length === 0
         ) {
-          console.log('⏭️ Skipping fee entry - missing feeType or className');
           continue;
         }
 
@@ -478,43 +447,86 @@ export const createEnrollment = async (payload: any) => {
         const feeAmount = Number(fee.feeAmount) || 0;
         const paidAmount = Number(fee.paidAmount) || 0;
 
-        // ✅ Get discount and waiver from payload
+        // Get discount and waiver from payload
         const discountAmount = Number(fee.discount) || 0;
         const waiverAmount = Number(fee.waiver) || 0;
 
-        console.log(
-          `💳 Processing fee: ${feeType}, Amount: ${feeAmount}, Discount: ${discountAmount}, Waiver: ${waiverAmount}`,
-        );
 
-        // ✅ Validate that discount + waiver doesn't exceed fee amount
+        //  Validate that discount + waiver doesn't exceed fee amount
         if (discountAmount + waiverAmount > feeAmount) {
           throw new Error(
             `Total adjustments (${discountAmount + waiverAmount}) cannot exceed fee amount (${feeAmount}) for ${feeType}`,
           );
         }
 
-        // ✅ Calculate due amount with discount and waiver
+        //  Calculate due amount with discount and waiver
         const netAmount = feeAmount - discountAmount - waiverAmount;
         const dueAmount = Math.max(0, netAmount - paidAmount);
 
         // Check if this is a monthly fee based on feeType name
-        const isMonthlyFee =
-          feeType.toLowerCase().includes('monthly') ||
+        const isMonthlyFee = feeType.toLowerCase().includes('monthly');
+        const isYearlyFee =
           feeType.toLowerCase().includes('yearly') ||
           feeType.toLowerCase().includes('annual');
 
-        // For monthly fees, generate records for all 12 months
-        if (isMonthlyFee && feeAmount > 0) {
-          // Calculate monthly amount from yearly amount
-          const monthlyAmount = feeAmount / 12;
 
-          // ✅ Calculate monthly discount and waiver
+        if (isMonthlyFee && feeAmount > 0) {
+          const monthlyAmount = feeAmount;
+
+
+
+          for (let i = 0; i < 12; i++) {
+            const isCurrentMonth = i === currentMonthIndex;
+            // const isPastMonth = i < currentMonthIndex;
+
+            // For monthly fees, apply discount/waiver proportionally across all months
+            const monthlyDiscount = discountAmount / 12;
+            const monthlyWaiver = waiverAmount / 12;
+            const monthlyNetAmount = monthlyAmount - monthlyDiscount - monthlyWaiver;
+
+            // Only apply payment to the current month
+            const monthPaidAmount = isCurrentMonth ? paidAmount : 0;
+            const monthDueAmount = monthlyNetAmount - monthPaidAmount;
+
+            const monthFeeData: any = {
+              enrollment: newEnrollment._id,
+              student: studentId,
+              feeType: feeType,
+              class: actualClassName,
+              month: `${monthNames[i]}-${currentYear}`,
+              amount: monthlyAmount,
+              paidAmount: monthPaidAmount,
+              discount: monthlyDiscount,
+              waiver: monthlyWaiver,
+              dueAmount: Math.max(0, monthDueAmount),
+              status:
+                monthDueAmount <= 0
+                  ? 'paid'
+                  : monthPaidAmount > 0
+                    ? 'partial'
+                    : 'unpaid',
+              academicYear: currentYear.toString(),
+              isCurrentMonth: isCurrentMonth,
+              isMonthly: true,
+            };
+
+            // Add payment info if payment was made for current month
+            if (isCurrentMonth && paidAmount > 0) {
+              monthFeeData.paymentMethod = 'cash';
+              monthFeeData.paymentDate = new Date();
+            }
+
+            const [monthlyFee] = await Fees.create([monthFeeData], { session });
+            feeDocs.push(monthlyFee._id as mongoose.Types.ObjectId);
+          }
+
+        }
+        // For yearly fees, divide by 12 as before
+        else if (isYearlyFee && feeAmount > 0) {
+          const monthlyAmount = feeAmount / 12;
           const monthlyDiscount = discountAmount / 12;
           const monthlyWaiver = waiverAmount / 12;
-          const monthlyNetAmount =
-            monthlyAmount - monthlyDiscount - monthlyWaiver;
-
-          console.log(`📅 Generating 12 monthly fees for ${feeType}`);
+          const monthlyNetAmount = monthlyAmount - monthlyDiscount - monthlyWaiver;
 
           // Generate monthly fees for all months of the current year
           for (let i = 0; i < 12; i++) {
@@ -536,7 +548,6 @@ export const createEnrollment = async (payload: any) => {
               month: `${monthNames[i]}-${currentYear}`,
               amount: monthlyAmount,
               paidAmount: monthPaidAmount,
-              // ✅ Include discount and waiver in monthly records
               discount: monthlyDiscount,
               waiver: monthlyWaiver,
               dueAmount: Math.max(0, monthDueAmount),
@@ -548,6 +559,7 @@ export const createEnrollment = async (payload: any) => {
                     : 'unpaid',
               academicYear: currentYear.toString(),
               isCurrentMonth: isCurrentMonth,
+              isYearly: true,
             };
 
             // Add payment info if payment was made for current month
@@ -559,11 +571,9 @@ export const createEnrollment = async (payload: any) => {
             const [monthlyFee] = await Fees.create([monthFeeData], { session });
             feeDocs.push(monthlyFee._id as mongoose.Types.ObjectId);
           }
-          console.log(
-            `✅ Generated 12 monthly fee records for ${currentYear} with adjustments`,
-          );
-        } else {
-          // For non-monthly fees (admission, exam, etc.), create single record with current month
+
+        }
+        else {
           if (feeAmount > 0) {
             const feeData: any = {
               enrollment: newEnrollment._id,
@@ -573,7 +583,6 @@ export const createEnrollment = async (payload: any) => {
               month: `${currentMonth}-${currentYear}`,
               amount: feeAmount,
               paidAmount: paidAmount,
-              // ✅ Include discount and waiver in single fee record
               discount: discountAmount,
               waiver: waiverAmount,
               dueAmount: dueAmount,
@@ -591,7 +600,6 @@ export const createEnrollment = async (payload: any) => {
 
             const [newFee] = await Fees.create([feeData], { session });
             feeDocs.push(newFee._id as mongoose.Types.ObjectId);
-            console.log(`✅ Created single fee record for ${feeType}`);
           }
         }
       }
@@ -599,11 +607,9 @@ export const createEnrollment = async (payload: any) => {
       console.log('⚠️ No fees found in payload');
     }
 
-    // --- STEP 5: Link Fees to Enrollment and Student ---
+    //  STEP 5: Link Fees to Enrollment and Student ---
     if (feeDocs.length > 0) {
-      console.log(
-        `🔗 Linking ${feeDocs.length} fees to enrollment and student`,
-      );
+
 
       newEnrollment.fees = feeDocs;
       await newEnrollment.save({ session });
@@ -622,11 +628,10 @@ export const createEnrollment = async (payload: any) => {
           (id) => new mongoose.Types.ObjectId(id),
         );
         await studentDoc.save({ session });
-        console.log(`✅ Linked ${newFeeIds.length} new fees to student`);
       }
     }
 
-    // --- STEP 6: Create Fee Adjustment Records if Discount/Waiver Applied ---
+    // Create Fee Adjustment Records if Discount/Waiver Applied ---
     if (payload.fees && Array.isArray(payload.fees)) {
       console.log('📊 Creating fee adjustment records...');
 
@@ -638,13 +643,13 @@ export const createEnrollment = async (payload: any) => {
         if (discountAmount > 0 && feeDocs.length > 0) {
           const discountAdjustment = {
             student: studentId,
-            fee: feeDocs[0], // Use the first fee doc ID as reference
+            fee: feeDocs[0],
             enrollment: newEnrollment._id,
             type: 'discount',
-            adjustmentType: 'flat',
+            adjustmentType: fee.discountType || 'flat',
             value: discountAmount,
-            reason: 'Enrollment time discount',
-            approvedBy: new mongoose.Types.ObjectId(), // You might want to set actual user ID
+            reason: fee.discountReason || 'Enrollment time discount',
+            approvedBy: new mongoose.Types.ObjectId(),
             startMonth: `${currentMonth}-${currentYear}`,
             endMonth: `${currentMonth}-${currentYear}`,
             academicYear: currentYear.toString(),
@@ -652,20 +657,19 @@ export const createEnrollment = async (payload: any) => {
             isRecurring: false,
           };
           await FeeAdjustment.create([discountAdjustment], { session });
-          console.log('✅ Created discount adjustment record');
         }
 
         // Create FeeAdjustment records for waiver
         if (waiverAmount > 0 && feeDocs.length > 0) {
           const waiverAdjustment = {
             student: studentId,
-            fee: feeDocs[0], // Use the first fee doc ID as reference
+            fee: feeDocs[0],
             enrollment: newEnrollment._id,
             type: 'waiver',
-            adjustmentType: 'flat',
+            adjustmentType: fee.waiverType || 'flat',
             value: waiverAmount,
-            reason: 'Enrollment time waiver',
-            approvedBy: new mongoose.Types.ObjectId(), // You might want to set actual user ID
+            reason: fee.waiverReason || 'Enrollment time waiver',
+            approvedBy: new mongoose.Types.ObjectId(),
             startMonth: `${currentMonth}-${currentYear}`,
             endMonth: `${currentMonth}-${currentYear}`,
             academicYear: currentYear.toString(),
@@ -678,12 +682,9 @@ export const createEnrollment = async (payload: any) => {
       }
     }
 
-    // --- STEP 7: Commit Transaction ---
-    console.log('✅ Committing transaction...');
+    //  Transaction ---
     await session.commitTransaction();
     session.endSession();
-
-    console.log('🎉 Enrollment process completed successfully!');
 
     // Populate the enrollment data before returning
     const populatedEnrollment = await Enrollment.findById(newEnrollment._id)
@@ -700,9 +701,8 @@ export const createEnrollment = async (payload: any) => {
   } catch (error: any) {
     await session.abortTransaction();
     session.endSession();
-    console.error('❌ Enrollment Creation Failed:', error);
 
-    // Provide proper error response format
+
     throw {
       status: 500,
       data: {
