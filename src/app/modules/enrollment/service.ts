@@ -104,11 +104,10 @@ export const createEnrollment = async (payload: any) => {
               return cls.toString();
             }
           }
-          // If it's already a string ID
+
           return typeof cls === 'string' ? cls.trim() : cls;
         });
     } else if (payload.className) {
-      // Handle single class name
       const cls = payload.className;
       if (typeof cls === 'object') {
         if (cls._id) classIds = [cls._id.toString()];
@@ -122,7 +121,6 @@ export const createEnrollment = async (payload: any) => {
       }
     }
 
-    // Validate class IDs
     if (!classIds.length) {
       throw new Error('At least one class is required');
     }
