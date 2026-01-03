@@ -241,7 +241,6 @@ const getStudentDueFees = async (studentId: string, year?: number) => {
     dueAmount: { $gt: 0 },
     academicYear: currentYear.toString(),
   }).sort({ month: 1 });
-
   const totalDue = dueFees.reduce((sum, fee) => sum + fee.dueAmount, 0);
   const paidFees = await Fees.find({
     student: new Types.ObjectId(studentId),
@@ -418,6 +417,7 @@ export const getAllDueFees = async (query: Record<string, any>) => {
             _id: '$_id',
             month: '$month',
             class: '$class',
+            feeType: '$feeType',
             amount: '$amount',
             paidAmount: { $ifNull: ['$paidAmount', 0] },
             discount: { $ifNull: ['$discount', 0] },
@@ -428,6 +428,7 @@ export const getAllDueFees = async (query: Record<string, any>) => {
             paymentDate: '$paymentDate',
           },
         },
+
         totalDue: { $sum: '$computedDue' },
         totalPaid: { $sum: { $ifNull: ['$paidAmount', 0] } },
         totalAmount: { $sum: { $ifNull: ['$amount', 0] } },

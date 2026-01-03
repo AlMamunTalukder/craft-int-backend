@@ -1,8 +1,6 @@
 import { model, Schema } from 'mongoose';
 import { IStudent } from './student.interface';
 
-
-
 const studentSchema = new Schema<IStudent>(
   {
     studentId: { type: String },
@@ -13,16 +11,14 @@ const studentSchema = new Schema<IStudent>(
     studentDepartment: { type: String, enum: ['hifz', 'academic'] },
     birthDate: { type: String },
     birthRegistrationNo: { type: String },
-    gender: { type: String, },
+    gender: { type: String },
     mobile: { type: String },
     fees: [{ type: Schema.Types.ObjectId, ref: 'Fees' }],
-    payments: {
-      type: Schema.Types.ObjectId,
-      ref: 'Payment',
-    },
+    payments: [{ type: Schema.Types.ObjectId, ref: 'Payment' }],
+
     advanceBalance: {
       type: Number,
-      default: 0
+      default: 0,
     },
     bloodGroup: { type: String },
     studentPhoto: { type: String },
@@ -76,11 +72,9 @@ const studentSchema = new Schema<IStudent>(
     },
     status: {
       type: String,
-
     },
   },
   { timestamps: true },
 );
-
 
 export const Student = model<IStudent>('Student', studentSchema);

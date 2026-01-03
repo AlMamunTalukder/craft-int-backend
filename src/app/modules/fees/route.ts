@@ -9,7 +9,10 @@ router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);
 router.post('/pay', feesControllers.payFee);
 router.post('/pay-with-advance', feesControllers.payFeeWithAdvance);
 router.get('/student-due/:studentId', feesControllers.getStudentDueFees);
-router.get('/monthly-status/:studentId/:month/:year', feesControllers.getMonthlyFeeStatus);
+router.get(
+  '/monthly-status/:studentId/:month/:year',
+  feesControllers.getMonthlyFeeStatus,
+);
 router.get('/', feesControllers.getAllFees);
 router.get('/:id', feesControllers.getSingleFee);
 router.patch('/:id', feesControllers.updateFee);

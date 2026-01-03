@@ -18,14 +18,16 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
   }
 
   if (!studentDepartment) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Student department is required');
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Student department is required',
+    );
   }
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Generate unique student ID
     const studentId = await generateStudentId();
 
     // Check if the generated ID already exists
@@ -48,24 +50,29 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
       studentId,
       className: Array.isArray(payload.className)
         ? payload.className
-        : payload.className ? [payload.className] : [],
+        : payload.className
+          ? [payload.className]
+          : [],
       section: Array.isArray(payload.section)
         ? payload.section
-        : payload.section ? [payload.section] : [],
+        : payload.section
+          ? [payload.section]
+          : [],
       activeSession: Array.isArray(payload.activeSession)
         ? payload.activeSession
-        : payload.activeSession ? [payload.activeSession] : [],
+        : payload.activeSession
+          ? [payload.activeSession]
+          : [],
     };
 
-    // Create student with the processed payload
     const student = await Student.create([processedPayload], {
       session,
     });
-
-    // Create user account for the student
     const userPayload = {
-      email: email || `${studentId.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.com`,
-      password: 'student123', // Default password, should be changed on first login
+      email:
+        email ||
+        `${studentId.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.com`,
+      password: 'student123',
       name: name,
       role: 'student',
       studentId: studentId,
@@ -103,8 +110,12 @@ const getAllStudents = async (query: Record<string, unknown>) => {
       })
       .populate({
         path: 'section',
+      })
+      .populate({
+        path: 'payments',
+        model: 'Payment',
       }),
-    query
+    query,
   )
     .search(studentSearchableFields)
     .filter()
@@ -135,6 +146,10 @@ export const getSingleStudent = async (id: string): Promise<IStudent> => {
     })
     .populate({
       path: 'section',
+    })
+    .populate({
+      path: 'payments',
+      model: 'Payment',
     });
 
   if (!student) {
@@ -186,14 +201,10 @@ const updateStudent = async (
   }
 
   // Update student with new data
-  const student = await Student.findByIdAndUpdate(
-    id,
-    processedPayload,
-    {
-      new: true,
-      runValidators: true,
-    }
-  )
+  const student = await Student.findByIdAndUpdate(id, processedPayload, {
+    new: true,
+    runValidators: true,
+  })
     .populate('className')
     .populate('section')
     .populate('fees');
@@ -207,7 +218,7 @@ const updateStudent = async (
     await User.findOneAndUpdate(
       { studentId: student.studentId },
       { email: payload.email },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
   }
 
