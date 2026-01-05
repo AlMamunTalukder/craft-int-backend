@@ -12,7 +12,7 @@ import { IStudent } from '../student/student.interface';
 import { FeeAdjustment } from '../feeAdjustment/model';
 import { generateStudentId } from '../student/student.utils';
 import { Payment } from '../payment/model';
-import { Class } from '../class/class.model';
+// import { Class } from '../class/class.model';
 
 const getAllEnrollments = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(Enrollment.find(), query)
@@ -1738,454 +1738,689 @@ export const deleteEnrollment = async (id: string) => {
   }
 };
 
-// Promote a single student
-const promoteEnrollment = async (
-  studentId: string,
-  newClassId: string,
-  session: string,
-  rollNumber?: string,
-  section?: string,
-) => {
-  const sessionTransaction = await mongoose.startSession();
-  sessionTransaction.startTransaction();
+// const promoteEnrollment = async (
+//   studentId: string,
+//   newClassId: string,
+//   session: string,
+//   rollNumber?: string,
+//   section?: string,
+// ) => {
+//   const sessionTransaction = await mongoose.startSession();
+//   sessionTransaction.startTransaction();
 
-  try {
-    // Find the student
-    const student =
-      await Student.findById(studentId).session(sessionTransaction);
-    if (!student) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
-    }
+//   try {
 
-    // Find the latest enrollment of the student
-    const lastEnrollment = await Enrollment.findOne({ student: studentId })
-      .sort({ session: -1, createdAt: -1 })
-      .populate('className')
-      .session(sessionTransaction);
+//     const student = await Student.findById(studentId).session(sessionTransaction);
+//     if (!student) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+//     }
 
-    if (!lastEnrollment) {
-      throw new AppError(
-        httpStatus.NOT_FOUND,
-        'No enrollment found for this student',
-      );
-    }
+//     const lastEnrollment = await Enrollment.findOne({ student: studentId })
+//       .sort({ session: -1, createdAt: -1 })
+//       .populate('className')
+//       .session(sessionTransaction);
 
-    // Check if the student already has an enrollment for the target session
-    const existingEnrollment = await Enrollment.findOne({
-      student: studentId,
-      session: session,
-    }).session(sessionTransaction);
+//     if (!lastEnrollment) {
+//       throw new AppError(
+//         httpStatus.NOT_FOUND,
+//         'No enrollment found for this student'
+//       );
+//     }
 
-    if (existingEnrollment) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'Student already enrolled for this session',
-      );
-    }
+//     const existingEnrollment = await Enrollment.findOne({
+//       student: studentId,
+//       session: session,
+//     }).session(sessionTransaction);
 
-    // Validate new class exists
-    const newClass =
-      await Class.findById(newClassId).session(sessionTransaction);
-    if (!newClass) {
-      throw new AppError(httpStatus.NOT_FOUND, 'New class not found');
-    }
+//     if (existingEnrollment) {
+//       throw new AppError(
+//         httpStatus.BAD_REQUEST,
+//         'Student already enrolled for this session'
+//       );
+//     }
 
-    // Create new enrollment data by copying from last enrollment
-    const newEnrollmentData: any = {
-      student: studentId,
-      studentId: student.studentId,
-      studentName: student.name,
-      nameBangla: student.nameBangla || '',
-      studentPhoto: student.studentPhoto || lastEnrollment.studentPhoto,
-      mobileNo: student.mobile || lastEnrollment.mobileNo,
-      rollNumber:
-        rollNumber ||
-        (lastEnrollment.rollNumber
-          ? `${parseInt(lastEnrollment.rollNumber) + 1}`
-          : '1'),
-      gender: student.gender || lastEnrollment.gender,
-      birthDate: student.birthDate || lastEnrollment.birthDate,
-      birthRegistrationNo:
-        student.birthRegistrationNo || lastEnrollment.birthRegistrationNo,
-      bloodGroup: student.bloodGroup || lastEnrollment.bloodGroup,
-      nationality:
-        student.nationality || lastEnrollment.nationality || 'Bangladesh',
-      className: newClassId,
-      section: section || lastEnrollment.section,
-      roll:
-        rollNumber ||
-        (lastEnrollment.roll ? `${parseInt(lastEnrollment.roll) + 1}` : '1'),
-      session: session,
-      batch: lastEnrollment.batch,
-      studentType: lastEnrollment.studentType,
-      studentDepartment: lastEnrollment.studentDepartment,
-      fatherName: lastEnrollment.fatherName || student.fatherName,
-      fatherNameBangla:
-        lastEnrollment.fatherNameBangla || student.fatherNameBangla,
-      fatherMobile: lastEnrollment.fatherMobile || student.fatherMobile,
-      fatherNid: lastEnrollment.fatherNid || student.fatherNid,
-      fatherProfession:
-        lastEnrollment.fatherProfession || student.fatherProfession,
-      fatherIncome: lastEnrollment.fatherIncome || student.fatherIncome || 0,
-      motherName: lastEnrollment.motherName || student.motherName,
-      motherNameBangla:
-        lastEnrollment.motherNameBangla || student.motherNameBangla,
-      motherMobile: lastEnrollment.motherMobile || student.motherMobile,
-      motherNid: lastEnrollment.motherNid || student.motherNid,
-      motherProfession:
-        lastEnrollment.motherProfession || student.motherProfession,
-      motherIncome: lastEnrollment.motherIncome || student.motherIncome || 0,
-      guardianInfo: lastEnrollment.guardianInfo || student.guardianInfo,
-      presentAddress: lastEnrollment.presentAddress || student.presentAddress,
-      permanentAddress:
-        lastEnrollment.permanentAddress || student.permanentAddress,
-      documents: lastEnrollment.documents || student.documents,
-      previousSchool: lastEnrollment.previousSchool || student.previousSchool,
-      termsAccepted: true,
-      admissionType: 'promotion',
-      promotedFrom: lastEnrollment._id,
-      status: 'active',
-      paymentStatus: 'pending',
-    };
+//     // ৪. নতুন ক্লাসের validation চেক করুন
+//     const newClass = await Class.findById(newClassId).session(sessionTransaction);
+//     if (!newClass) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'New class not found');
+//     }
 
-    // Clean up undefined values
-    Object.keys(newEnrollmentData).forEach((key) => {
-      if (newEnrollmentData[key] === undefined) {
-        delete newEnrollmentData[key];
-      }
-    });
+//     // ৫. মাসের নামের array তৈরি করুন (ফি তৈরি করার জন্য)
+//     const monthNames = [
+//       'January', 'February', 'March', 'April', 'May', 'June',
+//       'July', 'August', 'September', 'October', 'November', 'December'
+//     ];
 
-    // Create new enrollment
-    const [newEnrollment] = await Enrollment.create([newEnrollmentData], {
-      session: sessionTransaction,
-    });
+//     const currentDate = new Date();
+//     const currentMonthIndex = currentDate.getMonth();
+//     const currentMonth = monthNames[currentMonthIndex];
+//     const currentYear = currentDate.getFullYear();
 
-    // Update old enrollment's promotedTo field
-    lastEnrollment.promotedTo = newEnrollment._id;
-    lastEnrollment.status = 'passed';
-    await lastEnrollment.save({ session: sessionTransaction });
+//     // ৬. নতুন Enrollment data তৈরি করুন (পুরানো Enrollment থেকে copy করে)
+//     const newEnrollmentData: any = {
+//       student: new Types.ObjectId(studentId),
+//       studentId: student.studentId || '',
+//       studentName: student.name || '',
+//       nameBangla: student.nameBangla || '',
+//       studentPhoto: student.studentPhoto || lastEnrollment.studentPhoto || '',
+//       mobileNo: student.mobile || lastEnrollment.mobileNo || '',
+//       rollNumber: rollNumber || (lastEnrollment.rollNumber
+//         ? String(Number(lastEnrollment.rollNumber) + 1)
+//         : '1'),
+//       gender: student.gender || lastEnrollment.gender || '',
+//       birthDate: student.birthDate || lastEnrollment.birthDate || '',
+//       birthRegistrationNo: student.birthRegistrationNo || lastEnrollment.birthRegistrationNo || '',
+//       bloodGroup: student.bloodGroup || lastEnrollment.bloodGroup || '',
+//       className: [new Types.ObjectId(newClassId)], // Array হিসেবে রাখুন
+//       section: section || lastEnrollment.section || '',
+//       roll: rollNumber || (lastEnrollment.roll
+//         ? String(Number(lastEnrollment.roll) + 1)
+//         : '1'),
+//       session: session,
+//       batch: lastEnrollment.batch || '',
+//       studentType: lastEnrollment.studentType || '',
+//       studentDepartment: lastEnrollment.studentDepartment || 'hifz',
+//       fatherName: lastEnrollment.fatherName || student.fatherName || '',
+//       fatherMobile: lastEnrollment.fatherMobile || student.fatherMobile || '',
+//       motherName: lastEnrollment.motherName || student.motherName || '',
+//       motherMobile: lastEnrollment.motherMobile || student.motherMobile || '',
+//       motherProfession: lastEnrollment.motherProfession || student.motherProfession || '',
+//       guardianInfo: lastEnrollment.guardianInfo || student.guardianInfo || {},
+//       presentAddress: lastEnrollment.presentAddress || student.presentAddress || {},
+//       permanentAddress: lastEnrollment.permanentAddress || student.permanentAddress || {},
+//       documents: lastEnrollment.documents || student.documents || {
+//         birthCertificate: false,
+//         transferCertificate: false,
+//         characterCertificate: false,
+//         markSheet: false,
+//         photographs: false,
+//       },
+//       previousSchool: lastEnrollment.previousSchool || student.previousSchool || {},
+//       termsAccepted: true,
+//       admissionType: 'promotion',
+//       promotedFrom: lastEnrollment._id,
+//       status: 'active',
+//       paymentStatus: 'pending',
+//       fees: [],
+//     };
 
-    // Update student's current class
-    student.className = [newClassId];
-    await student.save({ session: sessionTransaction });
+//     const [newEnrollment] = await Enrollment.create([newEnrollmentData], {
+//       session: sessionTransaction,
+//     });
 
-    // Commit transaction
-    await sessionTransaction.commitTransaction();
-    sessionTransaction.endSession();
+//     lastEnrollment.promotedTo = newEnrollment._id;
+//     lastEnrollment.status = 'passed';
+//     await lastEnrollment.save({ session: sessionTransaction });
 
-    // Populate the new enrollment before returning
-    const populatedEnrollment = await Enrollment.findById(newEnrollment._id)
-      .populate('student')
-      .populate('className')
-      .populate('promotedFrom');
+//     student.className = [new Types.ObjectId(newClassId)];
+//     await student.save({ session: sessionTransaction });
 
-    return {
-      success: true,
-      message: 'Student promoted successfully',
-      data: {
-        oldEnrollment: {
-          id: lastEnrollment._id,
-          class: lastEnrollment.className,
-          session: lastEnrollment.session,
-          status: lastEnrollment.status,
-        },
-        newEnrollment: populatedEnrollment,
-      },
-    };
-  } catch (error: any) {
-    await sessionTransaction.abortTransaction();
-    sessionTransaction.endSession();
-    throw error;
-  }
-};
+//     const feeDocs: mongoose.Types.ObjectId[] = [];
 
-// Bulk promote multiple students
-const bulkPromoteEnrollments = async (promotions: any[], session: string) => {
-  const sessionTransaction = await mongoose.startSession();
-  sessionTransaction.startTransaction();
+//     if (newClass.feeStructure && Array.isArray(newClass.feeStructure)) {
+//       console.log('Creating fees for promoted student from class fee structure...');
 
-  try {
-    const results = [];
-    const errors = [];
+//       for (const feeStructure of newClass.feeStructure) {
+//         const feeType = feeStructure.feeType || '';
+//         const amount = feeStructure.amount || 0;
+//         const isMonthly = feeStructure.isMonthly || false;
 
-    for (const promotion of promotions) {
-      try {
-        const { studentId, newClassId, rollNumber, section } = promotion;
+//         if (isMonthly && amount > 0) {
+//           // Monthly fee processing - 12 মাসের জন্য
+//           const monthlyAmount = amount;
 
-        // Find the student
-        const student =
-          await Student.findById(studentId).session(sessionTransaction);
-        if (!student) {
-          errors.push({ studentId, error: 'Student not found' });
-          continue;
-        }
+//           for (let i = 0; i < 12; i++) {
+//             const isCurrentMonth = i === currentMonthIndex;
+//             const monthName = monthNames[i];
+//             const monthKey = `${monthName}-${currentYear}`;
 
-        // Find the latest enrollment
-        const lastEnrollment = await Enrollment.findOne({ student: studentId })
-          .sort({ session: -1, createdAt: -1 })
-          .session(sessionTransaction);
+//             const monthFeeData: any = {
+//               enrollment: newEnrollment._id,
+//               student: new Types.ObjectId(studentId),
+//               feeType: feeType,
+//               class: newClass.className || newClassId,
+//               month: monthKey,
+//               amount: monthlyAmount,
+//               paidAmount: 0,
+//               discount: 0,
+//               waiver: 0,
+//               dueAmount: monthlyAmount,
+//               status: 'unpaid',
+//               academicYear: currentYear.toString(),
+//               isCurrentMonth: isCurrentMonth,
+//               isMonthly: true,
+//             };
 
-        if (!lastEnrollment) {
-          errors.push({ studentId, error: 'No enrollment found' });
-          continue;
-        }
+//             const [monthlyFee] = await Fees.create([monthFeeData], { session: sessionTransaction });
+//             feeDocs.push(monthlyFee._id as mongoose.Types.ObjectId);
+//           }
+//         } else if (amount > 0) {
+//           // One-time fee
+//           const feeData: any = {
+//             enrollment: newEnrollment._id,
+//             student: new Types.ObjectId(studentId),
+//             feeType: feeType,
+//             class: newClass.className || newClassId,
+//             month: `${currentMonth}-${currentYear}`,
+//             amount: amount,
+//             paidAmount: 0,
+//             discount: 0,
+//             waiver: 0,
+//             dueAmount: amount,
+//             status: 'unpaid',
+//             academicYear: currentYear.toString(),
+//             isCurrentMonth: true,
+//           };
 
-        // Check for existing enrollment in target session
-        const existingEnrollment = await Enrollment.findOne({
-          student: studentId,
-          session: session,
-        }).session(sessionTransaction);
+//           const [newFee] = await Fees.create([feeData], { session: sessionTransaction });
+//           feeDocs.push(newFee._id as mongoose.Types.ObjectId);
+//         }
+//       }
 
-        if (existingEnrollment) {
-          errors.push({
-            studentId,
-            error: 'Already enrolled for this session',
-          });
-          continue;
-        }
+//       // ১১. Enrollment
+//       if (feeDocs.length > 0) {
+//         newEnrollment.fees = feeDocs;
+//         await newEnrollment.save({ session: sessionTransaction });
 
-        // Validate new class
-        const newClass =
-          await Class.findById(newClassId).session(sessionTransaction);
-        if (!newClass) {
-          errors.push({ studentId, error: 'New class not found' });
-          continue;
-        }
+//         // Student
+//         const existingStudentFees = student.fees
+//           ? student.fees.map((id: any) => id.toString())
+//           : [];
 
-        // Create new enrollment
-        const newEnrollmentData: any = {
-          student: studentId,
-          studentId: student.studentId,
-          studentName: student.name,
-          nameBangla: student.nameBangla || '',
-          className: newClassId,
-          section: section || lastEnrollment.section,
-          roll:
-            rollNumber ||
-            (lastEnrollment.roll
-              ? `${parseInt(lastEnrollment.roll) + 1}`
-              : '1'),
-          session: session,
-          batch: lastEnrollment.batch,
-          studentType: lastEnrollment.studentType,
-          studentDepartment: lastEnrollment.studentDepartment,
-          admissionType: 'promotion',
-          promotedFrom: lastEnrollment._id,
-          status: 'active',
-          paymentStatus: 'pending',
-        };
+//         const newFeeIds = feeDocs
+//           .map((id) => id.toString())
+//           .filter((id) => !existingStudentFees.includes(id));
 
-        // Copy important fields from last enrollment
-        const fieldsToCopy = [
-          'fatherName',
-          'fatherMobile',
-          'motherName',
-          'motherMobile',
-          'presentAddress',
-          'permanentAddress',
-          'guardianInfo',
-          'documents',
-          'previousSchool',
-          'termsAccepted',
-        ];
+//         if (newFeeIds.length > 0) {
+//           const allFeeIds = [...existingStudentFees, ...newFeeIds];
+//           student.fees = allFeeIds.map((id) => new Types.ObjectId(id));
+//           await student.save({ session: sessionTransaction });
+//         }
+//       }
+//     }
 
-        fieldsToCopy.forEach((field) => {
-          if (lastEnrollment[field]) {
-            newEnrollmentData[field] = lastEnrollment[field];
-          }
-        });
+//     await sessionTransaction.commitTransaction();
+//     sessionTransaction.endSession();
 
-        const [newEnrollment] = await Enrollment.create([newEnrollmentData], {
-          session: sessionTransaction,
-        });
+//     const populatedEnrollment = await Enrollment.findById(newEnrollment._id)
+//       .populate('student')
+//       .populate({
+//         path: 'className',
+//         model: 'Class'
+//       })
+//       .populate('fees')
+//       .populate({
+//         path: 'promotedFrom',
+//         populate: {
+//           path: 'className',
+//           model: 'Class'
+//         }
+//       });
 
-        // Update old enrollment
-        lastEnrollment.promotedTo = newEnrollment._id;
-        lastEnrollment.status = 'passed';
-        await lastEnrollment.save({ session: sessionTransaction });
+//     return {
+//       success: true,
+//       message: 'Student promoted successfully',
+//       data: {
+//         oldEnrollment: {
+//           id: lastEnrollment._id,
+//           class: lastEnrollment.className,
+//           session: lastEnrollment.session,
+//           status: lastEnrollment.status,
+//         },
+//         newEnrollment: populatedEnrollment,
+//       },
+//     };
+//   } catch (error: any) {
+//     await sessionTransaction.abortTransaction();
+//     sessionTransaction.endSession();
+//     console.error('Promotion error:', error);
 
-        // Update student's class
-        student.className = [newClassId];
-        await student.save({ session: sessionTransaction });
+//     throw new AppError(
+//       httpStatus.INTERNAL_SERVER_ERROR,
+//       error.message || 'Failed to promote student'
+//     );
+//   }
+// };
 
-        results.push({
-          studentId,
-          studentName: student.name,
-          oldClass: lastEnrollment.className,
-          newClass: newClassId,
-          newEnrollmentId: newEnrollment._id,
-        });
-      } catch (error: any) {
-        errors.push({
-          studentId: promotion.studentId,
-          error: error.message || 'Promotion failed',
-        });
-      }
-    }
+// Bulk promote multiple students - IMPROVED VERSION
+// const bulkPromoteEnrollments = async (promotions: any[], session: string) => {
+//   const sessionTransaction = await mongoose.startSession();
+//   sessionTransaction.startTransaction();
 
-    // Commit transaction
-    await sessionTransaction.commitTransaction();
-    sessionTransaction.endSession();
+//   try {
+//     const results: any[] = [];
+//     const errors: any[] = [];
 
-    return {
-      success: true,
-      message: `Promotion completed: ${results.length} successful, ${errors.length} failed`,
-      results,
-      errors: errors.length > 0 ? errors : undefined,
-    };
-  } catch (error: any) {
-    await sessionTransaction.abortTransaction();
-    sessionTransaction.endSession();
-    throw error;
-  }
-};
+//     for (const promotion of promotions) {
+//       try {
+//         const { studentId, newClassId, rollNumber, section } = promotion;
 
-// Get promotion history for a student
-const getPromotionHistory = async (studentId: string) => {
-  const enrollments = await Enrollment.find({ student: studentId })
-    .sort({ session: 1, createdAt: 1 })
-    .populate('className', 'className')
-    .populate('promotedFrom', 'session className')
-    .populate('promotedTo', 'session className');
+//         // Validate inputs
+//         if (!studentId || !newClassId) {
+//           errors.push({
+//             studentId: studentId || 'unknown',
+//             error: 'Student ID and Class ID are required'
+//           });
+//           continue;
+//         }
 
-  if (!enrollments.length) {
-    throw new AppError(httpStatus.NOT_FOUND, 'No enrollment history found');
-  }
+//         // Find the student
+//         const student = await Student.findById(studentId).session(sessionTransaction);
+//         if (!student) {
+//           errors.push({ studentId, error: 'Student not found' });
+//           continue;
+//         }
 
-  const history = enrollments.map((enrollment) => ({
-    id: enrollment._id,
-    session: enrollment.session,
-    class: enrollment.className,
-    admissionType: enrollment.admissionType,
-    status: enrollment.status,
-    rollNumber: enrollment.rollNumber,
-    promotedFrom: enrollment.promotedFrom,
-    promotedTo: enrollment.promotedTo,
-    createdAt: enrollment.createdAt,
-  }));
+//         // Find the latest enrollment
+//         const lastEnrollment = await Enrollment.findOne({ student: studentId })
+//           .sort({ session: -1, createdAt: -1 })
+//           .session(sessionTransaction);
 
-  return {
-    success: true,
-    message: 'Promotion history retrieved successfully',
-    data: history,
-  };
-};
+//         if (!lastEnrollment) {
+//           errors.push({ studentId, error: 'No enrollment found for this student' });
+//           continue;
+//         }
 
-// Get students eligible for promotion (active students from previous session)
-const getPromotionEligibleStudents = async (currentSession: string) => {
-  // Extract year from session (e.g., "2024-2025" -> 2024)
-  const currentYear = parseInt(currentSession.split('-')[0]);
-  const previousSession = `${currentYear - 1}-${currentYear}`;
+//         // Check for existing enrollment in target session
+//         const existingEnrollment = await Enrollment.findOne({
+//           student: studentId,
+//           session: session,
+//         }).session(sessionTransaction);
 
-  const eligibleStudents = await Enrollment.find({
-    session: previousSession,
-    status: { $in: ['active', 'passed'] },
-  })
-    .populate('student', 'name studentId mobile')
-    .populate('className', 'className')
-    .sort({ 'student.name': 1 });
+//         if (existingEnrollment) {
+//           errors.push({
+//             studentId,
+//             error: 'Student already enrolled for this session'
+//           });
+//           continue;
+//         }
 
-  const formattedStudents = eligibleStudents.map((enrollment) => ({
-    enrollmentId: enrollment._id,
-    studentId: enrollment.student._id,
-    studentName: enrollment.student.name,
-    studentIdentifier: enrollment.student.studentId,
-    currentClass: enrollment.className,
-    currentSession: enrollment.session,
-    currentRollNumber: enrollment.rollNumber,
-    currentSection: enrollment.section,
-  }));
+//         // Validate new class
+//         const newClass = await Class.findById(newClassId).session(sessionTransaction);
+//         if (!newClass) {
+//           errors.push({ studentId, error: 'New class not found' });
+//           continue;
+//         }
 
-  return {
-    success: true,
-    message: 'Eligible students retrieved successfully',
-    data: {
-      previousSession,
-      currentSession,
-      eligibleStudents: formattedStudents,
-    },
-  };
-};
+//         // Create new enrollment data
+//         const newEnrollmentData: any = {
+//           student: new Types.ObjectId(studentId),
+//           studentId: student.studentId || '',
+//           studentName: student.name || '',
+//           nameBangla: student.nameBangla || '',
+//           className: [new Types.ObjectId(newClassId)],
+//           section: section || lastEnrollment.section || '',
+//           roll: rollNumber || (lastEnrollment.roll
+//             ? String(Number(lastEnrollment.roll) + 1)
+//             : '1'),
+//           session: session,
+//           batch: lastEnrollment.batch || '',
+//           studentType: lastEnrollment.studentType || '',
+//           studentDepartment: lastEnrollment.studentDepartment || 'hifz',
+//           admissionType: 'promotion',
+//           promotedFrom: lastEnrollment._id,
+//           status: 'active',
+//           paymentStatus: 'pending',
+//           fees: [],
+//           termsAccepted: true,
+//         };
 
-// Get promotion summary (statistics)
-const getPromotionSummary = async () => {
-  const currentYear = new Date().getFullYear();
-  const currentSession = `${currentYear}-${currentYear + 1}`;
-  const previousSession = `${currentYear - 1}-${currentYear}`;
+//         // Copy important fields
+//         const fieldsToCopy = [
+//           'fatherName', 'fatherMobile', 'motherName', 'motherMobile',
+//           'presentAddress', 'permanentAddress', 'guardianInfo',
+//           'documents', 'previousSchool'
+//         ] as const;
 
-  // Get counts
-  const totalPreviousEnrollments = await Enrollment.countDocuments({
-    session: previousSession,
-  });
+//         fieldsToCopy.forEach(field => {
+//           if (lastEnrollment[field]) {
+//             newEnrollmentData[field] = lastEnrollment[field];
+//           } else if (student[field as keyof IStudent]) {
+//             newEnrollmentData[field] = student[field as keyof IStudent];
+//           }
+//         });
 
-  const totalPromoted = await Enrollment.countDocuments({
-    session: currentSession,
-    admissionType: 'promotion',
-  });
+//         // Create new enrollment
+//         const [newEnrollment] = await Enrollment.create([newEnrollmentData], {
+//           session: sessionTransaction,
+//         });
 
-  const totalNewAdmissions = await Enrollment.countDocuments({
-    session: currentSession,
-    admissionType: 'admission',
-  });
+//         // Update old enrollment
+//         lastEnrollment.promotedTo = newEnrollment._id;
+//         lastEnrollment.status = 'passed';
+//         await lastEnrollment.save({ session: sessionTransaction });
 
-  // Get class-wise promotion count
-  const classWisePromotions = await Enrollment.aggregate([
-    {
-      $match: {
-        session: currentSession,
-        admissionType: 'promotion',
-      },
-    },
-    {
-      $lookup: {
-        from: 'classes',
-        localField: 'className',
-        foreignField: '_id',
-        as: 'class',
-      },
-    },
-    {
-      $unwind: '$class',
-    },
-    {
-      $group: {
-        _id: '$class.className',
-        count: { $sum: 1 },
-      },
-    },
-    {
-      $sort: { _id: 1 },
-    },
-  ]);
+//         // Update student's class
+//         student.className = [new Types.ObjectId(newClassId)];
+//         await student.save({ session: sessionTransaction });
 
-  return {
-    success: true,
-    message: 'Promotion summary retrieved successfully',
-    data: {
-      previousSession,
-      currentSession,
-      summary: {
-        totalPreviousEnrollments,
-        totalPromoted,
-        totalNewAdmissions,
-        promotionRate:
-          totalPreviousEnrollments > 0
-            ? ((totalPromoted / totalPreviousEnrollments) * 100).toFixed(2) +
-              '%'
-            : '0%',
-      },
-      classWisePromotions,
-    },
-  };
-};
+//         results.push({
+//           studentId: studentId,
+//           studentName: student.name,
+//           oldClass: lastEnrollment.className,
+//           newClass: newClass.className || newClassId,
+//           newEnrollmentId: newEnrollment._id,
+//           rollNumber: newEnrollmentData.roll,
+//           section: newEnrollmentData.section,
+//         });
+//       } catch (error: any) {
+//         errors.push({
+//           studentId: promotion.studentId || 'unknown',
+//           error: error.message || 'Promotion failed'
+//         });
+//       }
+//     }
+
+//     // Commit transaction
+//     await sessionTransaction.commitTransaction();
+//     sessionTransaction.endSession();
+
+//     return {
+//       success: true,
+//       message: `Promotion completed: ${results.length} successful, ${errors.length} failed`,
+//       results,
+//       errors: errors.length > 0 ? errors : undefined,
+//     };
+//   } catch (error: any) {
+//     await sessionTransaction.abortTransaction();
+//     sessionTransaction.endSession();
+//     console.error('Bulk promotion error:', error);
+//     throw error;
+//   }
+// };
+
+// Get promotion history for a student - IMPROVED VERSION
+// const getPromotionHistory = async (studentId: string) => {
+//   // Validate studentId
+//   if (!mongoose.Types.ObjectId.isValid(studentId)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
+//   }
+
+//   // Check if student exists
+//   const student = await Student.findById(studentId);
+//   if (!student) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+//   }
+
+//   const enrollments = await Enrollment.find({ student: studentId })
+//     .sort({ session: 1, createdAt: 1 })
+//     .populate({
+//       path: 'className',
+//       select: 'className',
+//       model: 'Class'
+//     })
+//     .populate({
+//       path: 'promotedFrom',
+//       select: 'session className',
+//       populate: {
+//         path: 'className',
+//         select: 'className',
+//         model: 'Class'
+//       }
+//     })
+//     .populate({
+//       path: 'promotedTo',
+//       select: 'session className',
+//       populate: {
+//         path: 'className',
+//         select: 'className',
+//         model: 'Class'
+//       }
+//     });
+
+//   if (!enrollments.length) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'No enrollment history found');
+//   }
+
+//   const history = enrollments.map((enrollment, index) => ({
+//     serial: index + 1,
+//     id: enrollment._id,
+//     session: enrollment.session,
+//     class: enrollment.className?.[0] ? (enrollment.className[0] as any).className : 'N/A',
+//     admissionType: enrollment.admissionType,
+//     status: enrollment.status,
+//     rollNumber: enrollment.roll,
+//     roll: enrollment.roll,
+//     section: enrollment.section,
+//     promotedFrom: enrollment.promotedFrom
+//       ? {
+//           id: enrollment.promotedFrom._id,
+//           session: (enrollment.promotedFrom as any).session,
+//           class: (enrollment.promotedFrom as any).className?.[0]
+//             ? ((enrollment.promotedFrom as any).className[0] as any).className
+//             : 'N/A'
+//         }
+//       : null,
+//     promotedTo: enrollment.promotedTo
+//       ? {
+//           id: enrollment.promotedTo._id,
+//           session: (enrollment.promotedTo as any).session,
+//           class: (enrollment.promotedTo as any).className?.[0]
+//             ? ((enrollment.promotedTo as any).className[0] as any).className
+//             : 'N/A'
+//         }
+//       : null,
+//     createdAt: enrollment.createdAt,
+//     updatedAt: enrollment.updatedAt,
+//   }));
+
+//   return {
+//     success: true,
+//     message: 'Promotion history retrieved successfully',
+//     data: {
+//       student: {
+//         id: student._id,
+//         name: student.name,
+//         studentId: student.studentId,
+//         currentClass: student.className,
+//       },
+//       totalEnrollments: enrollments.length,
+//       history,
+//     },
+//   };
+// };
+
+// Get students eligible for promotion - IMPROVED VERSION
+// const getPromotionEligibleStudents = async (currentSession: string) => {
+//   // Validate session format
+//   if (!currentSession || !currentSession.includes('-')) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid session format. Use format: YYYY-YYYY');
+//   }
+
+//   // Extract year from session
+//   const currentYear = parseInt(currentSession.split('-')[0]);
+//   if (isNaN(currentYear)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid year in session');
+//   }
+
+//   const previousSession = `${currentYear - 1}-${currentYear}`;
+
+//   // Find active enrollments from previous session
+//   const eligibleEnrollments = await Enrollment.find({
+//     session: previousSession,
+//     status: { $in: ['active'] }, // শুধুমাত্র active ছাত্রদের promotion দেবেন
+//     admissionType: { $ne: 'promotion' } // যারা ইতিমধ্যে promoted না
+//   })
+//     .populate({
+//       path: 'student',
+//       select: 'name studentId mobile email',
+//       model: 'Student'
+//     })
+//     .populate({
+//       path: 'className',
+//       select: 'className',
+//       model: 'Class'
+//     })
+//     .sort({ 'student.name': 1 });
+
+//   const formattedStudents = eligibleEnrollments.map((enrollment) => ({
+//     enrollmentId: enrollment._id,
+//     studentId: enrollment.student._id,
+//     studentName: (enrollment.student as any).name,
+//     studentIdentifier: (enrollment.student as any).studentId,
+//     currentClass: enrollment.className?.[0] ? (enrollment.className[0] as any).className : 'N/A',
+//     currentClassId: enrollment.className?.[0] ? enrollment.className[0]._id : null,
+//     currentSession: enrollment.session,
+//     currentRollNumber: enrollment.rollNumber,
+//     currentRoll: enrollment.roll,
+//     currentSection: enrollment.section,
+//     contact: (enrollment.student as any).mobile,
+//     email: (enrollment.student as any).email,
+//   }));
+
+//   return {
+//     success: true,
+//     message: 'Eligible students retrieved successfully',
+//     data: {
+//       previousSession,
+//       currentSession,
+//       totalEligible: formattedStudents.length,
+//       eligibleStudents: formattedStudents,
+//     },
+//   };
+// };
+
+// // Get promotion summary - IMPROVED VERSION
+// const getPromotionSummary = async (session?: string) => {
+//   const currentYear = new Date().getFullYear();
+//   const currentSession = session || `${currentYear}-${currentYear + 1}`;
+//   const previousSession = `${currentYear - 1}-${currentYear}`;
+
+//   // Get counts for previous session
+//   const totalPreviousEnrollments = await Enrollment.countDocuments({
+//     session: previousSession,
+//     status: 'active'
+//   });
+
+//   // Get counts for current session
+//   const totalPromoted = await Enrollment.countDocuments({
+//     session: currentSession,
+//     admissionType: 'promotion',
+//     status: 'active'
+//   });
+
+//   const totalNewAdmissions = await Enrollment.countDocuments({
+//     session: currentSession,
+//     admissionType: 'admission',
+//     status: 'active'
+//   });
+
+//   const totalTransferred = await Enrollment.countDocuments({
+//     session: currentSession,
+//     admissionType: { $nin: ['admission', 'promotion'] }
+//   });
+
+//   // Get class-wise promotion count
+//   const classWisePromotions = await Enrollment.aggregate([
+//     {
+//       $match: {
+//         session: currentSession,
+//         admissionType: 'promotion',
+//         status: 'active'
+//       }
+//     },
+//     {
+//       $unwind: '$className'
+//     },
+//     {
+//       $lookup: {
+//         from: 'classes',
+//         localField: 'className',
+//         foreignField: '_id',
+//         as: 'class'
+//       }
+//     },
+//     {
+//       $unwind: '$class'
+//     },
+//     {
+//       $group: {
+//         _id: '$class.className',
+//         classId: { $first: '$class._id' },
+//         count: { $sum: 1 },
+//         students: {
+//           $push: {
+//             studentId: '$studentId',
+//             studentName: '$studentName',
+//             roll: '$roll',
+//             section: '$section'
+//           }
+//         }
+//       }
+//     },
+//     {
+//       $sort: { _id: 1 }
+//     }
+//   ]);
+
+//   // Get promotion trend (last 3 years)
+//   const promotionTrend = await Enrollment.aggregate([
+//     {
+//       $match: {
+//         admissionType: 'promotion',
+//         status: 'active',
+//         session: {
+//           $gte: `${currentYear - 3}-${currentYear - 2}`,
+//           $lte: currentSession
+//         }
+//       }
+//     },
+//     {
+//       $group: {
+//         _id: '$session',
+//         count: { $sum: 1 }
+//       }
+//     },
+//     {
+//       $sort: { _id: 1 }
+//     }
+//   ]);
+
+//   // Calculate promotion rate
+//   const promotionRate = totalPreviousEnrollments > 0
+//     ? ((totalPromoted / totalPreviousEnrollments) * 100).toFixed(2)
+//     : '0.00';
+
+//   return {
+//     success: true,
+//     message: 'Promotion summary retrieved successfully',
+//     data: {
+//       sessions: {
+//         previous: previousSession,
+//         current: currentSession
+//       },
+//       summary: {
+//         totalPreviousEnrollments,
+//         totalPromoted,
+//         totalNewAdmissions,
+//         totalTransferred,
+//         totalCurrentEnrollments: totalPromoted + totalNewAdmissions + totalTransferred,
+//         promotionRate: `${promotionRate}%`,
+//         retentionRate: totalPreviousEnrollments > 0
+//           ? `${((totalPromoted / totalPreviousEnrollments) * 100).toFixed(2)}%`
+//           : '0.00%'
+//       },
+//       classWisePromotions,
+//       promotionTrend,
+//       analysis: {
+//         promotionPercentage: totalPreviousEnrollments > 0
+//           ? Math.round((totalPromoted / totalPreviousEnrollments) * 100)
+//           : 0,
+//         newAdmissionPercentage: totalPreviousEnrollments > 0
+//           ? Math.round((totalNewAdmissions / (totalPromoted + totalNewAdmissions)) * 100)
+//           : 0
+//       }
+//     },
+//   };
+// };
 
 export const enrollmentServices = {
   createEnrollment,
-  promoteEnrollment,
-  bulkPromoteEnrollments,
-  getPromotionHistory,
-  getPromotionEligibleStudents,
-  getPromotionSummary,
+  // promoteEnrollment,
+  // bulkPromoteEnrollments,
+  // getPromotionHistory,
+  // getPromotionEligibleStudents,
+  // getPromotionSummary,
   getAllEnrollments,
   getSingleEnrollment,
   updateEnrollment,

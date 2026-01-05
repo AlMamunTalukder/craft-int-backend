@@ -27,35 +27,35 @@ router.delete(
   enrollmentControllers.deleteEnrollment,
 );
 
-// Promotion routes
-router.post(
-  '/promote',
-  auth('admin', 'super_admin'),
-  enrollmentControllers.promoteEnrollment,
-);
+// // Promotion routes
+// router.post(
+//   '/promote',
+//   auth('admin', 'super_admin'),
+//   enrollmentControllers.promoteEnrollment,
+// );
 
-router.post(
-  '/bulk-promote',
-  auth('admin', 'super_admin'),
-  enrollmentControllers.bulkPromoteEnrollments,
-);
+// router.post(
+//   '/bulk-promote',
+//   auth('admin', 'super_admin'),
+//   enrollmentControllers.bulkPromoteEnrollments,
+// );
 
-router.get(
-  '/promotion/history/:studentId',
-  auth('admin', 'super_admin'),
-  enrollmentControllers.getPromotionHistory,
-);
+// router.get(
+//   '/promotion/history/:studentId',
+//   auth('admin', 'super_admin'),
+//   enrollmentControllers.getPromotionHistory,
+// );
 
-router.get(
-  '/promotion/eligible',
-  auth('admin', 'super_admin'),
-  enrollmentControllers.getPromotionEligibleStudents,
-);
+// router.get(
+//   '/promotion/eligible',
+//   auth('admin', 'super_admin'),
+//   enrollmentControllers.getPromotionEligibleStudents,
+// );
 
-router.get(
-  '/promotion/summary',
-  auth('admin', 'super_admin'),
-  enrollmentControllers.getPromotionSummary,
-);
+// router.get(
+//   '/promotion/summary',
+//   auth('admin', 'super_admin'),
+//   enrollmentControllers.getPromotionSummary,
+// );
 
 export const enrollmentRoutes = router;
