@@ -6,6 +6,7 @@
     "signal": null,
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     "backupStartTime": "2025-08-12T18:00:00.749Z",
     "backupEndTime": "2025-08-12T18:00:01.149Z",
     "archivePath": "D:\\projects\\craft-institute-management\\craft-institute-server\\public\\sarabelanews.gzip"
@@ -71,6 +72,10 @@
 =======
     "backupStartTime": "2025-11-13T18:00:00.870Z",
     "backupEndTime": "2025-11-13T18:00:00.898Z",
+=======
+    "backupStartTime": "2026-01-03T18:00:00.439Z",
+    "backupEndTime": "2026-01-03T18:00:00.448Z",
+>>>>>>> 4081da9dbbc24b8309c631cdcc91df35d7b8147c
     "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
   },
   {
@@ -78,6 +83,7 @@
     "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
     "code": null,
     "signal": null,
+<<<<<<< HEAD
     "backupStartTime": "2025-11-19T18:00:00.088Z",
     "backupEndTime": "2025-11-19T18:00:00.112Z",
     "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
@@ -92,6 +98,10 @@
     "signal": null,
     "backupStartTime": "2025-11-20T18:00:00.568Z",
     "backupEndTime": "2025-11-20T18:00:00.591Z",
+=======
+    "backupStartTime": "2026-01-04T18:00:00.429Z",
+    "backupEndTime": "2026-01-04T18:00:00.438Z",
+>>>>>>> 4081da9dbbc24b8309c631cdcc91df35d7b8147c
     "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
 >>>>>>> 9bb3e5eff3e4b273665a2274c77381d853e9ab88
   }

@@ -1,10 +1,13 @@
-import { FilterQuery, Query } from "mongoose";
+import { FilterQuery, Query } from 'mongoose';
 
 class QueryBuilder<T> {
   public modelQuery: Query<T[], T>;
   public query: Partial<Record<string, unknown>>;
 
-  constructor(modelQuery: Query<T[], T>, query: Partial<Record<string, unknown>>) {
+  constructor(
+    modelQuery: Query<T[], T>,
+    query: Partial<Record<string, unknown>>,
+  ) {
     this.modelQuery = modelQuery;
     this.query = query;
   }
@@ -16,8 +19,8 @@ class QueryBuilder<T> {
         $or: searchableFields.map(
           (field) =>
             ({
-              [field]: { $regex: searchTerm, $options: "i" },
-            }) as FilterQuery<T>
+              [field]: { $regex: searchTerm, $options: 'i' },
+            }) as FilterQuery<T>,
         ),
       });
     }
@@ -26,7 +29,7 @@ class QueryBuilder<T> {
 
   filter() {
     const queryObj = { ...this.query };
-    const excludeFields = ["searchTerm", "sort", "limit", "page", "fields"];
+    const excludeFields = ['searchTerm', 'sort', 'limit', 'page', 'fields'];
     excludeFields.forEach((el) => delete queryObj[el]);
 
     this.modelQuery = this.modelQuery.find(queryObj as FilterQuery<T>);
@@ -35,8 +38,26 @@ class QueryBuilder<T> {
   }
 
   sort() {
-    const sort = (this.query?.sort as string)?.split(",")?.join(" ") || "-createdAt";
-    this.modelQuery = this.modelQuery.sort(sort);
+    const sortParam = this.query?.sort as string;
+
+    if (sortParam) {
+      const sortObj: Record<string, 1 | -1> = {};
+
+      // Handle multiple sort fields
+      sortParam.split(',').forEach((field) => {
+        if (field.startsWith('-')) {
+          sortObj[field.substring(1)] = -1; // Descending
+        } else {
+          sortObj[field] = 1; // Ascending
+        }
+      });
+
+      this.modelQuery = this.modelQuery.sort(sortObj);
+    } else {
+      // Default sort
+      this.modelQuery = this.modelQuery.sort({ createdAt: -1 });
+    }
+
     return this;
   }
 
@@ -50,7 +71,8 @@ class QueryBuilder<T> {
   }
 
   fields() {
-    const fields = (this.query?.fields as string)?.split(",")?.join(" ") || "-__v";
+    const fields =
+      (this.query?.fields as string)?.split(',')?.join(' ') || '-__v';
     this.modelQuery = this.modelQuery.select(fields);
     return this;
   }
@@ -62,7 +84,9 @@ class QueryBuilder<T> {
   }
 
   async countTotal() {
-    const total = await this.modelQuery.model.countDocuments(this.modelQuery.getFilter());
+    const total = await this.modelQuery.model.countDocuments(
+      this.modelQuery.getFilter(),
+    );
     const page = Number(this.query?.page) || 1;
     const limit = Number(this.query?.limit) || 1000;
     const totalPage = Math.ceil(total / limit);
@@ -75,6 +99,5 @@ class QueryBuilder<T> {
     };
   }
 }
-
 
 export default QueryBuilder;

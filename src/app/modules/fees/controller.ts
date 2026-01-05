@@ -4,16 +4,16 @@ import sendResponse from '../../../utils/sendResponse';
 import httpStatus from 'http-status';
 import { feesServices } from './service';
 import mongoose from 'mongoose';
-import { AppError } from '../../error/AppError';
 
 const createMonthlyFees = catchAsync(async (req, res) => {
-  const { studentId, enrollmentId, studentClass, yearlyFee, startYear } = req.body;
+  const { studentId, enrollmentId, studentClass, yearlyFee, startYear } =
+    req.body;
   const result = await feesServices.generateMonthlyFees(
     studentId,
     enrollmentId,
     studentClass,
     yearlyFee,
-    startYear
+    startYear,
   );
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -35,20 +35,18 @@ const createBulkMonthlyFees = catchAsync(async (req, res) => {
 });
 
 const payFee = catchAsync(async (req, res) => {
-  const { feeId, amountPaid, paymentMethod, paymentDate, transactionId, receiptNo } = req.body;
-
-  // Start a session for transaction
+  const { feeId, amountPaid, paymentMethod, transactionId, receiptNo } =
+    req.body;
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Update fee record and create payment record
     const result = await feesServices.payFee(
       feeId,
       amountPaid,
       paymentMethod,
       transactionId,
-      receiptNo
+      receiptNo,
     );
 
     await session.commitTransaction();
@@ -68,21 +66,25 @@ const payFee = catchAsync(async (req, res) => {
 });
 
 const payFeeWithAdvance = catchAsync(async (req, res) => {
-  const { feeId, cashPaid, advanceUsed, paymentMethod, transactionId, receiptNo } = req.body;
-
-  // Start a session for transaction
+  const {
+    feeId,
+    cashPaid,
+    advanceUsed,
+    paymentMethod,
+    transactionId,
+    receiptNo,
+  } = req.body;
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Update fee record and create payment record
     const result = await feesServices.payFeeWithAdvance(
       feeId,
       cashPaid,
       advanceUsed,
       paymentMethod,
       transactionId,
-      receiptNo
+      receiptNo,
     );
 
     await session.commitTransaction();
@@ -106,7 +108,7 @@ const getStudentDueFees = catchAsync(async (req, res) => {
   const { year } = req.query;
   const result = await feesServices.getStudentDueFees(
     studentId,
-    year ? parseInt(year as string) : undefined
+    year ? parseInt(year as string) : undefined,
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -121,7 +123,7 @@ const getMonthlyFeeStatus = catchAsync(async (req, res) => {
   const result = await feesServices.getMonthlyFeeStatus(
     studentId,
     month,
-    parseInt(year)
+    parseInt(year),
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -131,7 +133,6 @@ const getMonthlyFeeStatus = catchAsync(async (req, res) => {
   });
 });
 
-// আগের কন্ট্রোলারগুলো একই থাকবে
 const getAllFees = catchAsync(async (req, res) => {
   const result = await feesServices.getAllFees(req.query);
   sendResponse(res, {
@@ -182,15 +183,14 @@ const getAllDueFees = catchAsync(async (req, res) => {
   if (year) {
     filterYear = parseInt(year as string);
     if (isNaN(filterYear)) {
-      new Error('Invalid year')
+      new Error('Invalid year');
     }
   }
-
 
   const result = await feesServices.getAllDueFees({
     year: filterYear,
     class: className,
-    status: status || 'unpaid'
+    status: status || 'unpaid',
   });
 
   sendResponse(res, {
