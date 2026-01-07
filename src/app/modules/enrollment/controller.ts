@@ -57,104 +57,114 @@ const deleteEnrollment = catchAsync(async (req, res) => {
   });
 });
 
-// const promoteEnrollment = catchAsync(async (req, res) => {
-//   const { studentId, newClassId, session, rollNumber, section } = req.body;
+const promoteEnrollment = catchAsync(async (req, res) => {
+  const { studentId, newClassId, session, rollNumber } = req.body;
 
-//   const result = await enrollmentServices.promoteEnrollment(
-//     studentId,
-//     newClassId,
-//     session,
-//     rollNumber,
-//     section,
-//   );
+  const result = await enrollmentServices.promoteEnrollment(
+    studentId,
+    newClassId,
+    session,
+    rollNumber,
+  );
 
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: result.message,
-//     data: result.data,
-//   });
-// });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
 
-// // Bulk promote students
-// const bulkPromoteEnrollments = catchAsync(async (req, res) => {
-//   const { promotions, session } = req.body;
+const bulkPromoteEnrollments = catchAsync(async (req, res) => {
+  const { promotions } = req.body;
 
-//   if (!promotions || !Array.isArray(promotions) || promotions.length === 0) {
-//     sendResponse(res, {
-//       statusCode: httpStatus.BAD_REQUEST,
-//       success: false,
-//       message: 'Promotions array and session are required',
-//       data: null,
-//     });
-//     return;
-//   }
+  if (!promotions || !Array.isArray(promotions) || promotions.length === 0) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'Promotions array and session are required',
+      data: null,
+    });
+  }
 
-//   const result = await enrollmentServices.bulkPromoteEnrollments(
-//     promotions,
-//     session,
-//   );
+  const result = await enrollmentServices.bulkPromoteEnrollments(promotions);
 
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: result.message,
-//     data: result,
-//   });
-// });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
 
-// // Get promotion history
-// const getPromotionHistory = catchAsync(async (req, res) => {
-//   const { studentId } = req.params;
+const getPromotionHistory = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
 
-//   const result = await enrollmentServices.getPromotionHistory(studentId);
+  const result = await enrollmentServices.getPromotionHistory(studentId);
 
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: result.message,
-//     data: result.data,
-//   });
-// });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Promotion history retrieved',
+    data: result.data,
+  });
+});
 
-// // Get eligible students for promotion
-// const getPromotionEligibleStudents = catchAsync(async (req, res) => {
-//   const { session } = req.query;
+const getPromotionEligibleStudents = catchAsync(async (req, res) => {
+  const { classId } = req.query;
+  console.log('this is class id ', classId);
 
-//   const result = await enrollmentServices.getPromotionEligibleStudents(
-//     (session as string) ||
-//       `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-//   );
+  if (!classId) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'Class ID is required to find eligible students',
+      data: null,
+    });
+  }
 
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: result.message,
-//     data: result.data,
-//   });
-// });
+  const result = await enrollmentServices.getPromotionEligibleStudents(
+    classId as string,
+  );
 
-// // Get promotion summary
-// const getPromotionSummary = catchAsync(async (req, res) => {
-//   const result = await enrollmentServices.getPromotionSummary();
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Eligible students retrieved',
+    data: result.data,
+  });
+});
 
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: result.message,
-//     data: result.data,
-//   });
-// });
+const bulkRetainStudents = catchAsync(async (req, res) => {
+  const { promotions } = req.body;
 
+  if (!promotions || !Array.isArray(promotions) || promotions.length === 0) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'Promotions array is required',
+      data: null,
+    });
+  }
+
+  const result = await enrollmentServices.bulkRetainEnrollments(promotions);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
 export const enrollmentControllers = {
   createEnrollment,
-  // promoteEnrollment,
-  // bulkPromoteEnrollments,
-  // getPromotionHistory,
-  // getPromotionEligibleStudents,
-  // getPromotionSummary,
+  promoteEnrollment,
+  bulkPromoteEnrollments,
   getAllEnrollments,
   getSingleEnrollment,
   updateEnrollment,
   deleteEnrollment,
+  getPromotionHistory,
+  getPromotionEligibleStudents,
+  bulkRetainStudents,
 };
