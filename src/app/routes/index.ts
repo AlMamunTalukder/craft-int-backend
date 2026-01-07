@@ -208,7 +208,7 @@ const moduleRoutes = [
     route: enrollmentRoutes,
   },
   {
-    path: '/enrollment',
+    path: '/enrollments',
     route: enrollmentRoutes,
   },
   {
