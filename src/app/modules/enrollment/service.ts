@@ -1748,17 +1748,15 @@ const promoteEnrollment = async (
   sessionTransaction.startTransaction();
 
   try {
-    // 1. Find Student
     const student =
       await Student.findById(studentId).session(sessionTransaction);
     if (!student) {
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
 
-    // 2. Find the CURRENT ACTIVE enrollment (No session filter)
     const currentEnrollment = await Enrollment.findOne({
       student: studentId,
-      status: 'active', // Currently active class (e.g., Hifz)
+      status: 'active',
     })
       .sort({ createdAt: -1 })
       .populate('className')
@@ -2143,16 +2141,58 @@ const getPromotionHistory = async (studentId: string) => {
 
   const enrollments = await Enrollment.find({ student: studentId })
     .sort({ createdAt: 1 })
-    .populate('className', 'className')
-    .select('className status admissionType createdAt roll promotedFrom');
+    .populate({
+      path: 'className',
+      select: 'className',
+    })
+    .populate({
+      path: 'promotedFrom',
+      select: 'className roll status admissionType createdAt',
+      populate: {
+        path: 'className',
+        select: 'className',
+      },
+    })
+    .populate({
+      path: 'promotedTo',
+      select: 'className roll status admissionType createdAt',
+      populate: {
+        path: 'className',
+        select: 'className',
+      },
+    })
+    .select(
+      'className status admissionType createdAt roll promotedFrom promotedTo',
+    );
 
   const history = enrollments.map((enrollment: any) => ({
     enrollmentId: enrollment._id,
+
     className: enrollment.className?.[0]?.className || 'N/A',
     status: enrollment.status,
     admissionType: enrollment.admissionType,
     roll: enrollment.roll,
     createdAt: enrollment.createdAt,
+
+    promotedFrom: enrollment.promotedFrom
+      ? {
+          enrollmentId: enrollment.promotedFrom._id,
+          className: enrollment.promotedFrom.className?.[0]?.className || 'N/A',
+          roll: enrollment.promotedFrom.roll,
+          status: enrollment.promotedFrom.status,
+          admissionType: enrollment.promotedFrom.admissionType,
+        }
+      : null,
+
+    promotedTo: enrollment.promotedTo
+      ? {
+          enrollmentId: enrollment.promotedTo._id,
+          className: enrollment.promotedTo.className?.[0]?.className || 'N/A',
+          roll: enrollment.promotedTo.roll,
+          status: enrollment.promotedTo.status,
+          admissionType: enrollment.promotedTo.admissionType,
+        }
+      : null,
   }));
 
   return {
