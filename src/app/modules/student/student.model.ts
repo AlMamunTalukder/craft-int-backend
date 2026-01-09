@@ -15,7 +15,7 @@ const studentSchema = new Schema<IStudent>(
     mobile: { type: String },
     fees: [{ type: Schema.Types.ObjectId, ref: 'Fees' }],
     payments: [{ type: Schema.Types.ObjectId, ref: 'Payment' }],
-
+    receipts: [{ type: Schema.Types.ObjectId, ref: 'Receipt' }],
     advanceBalance: {
       type: Number,
       default: 0,

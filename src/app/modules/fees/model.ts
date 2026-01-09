@@ -7,7 +7,6 @@ const FeesSchema = new Schema<IFees>(
     enrollment: {
       type: Schema.Types.ObjectId,
       ref: 'Enrollment',
-      required: true,
     },
     class: { type: String, required: true },
     month: { type: String, required: true },

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Document, Types } from 'mongoose';
 import { Gender, StudentStatus } from './student.utils';
 
@@ -39,7 +40,7 @@ export interface IStudent extends Document {
   motherProfession?: string;
   sameAsPermanent?: boolean;
 
-  className?: Types.ObjectId[];
+  className?: Types.ObjectId[] | any;
   section?: string[];
   batch?: string;
   activeSession?: string[];
@@ -80,7 +81,8 @@ export interface IStudent extends Document {
   previousSchool?: {
     institution?: string;
     address?: string;
-  }
+  };
   fees?: Types.ObjectId[];
-  payments?: Types.ObjectId[]
+  payments?: Types.ObjectId[];
+  receipts: Types.ObjectId[];
 }

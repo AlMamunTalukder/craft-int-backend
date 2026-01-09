@@ -5,9 +5,9 @@ const FeeAdjustmentSchema = new Schema<IFeeAdjustment>(
   {
     student: { type: Schema.ObjectId, ref: 'Student', required: true },
     fee: { type: Schema.ObjectId, ref: 'Fees', required: true },
-    enrollment: { type: Schema.ObjectId, ref: 'Enrollment', required: true },
+    enrollment: { type: Schema.ObjectId, ref: 'Enrollment' },
 
-    type: { type: String, enum: ['discount', 'waiver'], required: true },
+    type: { type: String, enum: ['discount', 'waiver'] },
 
     adjustmentType: {
       type: String,

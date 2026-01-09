@@ -53,7 +53,30 @@ const deletePayment = catchAsync(async (req, res) => {
   });
 });
 
+const createBulkPayment = catchAsync(async (req, res) => {
+  const result = await paymentServices.createBulkPayment(req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: 'Bulk payment created successfully',
+    data: result,
+  });
+});
+
+const generateReceipt = catchAsync(async (req, res) => {
+  const { paymentId } = req.params;
+  const result = await paymentServices.generateReceiptData(paymentId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Receipt data generated successfully',
+    data: result,
+  });
+});
+
 export const paymentControllers = {
+  createBulkPayment,
+  generateReceipt,
   createPayment,
   getAllPayments,
   getSinglePayment,

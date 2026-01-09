@@ -776,7 +776,7 @@ export const createEnrollment = async (payload: any) => {
         enrollment: populatedEnrollment,
         payments: payments,
         totalPayments: payments.reduce(
-          (sum, payment) => sum + payment.amountPaid,
+          (sum, payment: any) => sum + payment.amountPaid,
           0,
         ),
       },
