@@ -17,7 +17,6 @@ const paymentSchema = new Schema(
     ],
     totalAmount: {
       type: Number,
-      required: true,
     },
     paymentMethod: {
       type: String,
@@ -31,7 +30,6 @@ const paymentSchema = new Schema(
     receiptNo: {
       type: String,
       unique: true,
-      required: true,
     },
     transactionId: {
       type: String,
@@ -41,7 +39,6 @@ const paymentSchema = new Schema(
     },
     collectedBy: {
       type: String,
-      required: true,
     },
     receiptType: {
       type: String,
