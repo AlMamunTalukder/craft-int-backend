@@ -1,5 +1,7 @@
 import express from 'express';
 import { feesControllers } from './controller';
+import { validateRequest } from '../../middlewares/validateRequest';
+import { createFeeZodSchema } from './validation';
 
 const router = express.Router();
 
@@ -17,5 +19,9 @@ router.get('/', feesControllers.getAllFees);
 router.get('/:id', feesControllers.getSingleFee);
 router.patch('/:id', feesControllers.updateFee);
 router.delete('/:id', feesControllers.deleteFee);
-
+router.post(
+  '/students/:studentId/fees',
+  validateRequest(createFeeZodSchema),
+  feesControllers.createSingleFee,
+);
 export const feesRoutes = router;

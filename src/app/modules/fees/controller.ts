@@ -173,12 +173,8 @@ const deleteFee = catchAsync(async (req, res) => {
   });
 });
 
-// সঠিকভাবে getAllDueFees কন্ট্রোলার - প্যারামিটার ভ্যালিডেশন সহ
 const getAllDueFees = catchAsync(async (req, res) => {
-  // Query parameters for filtering
   const { year, class: className, status } = req.query;
-
-  // Validate year if provided
   let filterYear;
   if (year) {
     filterYear = parseInt(year as string);
@@ -201,6 +197,20 @@ const getAllDueFees = catchAsync(async (req, res) => {
   });
 });
 
+const createSingleFee = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
+  const payload = req.body;
+
+  const result = await feesServices.createSingleFee(studentId, payload);
+
+  sendResponse(res, {
+    statusCode: httpStatus.CREATED,
+    success: true,
+    message: 'Fee created successfully',
+    data: result,
+  });
+});
+
 export const feesControllers = {
   createMonthlyFees,
   createBulkMonthlyFees,
@@ -212,5 +222,6 @@ export const feesControllers = {
   getSingleFee,
   updateFee,
   deleteFee,
-  getAllDueFees, // সঠিক করা ফাংশন
+  getAllDueFees,
+  createSingleFee,
 };
