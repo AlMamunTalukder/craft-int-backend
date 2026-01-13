@@ -69,7 +69,7 @@ const generateReceipt = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Receipt data generated successfully',
+    message: 'Receipt data generated successssfully',
     data: result,
   });
 });
