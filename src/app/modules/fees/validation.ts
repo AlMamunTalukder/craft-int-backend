@@ -64,18 +64,10 @@ export const createFeeZodSchema = z.object({
     class: z.string({
       required_error: 'Class is required',
     }),
-    month: z.string({
-      required_error: 'Month is required',
-    }),
-    amount: z
-      .number({
-        required_error: 'Amount is required',
-      })
-      .min(1, 'Amount must be greater than 0'),
+
+    amount: z.number().optional(),
     feeType: z.string().optional(),
-    academicYear: z.string({
-      required_error: 'Academic year is required',
-    }),
+    academicYear: z.string().optional(),
     enrollmentId: z.string().optional(),
     discount: z.number().min(0).optional(),
     waiver: z.number().min(0).optional(),
