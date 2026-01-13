@@ -41,7 +41,6 @@ export const payFeeSchema = z.object({
   }),
 });
 
-// partial update for admin
 export const updateFeeSchema = z.object({
   params: z.object({ id: objectId }),
   body: z
@@ -59,3 +58,31 @@ export const updateFeeSchema = z.object({
     })
     .partial(),
 });
+
+export const createFeeZodSchema = z.object({
+  body: z.object({
+    class: z.string({
+      required_error: 'Class is required',
+    }),
+    month: z.string({
+      required_error: 'Month is required',
+    }),
+    amount: z
+      .number({
+        required_error: 'Amount is required',
+      })
+      .min(1, 'Amount must be greater than 0'),
+    feeType: z.string().optional(),
+    academicYear: z.string({
+      required_error: 'Academic year is required',
+    }),
+    enrollmentId: z.string().optional(),
+    discount: z.number().min(0).optional(),
+    waiver: z.number().min(0).optional(),
+    dueDate: z.string().optional(),
+  }),
+});
+
+export const FeeValidation = {
+  createFeeZodSchema,
+};

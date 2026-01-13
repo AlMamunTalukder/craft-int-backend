@@ -1,24 +1,27 @@
-import express from "express";
-import { auth } from "../../middlewares/auth";
-import { feeAdjustmentControllers } from "./controller";
+import express from 'express';
+import { feeAdjustmentControllers } from './controller';
 
 const router = express.Router();
 
-router.post(
-  "/",
-  auth("admin", "super_admin"),
-  feeAdjustmentControllers.createFeeAdjustment
+router.post('/', feeAdjustmentControllers.createFeeAdjustment);
+
+router.post('/bulk/student', feeAdjustmentControllers.applyBulkAdjustments);
+
+router.get(
+  '/student/:studentId',
+  feeAdjustmentControllers.getStudentAdjustments,
 );
 
-router.get("/", feeAdjustmentControllers.getAllFeeAdjustments);
-router.get("/:id", feeAdjustmentControllers.getSingleFeeAdjustment);
-
-router.patch(
-  "/:id",
-  auth("admin", "super_admin"),
-  feeAdjustmentControllers.updateFeeAdjustment
+router.get(
+  '/report/:studentId/:academicYear',
+  feeAdjustmentControllers.getFeeReport,
 );
 
-router.delete("/:id", auth("admin", "super_admin"), feeAdjustmentControllers.deleteFeeAdjustment);
+router.get('/', feeAdjustmentControllers.getAllFeeAdjustments);
+router.get('/:id', feeAdjustmentControllers.getSingleFeeAdjustment);
+
+router.patch('/:id', feeAdjustmentControllers.updateFeeAdjustment);
+
+router.delete('/:id', feeAdjustmentControllers.deleteFeeAdjustment);
 
 export const feeAdjustmentRoutes = router;

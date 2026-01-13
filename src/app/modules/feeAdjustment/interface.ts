@@ -1,15 +1,26 @@
-import { Types } from "mongoose";
+import { Types, Document } from 'mongoose';
 
-export interface IFeeAdjustment {
+export interface IFeeAdjustment extends Document {
   student: Types.ObjectId;
   fee: Types.ObjectId;
-  type: "discount" | "waiver";
-  amount: number;
-  reason?: string;
-  approvedBy?: Types.ObjectId;
-  approvedDate?: Date;
-  startMonth?: string;
-  endMonth?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  enrollment: Types.ObjectId;
+
+  type: 'discount' | 'waiver';
+  adjustmentType: 'percentage' | 'flat';
+  value: number;
+
+  reason: string;
+
+  approvedBy?: Types.ObjectId | null;
+  approvedDate?: Date | null;
+
+  startMonth: string;
+  endMonth?: string | null;
+
+  isActive: boolean;
+  isRecurring: boolean;
+  academicYear: string;
+
+  createdAt: Date;
+  updatedAt: Date;
 }

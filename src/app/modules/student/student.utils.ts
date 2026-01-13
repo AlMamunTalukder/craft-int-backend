@@ -14,24 +14,28 @@ export enum StudentStatus {
   LEFT = 'left',
 }
 
+export const generateStudentId = async (): Promise<string> => {
+  const currentYear = new Date().getFullYear();
+  const prefix = 'CII';
 
-
-const findLastStudentNo = async () => {
   const lastStudent = await Student.findOne(
-    {},
     {
-      studentId: 1,
+      studentId: { $regex: `^${prefix}${currentYear}` },
     },
+    { studentId: 1 },
   )
     .sort({ createdAt: -1 })
     .lean();
 
-  return lastStudent?.studentId ? lastStudent?.studentId : undefined;
-};
+  let sequenceNumber = 1000;
+  if (lastStudent?.studentId) {
+    const lastId = lastStudent.studentId;
+    const lastSequence = parseInt(lastId.slice(-4));
 
-export const generateStudentId = async () => {
-  const currentId = (await findLastStudentNo()) || '0000';
-  let incrementId = (Number(currentId) + 1).toString().padStart(4, '0');
-  incrementId = `${incrementId}`;
-  return incrementId;
+    if (!isNaN(lastSequence)) {
+      sequenceNumber = lastSequence + 1;
+    }
+  }
+
+  return `${prefix}${currentYear}${sequenceNumber.toString().padStart(4, '0')}`;
 };

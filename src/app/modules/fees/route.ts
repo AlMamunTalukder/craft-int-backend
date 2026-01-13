@@ -1,26 +1,27 @@
 import express from 'express';
-
-import { validateRequest } from '../../middlewares/validateRequest';
-import { auth } from '../../middlewares/auth';
-
 import { feesControllers } from './controller';
-import { createFeeSchema } from './validation';
+import { validateRequest } from '../../middlewares/validateRequest';
+import { createFeeZodSchema } from './validation';
 
 const router = express.Router();
-router.post(
-  '/',
-  // auth('admin', 'super_admin'),
-  validateRequest(createFeeSchema),
-  feesControllers.createFees,
+
+router.get('/due', feesControllers.getAllDueFees);
+router.post('/create-monthly', feesControllers.createMonthlyFees);
+router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);
+router.post('/pay', feesControllers.payFee);
+router.post('/pay-with-advance', feesControllers.payFeeWithAdvance);
+router.get('/student-due/:studentId', feesControllers.getStudentDueFees);
+router.get(
+  '/monthly-status/:studentId/:month/:year',
+  feesControllers.getMonthlyFeeStatus,
 );
 router.get('/', feesControllers.getAllFees);
-router.get('/:id', feesControllers.getSingleFees);
-router.patch(
-  '/:id',
-  auth('admin', 'super_admin'),
-  feesControllers.updateFees,
+router.get('/:id', feesControllers.getSingleFee);
+router.patch('/:id', feesControllers.updateFee);
+router.delete('/:id', feesControllers.deleteFee);
+router.post(
+  '/students/:studentId/fees',
+  validateRequest(createFeeZodSchema),
+  feesControllers.createSingleFee,
 );
-
-router.delete('/:id', auth('admin', 'super_admin'), feesControllers.deleteFees);
-
 export const feesRoutes = router;

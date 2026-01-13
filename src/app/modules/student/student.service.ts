@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { Student } from './student.model';
@@ -9,11 +10,18 @@ import mongoose from 'mongoose';
 import { User } from '../user/user.model';
 
 const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
-  const { name } = payload;
-  console.log(payload)
-  // Check if mobile, name, and email are provided
+  const { name, studentDepartment, email } = payload;
+
+  // Validate required fields
   if (!name) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Required fields are missing');
+    throw new AppError(httpStatus.BAD_REQUEST, 'Student name is required');
+  }
+
+  if (!studentDepartment) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Student department is required',
+    );
   }
 
   const session = await mongoose.startSession();
@@ -22,6 +30,7 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
   try {
     const studentId = await generateStudentId();
 
+    // Check if the generated ID already exists
     const exists = await Student.exists({ studentId });
     if (exists) {
       throw new AppError(
@@ -30,25 +39,57 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
       );
     }
 
-    const student = await Student.create([{ ...payload, studentId }], {
+    // Handle sameAsPermanent logic for addresses
+    if (payload.sameAsPermanent && payload.permanentAddress) {
+      payload.presentAddress = { ...payload.permanentAddress };
+    }
+
+    // Ensure arrays are properly formatted
+    const processedPayload = {
+      ...payload,
+      studentId,
+      className: Array.isArray(payload.className)
+        ? payload.className
+        : payload.className
+          ? [payload.className]
+          : [],
+      section: Array.isArray(payload.section)
+        ? payload.section
+        : payload.section
+          ? [payload.section]
+          : [],
+      activeSession: Array.isArray(payload.activeSession)
+        ? payload.activeSession
+        : payload.activeSession
+          ? [payload.activeSession]
+          : [],
+    };
+
+    const student = await Student.create([processedPayload], {
       session,
     });
+    const userPayload = {
+      email:
+        email ||
+        `${studentId.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.com`,
+      password: 'student123',
+      name: name,
+      role: 'student',
+      studentId: studentId,
+    };
 
-    await User.create(
-      [
-        {
-          email: payload.email || 'student@gmail.com',
-          password: 'student123',
-          name: name,
-          role: 'student',
-        },
-      ],
-      { session },
-    );
+    await User.create([userPayload], { session });
 
     // Commit the transaction
     await session.commitTransaction();
-    return student[0];
+
+    // Populate the student document before returning
+    const populatedStudent = await Student.findById(student[0]._id)
+      .populate('className')
+      .populate('section')
+      .populate('fees');
+
+    return populatedStudent as IStudent;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -63,8 +104,18 @@ const getAllStudents = async (query: Record<string, unknown>) => {
       .populate({
         path: 'fees',
         model: 'Fees',
+      })
+      .populate({
+        path: 'className',
+      })
+      .populate({
+        path: 'section',
+      })
+      .populate({
+        path: 'payments',
+        model: 'Payment',
       }),
-    query
+    query,
   )
     .search(studentSearchableFields)
     .filter()
@@ -81,15 +132,24 @@ const getAllStudents = async (query: Record<string, unknown>) => {
   };
 };
 
-
-
 export const getSingleStudent = async (id: string): Promise<IStudent> => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
+  }
+
   const student = await Student.findById(id)
     .populate({
       path: 'fees',
     })
     .populate({
       path: 'className',
+    })
+    .populate({
+      path: 'section',
+    })
+    .populate({
+      path: 'payments',
+      model: 'Payment',
     });
 
   if (!student) {
@@ -103,30 +163,97 @@ const updateStudent = async (
   id: string,
   payload: Partial<IStudent>,
 ): Promise<IStudent> => {
-  console.log(payload)
-  const student = await Student.findByIdAndUpdate(id, payload, {
+  // Validate ID
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
+  }
+
+  // Check if student exists
+  const existingStudent = await Student.findById(id);
+  if (!existingStudent) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Handle sameAsPermanent logic for addresses
+  if (payload.sameAsPermanent && payload.permanentAddress) {
+    payload.presentAddress = { ...payload.permanentAddress };
+  }
+
+  // Process arrays
+  const processedPayload: any = { ...payload };
+
+  if (payload.className) {
+    processedPayload.className = Array.isArray(payload.className)
+      ? payload.className
+      : [payload.className];
+  }
+
+  if (payload.section) {
+    processedPayload.section = Array.isArray(payload.section)
+      ? payload.section
+      : [payload.section];
+  }
+
+  if (payload.activeSession) {
+    processedPayload.activeSession = Array.isArray(payload.activeSession)
+      ? payload.activeSession
+      : [payload.activeSession];
+  }
+
+  // Update student with new data
+  const student = await Student.findByIdAndUpdate(id, processedPayload, {
     new: true,
     runValidators: true,
-  });
+  })
+    .populate('className')
+    .populate('section')
+    .populate('fees');
 
   if (!student) {
     throw new AppError(httpStatus.NOT_FOUND, 'Failed to update student');
+  }
+
+  // If email was updated, also update the user account
+  if (payload.email) {
+    await User.findOneAndUpdate(
+      { studentId: student.studentId },
+      { email: payload.email },
+      { new: true, runValidators: true },
+    );
   }
 
   return student;
 };
 
 const deleteStudent = async (id: string): Promise<IStudent> => {
-  const student = await Student.findByIdAndDelete(id);
-
-  if (!student) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Student not found or already deleted',
-    );
+  // Validate ID
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
   }
 
-  return student;
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const student = await Student.findById(id);
+    if (!student) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+    }
+
+    // Delete the student
+    const deletedStudent = await Student.findByIdAndDelete(id, { session });
+
+    // Delete the associated user account
+    await User.findOneAndDelete({ studentId: student.studentId }, { session });
+
+    await session.commitTransaction();
+    return deletedStudent as IStudent;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 export const studentServices = {

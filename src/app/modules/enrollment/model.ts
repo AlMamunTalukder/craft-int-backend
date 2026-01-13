@@ -3,14 +3,14 @@ import { IEnrollment } from './interface';
 
 const enrollmentSchema = new Schema<IEnrollment>(
   {
-    student: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
+    student: { type: Schema.Types.ObjectId, ref: 'Student' },
     studentPhoto: {
       type: String,
     },
     studentId: { type: String },
     mobileNo: { type: String },
     rollNumber: { type: String },
-    studentName: { type: String, required: true },
+    studentName: { type: String },
     nameBangla: { type: String },
     gender: { type: String },
     birthDate: { type: String },
@@ -41,7 +41,6 @@ const enrollmentSchema = new Schema<IEnrollment>(
     motherIncome: { type: Number },
     studentDepartment: {
       type: String,
-      required: true,
     },
     guardianInfo: {
       name: { type: String },

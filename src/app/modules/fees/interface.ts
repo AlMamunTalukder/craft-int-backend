@@ -1,20 +1,26 @@
-// interfaces/IFees.ts
+// fees/interface.ts
 import { Document, Types } from 'mongoose';
 
 export interface IFees extends Document {
-  enrollment: Types.ObjectId;
+  _id: Types.ObjectId;
   student: Types.ObjectId;
-  feeType: string;
-  month?: string;
+  enrollment: Types.ObjectId;
+  class: string;
+  month: string;
   amount: number;
   paidAmount: number;
-  advance: number;
+  advanceUsed: number;
   dueAmount: number;
+  discount: number;
+  waiver: number;
+  feeType?: string;
   status: 'paid' | 'partial' | 'unpaid';
   paymentMethod?: 'cash' | 'bkash' | 'bank' | 'online';
   transactionId?: string;
   receiptNo?: string;
   paymentDate?: Date;
+  academicYear: string;
+  isCurrentMonth: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -2,13 +2,24 @@ import express from 'express';
 import { auth } from '../../middlewares/auth';
 import { paymentControllers } from './controller';
 
-
 const router = express.Router();
+
+router.post(
+  '/bulk',
+  auth('admin', 'super_admin'),
+  paymentControllers.createBulkPayment,
+);
+
+router.get(
+  '/receipt/:paymentId',
+  auth('admin', 'super_admin'),
+  paymentControllers.generateReceipt,
+);
 
 router.post(
   '/',
   auth('admin', 'super_admin'),
-  paymentControllers.createPayment
+  paymentControllers.createPayment,
 );
 
 router.get('/', paymentControllers.getAllPayments);
@@ -17,9 +28,13 @@ router.get('/:id', paymentControllers.getSinglePayment);
 router.patch(
   '/:id',
   auth('admin', 'super_admin'),
-  paymentControllers.updatePayment
+  paymentControllers.updatePayment,
 );
 
-router.delete('/:id', auth('admin', 'super_admin'), paymentControllers.deletePayment);
+router.delete(
+  '/:id',
+  auth('admin', 'super_admin'),
+  paymentControllers.deletePayment,
+);
 
 export const paymentRoutes = router;

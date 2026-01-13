@@ -42,6 +42,9 @@ import { weeklyReportRoutes } from '../modules/weeklyReport/route';
 import { feesRoutes } from '../modules/fees/route';
 import { enrollmentRoutes } from '../modules/enrollment/route';
 import { feeCategoryRoutes } from '../modules/feeCategory/route';
+import { feeAdjustmentRoutes } from '../modules/feeAdjustment/route';
+import { paymentRoutes } from '../modules/payment/route';
+import { receiptRoutes } from '../modules/receipt/route';
 const router = Router();
 
 const moduleRoutes = [
@@ -207,8 +210,20 @@ const moduleRoutes = [
     route: enrollmentRoutes,
   },
   {
-    path: '/meta',
-    route: metaroute,
+    path: '/enrollments',
+    route: enrollmentRoutes,
+  },
+  {
+    path: '/fee-adjustments',
+    route: feeAdjustmentRoutes,
+  },
+  {
+    path: '/payments',
+    route: paymentRoutes,
+  },
+  {
+    path: '/receipts',
+    route: receiptRoutes,
   },
 ];
 

@@ -1,22 +1,46 @@
-import { model, Schema } from "mongoose";
-import { IFeeAdjustment } from "./interface";
+import { model, Schema, Types } from 'mongoose';
+import { IFeeAdjustment } from './interface';
 
 const FeeAdjustmentSchema = new Schema<IFeeAdjustment>(
   {
-    student: { type: Schema.Types.ObjectId, ref: "Student", required: true },
-    fee: { type: Schema.Types.ObjectId, ref: "Fee", required: true },
-    type: { type: String, enum: ["discount", "waiver"], required: true },
-    amount: { type: Number, required: true },
-    reason: { type: String },
-    approvedBy: { type: Schema.Types.ObjectId, ref: "User" },
-    approvedDate: { type: Date },
-    startMonth: { type: String },
-    endMonth: { type: String },
+    student: { type: Schema.ObjectId, ref: 'Student', required: true },
+    fee: { type: Schema.ObjectId, ref: 'Fees', required: true },
+    enrollment: { type: Schema.ObjectId, ref: 'Enrollment' },
+
+    type: { type: String, enum: ['discount', 'waiver'] },
+
+    adjustmentType: {
+      type: String,
+      enum: ['percentage', 'flat'],
+      required: true,
+    },
+
+    value: { type: Number, required: true },
+
+    reason: { type: String, default: '' },
+
+    approvedBy: { type: Types.ObjectId, ref: 'User', default: null },
+    approvedDate: { type: Date, default: null },
+
+    startMonth: { type: String, required: true },
+    endMonth: { type: String, default: null },
+
+    isActive: { type: Boolean, default: true },
+    isRecurring: { type: Boolean, default: false },
+
+    academicYear: { type: String, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// Index for performance: frequently queried fields
-FeeAdjustmentSchema.index({ student: 1, type: 1, startMonth: 1 });
+FeeAdjustmentSchema.index({
+  student: 1,
+  fee: 1,
+  type: 1,
+  academicYear: 1,
+});
 
-export const FeeAdjustment = model<IFeeAdjustment>("FeeAdjustment", FeeAdjustmentSchema);
+export const FeeAdjustment = model<IFeeAdjustment>(
+  'FeeAdjustment',
+  FeeAdjustmentSchema,
+);

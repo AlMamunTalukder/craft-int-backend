@@ -1,55 +1,37 @@
 import { Schema, model } from 'mongoose';
 import { IFees } from './interface';
 
-const feeSchema = new Schema<IFees>(
+const FeesSchema = new Schema<IFees>(
   {
+    student: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
     enrollment: {
       type: Schema.Types.ObjectId,
       ref: 'Enrollment',
-      required: true,
-      index: true,
     },
-    student: {
-      type: Schema.Types.ObjectId,
-      ref: 'Student',
-      required: true,
-      index: true,
-    },
-    feeType: {
-      type: String,
-      required: true,
-    },
-    month: { type: String },
+    class: { type: String, required: true },
+    month: { type: String, required: true },
     amount: { type: Number, required: true },
-    advance: { type: Number },
     paidAmount: { type: Number, default: 0 },
-    dueAmount: { type: Number, default: 0 },
+    advanceUsed: { type: Number, default: 0 },
+    dueAmount: { type: Number, required: true },
+    discount: { type: Number, default: 0 },
+    waiver: { type: Number, default: 0 },
+    feeType: { type: String },
     status: {
       type: String,
       enum: ['paid', 'partial', 'unpaid'],
       default: 'unpaid',
     },
-    paymentMethod: {
-      type: String,
-      enum: ['cash', 'bkash', 'bank', 'online'],
-      default: 'cash',
-    },
+    paymentMethod: { type: String, enum: ['cash', 'bkash', 'bank', 'online'] },
     transactionId: { type: String },
-    receiptNo: { type: String, index: true },
+    receiptNo: { type: String },
     paymentDate: { type: Date },
+    academicYear: { type: String, required: true },
+    isCurrentMonth: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
-feeSchema.pre('save', function (next) {
-  if (this.amount != null) {
-    const paid = this.paidAmount ?? 0;
-    this.dueAmount = Math.max(0, this.amount - paid);
-    if (paid === 0) this.status = 'unpaid';
-    else if (paid >= this.amount) this.status = 'paid';
-    else this.status = 'partial';
-  }
-  next();
-});
+FeesSchema.index({ student: 1, month: 1, academicYear: 1 });
 
-export const Fees = model<IFees>('Fees', feeSchema);
+export const Fees = model<IFees>('Fees', FeesSchema);
