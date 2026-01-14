@@ -73,10 +73,16 @@ export const createEnrollment = async (payload: any) => {
         .filter((cls: any) => cls && cls !== '')
         .map((cls: any) => {
           if (typeof cls === 'object') {
-            // Extract class name from object
+            // Extract class name from object if available
             if (cls.label) {
               classNameForId = cls.label; // Get class name from label
+            } else if (cls.className) {
+              classNameForId = cls.className;
+            } else if (cls.name) {
+              classNameForId = cls.name;
             }
+
+            // Extract the ID
             if (cls._id) return cls._id.toString();
             if (cls.value) return cls.value.toString();
             if (cls.id) return cls.id.toString();
@@ -84,8 +90,15 @@ export const createEnrollment = async (payload: any) => {
               return cls.toString();
             }
           } else if (typeof cls === 'string') {
-            classNameForId = cls; // Get class name from string
-            return cls.trim();
+            // If it's a string, check if it's an ObjectId or class name
+            if (cls.match(/^[0-9a-fA-F]{24}$/)) {
+              // It's an ObjectId
+              return cls.trim();
+            } else {
+              // It's a class name string
+              classNameForId = cls;
+              return cls.trim();
+            }
           }
           return typeof cls === 'string' ? cls.trim() : cls;
         });
@@ -94,7 +107,12 @@ export const createEnrollment = async (payload: any) => {
       if (typeof cls === 'object') {
         if (cls.label) {
           classNameForId = cls.label;
+        } else if (cls.className) {
+          classNameForId = cls.className;
+        } else if (cls.name) {
+          classNameForId = cls.name;
         }
+
         if (cls._id) classIds = [cls._id.toString()];
         else if (cls.value) classIds = [cls.value.toString()];
         else if (cls.id) classIds = [cls.id.toString()];
@@ -102,8 +120,15 @@ export const createEnrollment = async (payload: any) => {
           classIds = [cls.toString()];
         }
       } else if (typeof cls === 'string' && cls.trim()) {
-        classNameForId = cls;
-        classIds = [cls.trim()];
+        // Check if it's an ObjectId or class name
+        if (cls.match(/^[0-9a-fA-F]{24}$/)) {
+          // It's an ObjectId
+          classIds = [cls.trim()];
+        } else {
+          // It's a class name
+          classNameForId = cls;
+          classIds = [cls.trim()];
+        }
       }
     }
 
@@ -122,7 +147,7 @@ export const createEnrollment = async (payload: any) => {
 
     classIds = validClassIds;
 
-    // Normalize data to match schema
+    // Normalize data to match schema - keep as ObjectId
     const enrollmentData: any = {
       studentId: payload.studentId || '',
       studentName: payload.studentName || '',
@@ -134,7 +159,7 @@ export const createEnrollment = async (payload: any) => {
       birthRegistrationNo: payload.birthRegistrationNo || '',
       bloodGroup: payload.bloodGroup || '',
       nationality: payload.nationality || 'Bangladesh',
-      className: classIds[0],
+      className: new mongoose.Types.ObjectId(classIds[0]), // Keep as ObjectId
       section: payload.section || '',
       roll: payload.roll || payload.rollNumber || '',
       session: payload.session || '',
@@ -212,22 +237,56 @@ export const createEnrollment = async (payload: any) => {
 
     // If still no student found, create new student
     if (!studentDoc) {
-      // Get class name for ID generation
+      // Get class name for ID generation - FETCH FROM DATABASE
       let actualClassName = classNameForId;
 
-      // If we don't have class name from payload, fetch it from database
-      if (!actualClassName && classIds.length > 0) {
+      // Always fetch class name from database using the ObjectId
+      if (classIds.length > 0) {
         const classDoc = await mongoose
           .model('Class')
           .findById(classIds[0])
           .session(session);
-        if (classDoc && classDoc.className) {
-          actualClassName = classDoc.className;
+
+        if (classDoc) {
+          // Try different property names for class name
+          actualClassName =
+            classDoc.className || classDoc.name || classDoc.label || '';
+          console.log(
+            'DEBUG - Fetched class name from DB:',
+            actualClassName,
+            'for ID:',
+            classIds[0],
+          );
         }
       }
 
+      // If still no class name found (shouldn't happen), try from fees
+      if (!actualClassName && payload.fees && payload.fees.length > 0) {
+        const firstFee = payload.fees[0];
+        if (firstFee.className && firstFee.className !== '') {
+          actualClassName = firstFee.className;
+          console.log(
+            'DEBUG - Fallback: Got class name from fees:',
+            actualClassName,
+          );
+        }
+      }
+
+      // If still no class name, use a default
+      if (!actualClassName) {
+        actualClassName = 'Unknown';
+        console.log('WARNING: No class name found, using default');
+      }
+
+      console.log(
+        'DEBUG - Final class name for ID generation:',
+        actualClassName,
+      );
+
       // Generate new student ID based on class
       const newStudentId = await generateStudentId(actualClassName);
+      console.log('DEBUG - Generated Student ID:', newStudentId);
+
       const email = payload.email || `${newStudentId}@craft.edu.bd`;
 
       // Create new user for the student
@@ -250,7 +309,7 @@ export const createEnrollment = async (payload: any) => {
         user = newUser;
       }
 
-      // Prepare student data with advance balance
+      // Prepare student data with advance balance - className as ObjectId array
       const studentData: any = {
         studentId: newStudentId,
         smartIdCard: `CRAFT${Date.now()}`,
@@ -259,7 +318,7 @@ export const createEnrollment = async (payload: any) => {
         mobile: payload.mobileNo || '',
         email: email,
         user: user?._id,
-        className: classIds.map((id) => new mongoose.Types.ObjectId(id)),
+        className: classIds.map((id) => new mongoose.Types.ObjectId(id)), // Keep as ObjectId array
         studentDepartment: payload.studentDepartment || 'hifz',
         birthDate: payload.birthDate || '',
         bloodGroup: payload.bloodGroup || '',
