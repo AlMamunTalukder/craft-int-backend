@@ -65,7 +65,7 @@ export const createEnrollment = async (payload: any) => {
 
   try {
     let classIds: string[] = [];
-    let classNameForId = ''; // Store class name for student ID generation
+    let classNameForId = '';
 
     // Process class names
     if (Array.isArray(payload.className)) {
@@ -146,8 +146,6 @@ export const createEnrollment = async (payload: any) => {
     }
 
     classIds = validClassIds;
-
-    // Normalize data to match schema - keep as ObjectId
     const enrollmentData: any = {
       studentId: payload.studentId || '',
       studentName: payload.studentName || '',
@@ -159,7 +157,7 @@ export const createEnrollment = async (payload: any) => {
       birthRegistrationNo: payload.birthRegistrationNo || '',
       bloodGroup: payload.bloodGroup || '',
       nationality: payload.nationality || 'Bangladesh',
-      className: new mongoose.Types.ObjectId(classIds[0]), // Keep as ObjectId
+      className: new mongoose.Types.ObjectId(classIds[0]),
       section: payload.section || '',
       roll: payload.roll || payload.rollNumber || '',
       session: payload.session || '',
@@ -277,11 +275,6 @@ export const createEnrollment = async (payload: any) => {
         actualClassName = 'Unknown';
         console.log('WARNING: No class name found, using default');
       }
-
-      console.log(
-        'DEBUG - Final class name for ID generation:',
-        actualClassName,
-      );
 
       // Generate new student ID based on class
       const newStudentId = await generateStudentId(actualClassName);
@@ -498,7 +491,6 @@ export const createEnrollment = async (payload: any) => {
       },
     };
   } catch (error: any) {
-    // Abort transaction on error
     await session.abortTransaction();
     session.endSession();
 
