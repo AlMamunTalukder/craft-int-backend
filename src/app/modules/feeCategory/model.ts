@@ -12,6 +12,9 @@ const feeCategorySchema = new Schema<IFeeCategory>(
     feeAmount: {
       type: Number,
     },
+    category: {
+      type: String,
+    },
   },
   {
     timestamps: true,

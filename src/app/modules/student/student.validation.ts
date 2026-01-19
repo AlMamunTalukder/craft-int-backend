@@ -12,14 +12,12 @@ export const createStudentValidation = z.object({
     mobile: z.string().optional(),
     bloodGroup: z.string().optional(),
     studentPhoto: z.string().optional(),
-
     fatherName: z.string().optional(),
     fatherMobile: z.string().optional(),
     fatherProfession: z.string().optional(),
     motherName: z.string().optional(),
     motherMobile: z.string().optional(),
     motherProfession: z.string().optional(),
-
     guardianInfo: z
       .object({
         guardianName: z.string().optional(),
@@ -28,7 +26,6 @@ export const createStudentValidation = z.object({
         address: z.string().optional(),
       })
       .optional(),
-
     presentAddress: z
       .object({
         village: z.string().optional(),
@@ -38,7 +35,6 @@ export const createStudentValidation = z.object({
         district: z.string().optional(),
       })
       .optional(),
-
     permanentAddress: z
       .object({
         village: z.string().optional(),
@@ -48,9 +44,7 @@ export const createStudentValidation = z.object({
         district: z.string().optional(),
       })
       .optional(),
-
     sameAsPermanent: z.boolean().default(false),
-
     className: z.array(z.string()).optional(),
     section: z.array(z.string()).optional(),
     batch: z.string().optional(),
