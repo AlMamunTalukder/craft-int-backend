@@ -89,6 +89,11 @@ const enrollmentSchema = new Schema<IEnrollment>(
       enum: ['active', 'passed', 'failed', 'left'],
       default: 'active',
     },
+    totalAmount: { type: Number, default: 0 },
+    paidAmount: { type: Number, default: 0 },
+    dueAmount: { type: Number, default: 0 },
+    totalDiscount: { type: Number, default: 0 },
+    advanceBalance: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

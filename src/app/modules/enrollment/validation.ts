@@ -35,7 +35,7 @@ export const enrollmentValidationSchema = z.object({
       })
       .optional(),
 
-    paymentStatus: z.enum(['pending', 'paid']).default('pending'),
+    // paymentStatus: z.enum(['pending', 'paid']).default('pending'),
     studentDepartment: z.enum(['hifz', 'academic']).optional(),
 
     fatherName: z.string().optional(),

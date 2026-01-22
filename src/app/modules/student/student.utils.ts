@@ -13,64 +13,56 @@ export enum StudentStatus {
   GRADUATED = 'failed',
   LEFT = 'left',
 }
+
 export const generateStudentId = async (
   className?: string,
 ): Promise<string> => {
   const currentYear = new Date().getFullYear();
   const prefix = 'CII';
 
+  // Helper function to determine the Class Code
   const getClassCode = (className: string): string => {
-    if (!className) return '0';
+    if (!className) return '0'; // Default fallback if no class name provided
 
     const normalized = className.toLowerCase().trim();
+    console.log('classname check ', className, normalized);
 
-    const textToNumber: { [key: string]: string } = {
-      one: '1',
-      two: '2',
-      three: '3',
-      four: '4',
-      five: '5',
-      six: '6',
-      seven: '7',
-      eight: '8',
-      nine: '9',
-      ten: '10',
-    };
+    // 1. Handle Specific Class Names with Special Codes
 
-    for (const [text, number] of Object.entries(textToNumber)) {
-      if (normalized.includes(text)) {
-        return number;
-      }
-    }
+    // 'Pre One' takes precedence over 'One'
+    if (normalized.includes('pre one')) return '00';
 
-    const numberMatch = normalized.match(/\d+/);
-    if (numberMatch) {
-      const num = parseInt(numberMatch[0]);
-      return (num * 10).toString();
-    }
+    // 'One' but NOT 'Pre One'
+    if (
+      normalized === 'one' ||
+      (normalized.includes('one') && !normalized.includes('pre'))
+    )
+      return '10';
 
-    const firstLetter = className.charAt(0).toUpperCase();
+    if (normalized.includes('two')) return '20';
+    if (normalized.includes('three')) return '30';
+    if (normalized.includes('four')) return '40';
+    if (normalized.includes('five')) return '50';
+    if (normalized.includes('six')) return '60';
+    if (normalized.includes('seven')) return '70';
 
-    if (/^[A-Za-z]$/.test(firstLetter)) {
-      return firstLetter;
-    }
+    // Religious/Islamic Classes
+    if (normalized.includes('nurani')) return 'N';
+    if (normalized.includes('nazera')) return 'NA';
+    if (normalized.includes('qaida')) return 'QA';
+    if (normalized.includes('hifz')) return 'HA';
 
-    return '0';
+    // 2. Default: Take the first letter of the class name (e.g., "Eight" -> "E")
+    return className.charAt(0).toUpperCase();
   };
 
-  let classCode = '0';
+  const classCode = getClassCode(className || '');
 
-  if (className) {
-    classCode = getClassCode(className);
-  }
+  // Sequence length is fixed to 3 digits based on your examples (001, 002)
+  const sequenceLength = 3;
 
-  let pattern: string;
-
-  if (/^\d+$/.test(classCode)) {
-    pattern = `^${prefix}${currentYear}${classCode}\\d{3}$`;
-  } else {
-    pattern = `^${prefix}${currentYear}${classCode}\\d{4}$`;
-  }
+  // Explicitly define 'pattern' here to avoid the "Cannot find name 'pattern'" error
+  const pattern = `^${prefix}${currentYear}${classCode}\\d{${sequenceLength}}$`;
 
   const lastStudent = await Student.findOne(
     {
@@ -81,21 +73,19 @@ export const generateStudentId = async (
     .sort({ studentId: -1 })
     .lean();
 
-  let sequenceNumber = 0;
-  if (lastStudent?.studentId) {
-    const lastId = lastStudent.studentId;
+  let sequenceNumber = 1; // Default to 1 if this is the first student
 
-    if (/^\d+$/.test(classCode)) {
-      const sequenceStr = lastId.slice(-3);
-      sequenceNumber = parseInt(sequenceStr) + 1;
-    } else {
-      const sequenceStr = lastId.slice(-4);
-      sequenceNumber = parseInt(sequenceStr) + 1;
-    }
+  if (lastStudent?.studentId) {
+    // Extract the last 3 digits as the sequence number
+    const sequenceStr = lastStudent.studentId.slice(-sequenceLength);
+    sequenceNumber = parseInt(sequenceStr, 10) + 1;
   }
-  if (/^\d+$/.test(classCode)) {
-    return `${prefix}${currentYear}${classCode}${sequenceNumber.toString().padStart(3, '0')}`;
-  } else {
-    return `${prefix}${currentYear}${classCode}${sequenceNumber.toString().padStart(4, '0')}`;
-  }
+
+  // Pad sequence with leading zeros (e.g., 1 -> "001")
+  const paddedSequence = sequenceNumber
+    .toString()
+    .padStart(sequenceLength, '0');
+
+  // Construct Final ID
+  return `${prefix}${currentYear}${classCode}${paddedSequence}`;
 };

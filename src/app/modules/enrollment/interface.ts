@@ -18,7 +18,7 @@ export interface IEnrollment {
   session: string;
   batch?: string;
   studentType?: string;
-  paymentStatus?: 'pending' | string;
+  paymentStatus?: 'pending' | 'partial' | 'paid' | string;
 
   fatherName?: string;
   fatherNameBangla?: string;
@@ -77,6 +77,14 @@ export interface IEnrollment {
   fees?: Types.ObjectId[];
   admissionType?: 'admission' | 'promotion';
   status?: 'active' | 'passed' | 'failed' | 'left';
+
+  // --- MISSING FIELDS ADDED HERE ---
+  totalAmount?: number;
+  paidAmount?: number;
+  dueAmount?: number;
+  totalDiscount?: number;
+  advanceBalance?: number;
+  // --------------------------------
 
   createdAt?: Date;
   updatedAt?: Date;
