@@ -1,27 +1,51 @@
 import { Schema, model } from 'mongoose';
-import { IFeeCategory } from './interface';
 
-const feeCategorySchema = new Schema<IFeeCategory>(
+const feeCategorySchema = new Schema(
   {
-    class: {
+    categoryName: {
       type: String,
+      enum: [
+        '',
+        'Residential',
+        'Non-Residential',
+        'Day Care',
+        'Non-Residential One Meal',
+        'Day Care One Meal',
+      ],
+      default: '',
     },
-    feeType: {
+
+    className: {
       type: String,
+      required: true,
+      trim: true,
     },
-    feeAmount: {
-      type: Number,
-    },
-    category: {
-      type: String,
-    },
+
+    feeItems: [
+      {
+        feeType: {
+          type: String,
+          required: true,
+          enum: [
+            'Monthly Fee',
+            'Tuition Fee',
+            'Meal Fee',
+            'Seat Rent',
+            'Day Care Fee',
+            'One Meal',
+            'Exam Fee',
+            'Admission Fee',
+          ],
+        },
+        amount: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+      },
+    ],
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-export const FeeCategory = model<IFeeCategory>(
-  'FeeCategory',
-  feeCategorySchema,
-);
+export const FeeCategory = model('FeeCategory', feeCategorySchema);
