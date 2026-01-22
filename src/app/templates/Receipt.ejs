@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Receipt - Darunnazat Siddikia Kamil Madrasah</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .receipt-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            border-top: 5px solid #2c3e50;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 15px;
+        }
+
+        .madrasah-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .receipt-title {
+            font-size: 20px;
+            margin-top: 10px;
+            color: #34495e;
+            font-weight: 600;
+        }
+
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+
+        .info-table td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+        }
+
+        .info-table td:first-child {
+            font-weight: 600;
+            width: 40%;
+            background-color: #f9f9f9;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+
+        .items-table th {
+            background-color: #2c3e50;
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .items-table td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .items-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .sl-col {
+            width: 8%;
+            text-align: center;
+        }
+
+        .desc-col {
+            width: 72%;
+        }
+
+        .amount-col {
+            width: 20%;
+            text-align: right;
+        }
+
+        .total-row {
+            background-color: #ecf0f1 !important;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .total-row td {
+            border-top: 2px solid #2c3e50 !important;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px dashed #ddd;
+            text-align: right;
+        }
+
+        .received-by {
+            display: inline-block;
+            padding-top: 40px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .date-print {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+            }
+
+            .receipt-container {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                max-width: 100%;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+
+        .print-button {
+            display: block;
+            width: 200px;
+            margin: 30px auto;
+            padding: 12px 20px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .print-button:hover {
+            background-color: #34495e;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="receipt-container">
+        <div class="header">
+            <div class="madrasah-name">Darunnazat Siddikia Kamil Madrasah</div>
+            <div class="receipt-title">Money Receipt</div>
+        </div>
+
+        <table class="info-table">
+            <tr>
+                <td>Name</td>
+                <td>
+                    <%= receipt.name || 'AHMAD ABID KAJI' %>
+                </td>
+            </tr>
+            <tr>
+                <td>Jamat Group/Dept</td>
+                <td>
+                    <%= receipt.jamatGroup || 'Samen (Eight)' %>
+                </td>
+            </tr>
+            <tr>
+                <td>STD. ID</td>
+                <td>
+                    <%= receipt.stdId || 'N/A' %>
+                </td>
+            </tr>
+            <tr>
+                <td>Roll</td>
+                <td>
+                    <%= receipt.roll || '20' %>
+                </td>
+            </tr>
+            <tr>
+                <td>Section</td>
+                <td>
+                    <%= receipt.section || 'Ba' %>
+                </td>
+            </tr>
+            <tr>
+                <td>PayDate</td>
+                <td>
+                    <%= receipt.payDate || '14-Dec-2025' %>
+                </td>
+            </tr>
+            <tr>
+                <td>Inv. No.</td>
+                <td>
+                    <%= receipt.invNo || '20353567' %>
+                </td>
+            </tr>
+        </table>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="sl-col">SL</th>
+                    <th class="desc-col">Description</th>
+                    <th class="amount-col">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% const items=receipt.items || [ { description: 'Admission Fee - January, 2026' , amount: '2400' }, {
+                    description: 'Calendar - January, 2026' , amount: '50' }, { description: 'Dairy - January, 2026' ,
+                    amount: '200' }, { description: 'Development Fee - January, 2026' , amount: '500' }, {
+                    description: 'Electricity Bill - January, 2026' , amount: '100' }, {
+                    description: 'Function - January, 2026' , amount: '100' }, { description: 'ID Card - January, 2026'
+                    , amount: '100' }, { description: 'Installation Fee - January, 2026' , amount: '200' }, {
+                    description: 'Lesson Plan - January, 2026' , amount: '150' }, {
+                    description: 'Library - January, 2026' , amount: '50' }, { description: 'Magazine - January, 2026' ,
+                    amount: '150' }, { description: 'Prize - January, 2026' , amount: '100' }, {
+                    description: 'Registration Fee - January, 2026' , amount: '300' }, {
+                    description: 'Science and ICT Lab - January, 2026' , amount: '100' }, {
+                    description: 'Sub. for Bikash - January, 2026' , amount: '600' }, {
+                    description: 'Monthly Tuition Fee (January, 2026)' , amount: '5400.00' } ]; %>
+
+                    <% let total=0; %>
+                        <% items.forEach((item, index)=> { %>
+                            <tr>
+                                <td class="sl-col">
+                                    <%= index + 1 %>
+                                </td>
+                                <td class="desc-col">
+                                    <%= item.description %>
+                                </td>
+                                <td class="amount-col">
+                                    <%= item.amount %>
+                                </td>
+                            </tr>
+                            <% total +=parseFloat(item.amount); %>
+                                <% }); %>
+
+                                    <tr class="total-row">
+                                        <td colspan="2" style="text-align: right; padding-right: 15px;">TOTAL</td>
+                                        <td class="amount-col">
+                                            <%= total.toFixed(2) %>
+                                        </td>
+                                    </tr>
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <div class="received-by">Received By (<%= receipt.receivedBy || 'Tanvir Rahman' %>)</div>
+        </div>
+
+        <div class="date-print">
+            Generated on: <%= new Date().toLocaleDateString('en-US', { year: 'numeric' , month: 'short' , day: 'numeric'
+                , hour: '2-digit' , minute: '2-digit' }) %>
+        </div>
+    </div>
+
+    <button class="print-button no-print" onclick="window.print()">Print / Save as PDF</button>
+
+    <script>
+        // Auto-print when the page loads (optional)
+        window.onload = function () {
+            // Uncomment the line below if you want to auto-print when page loads
+            // window.print();
+        };
+    </script>
+</body>
+
+</html>

@@ -28,11 +28,29 @@ const getAllPayments = async (query: Record<string, unknown>) => {
   return { meta, data };
 };
 
-const getSinglePayment = async (id: string) => {
-  const result = await Payment.findById(id);
+export const getSinglePayment = async (id: string) => {
+  const result = await Payment.findById(id)
+    .populate({
+      path: 'student',
+      select: 'name studentId class roll',
+    })
+    .populate({
+      path: 'fees',
+      select: 'title amount',
+    })
+    .populate({
+      path: 'receiptData.feeDetails.className',
+      select: 'name section',
+    })
+    .populate({
+      path: 'receiptData.feeDetails',
+      select: 'title amount',
+    });
+
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment not found');
   }
+
   return result;
 };
 

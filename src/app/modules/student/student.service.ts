@@ -8,6 +8,7 @@ import { studentSearchableFields } from './student.constant';
 import { generateStudentId } from './student.utils';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
+import { Class } from '../class/class.model';
 
 const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
   const { name, studentDepartment, email } = payload;
@@ -99,6 +100,57 @@ const createStudent = async (payload: Partial<IStudent>): Promise<IStudent> => {
 };
 
 const getAllStudents = async (query: Record<string, unknown>) => {
+  const { className, ...otherQuery } = query;
+
+  const processedQuery = { ...otherQuery };
+
+  // Handle className filter
+  if (className) {
+    const classValue = className as string;
+
+    // Check if it's a valid ObjectId
+    if (/^[0-9a-fA-F]{24}$/.test(classValue)) {
+      // It's an ObjectId, keep it as is for QueryBuilder
+      processedQuery.className = classValue;
+    } else {
+      // It's a class name string, we need to find the Class document first
+      try {
+        // Find the Class document by name
+        const classDoc = await Class.findOne({
+          className: { $regex: new RegExp(`^${classValue}$`, 'i') },
+        });
+
+        if (classDoc) {
+          // Use the ObjectId in the query
+          processedQuery.className = classDoc._id.toString();
+        } else {
+          // If class not found, return empty results
+          return {
+            meta: {
+              page: Number(query.page) || 1,
+              limit: Number(query.limit) || 10000,
+              total: 0,
+              totalPage: 0,
+            },
+            data: [],
+          };
+        }
+      } catch (error) {
+        console.error('Error finding class:', error);
+        // Return empty results on error
+        return {
+          meta: {
+            page: Number(query.page) || 1,
+            limit: Number(query.limit) || 10000,
+            total: 0,
+            totalPage: 0,
+          },
+          data: [],
+        };
+      }
+    }
+  }
+
   const studentQuery = new QueryBuilder(
     Student.find()
       .populate({
@@ -115,7 +167,7 @@ const getAllStudents = async (query: Record<string, unknown>) => {
         path: 'payments',
         model: 'Payment',
       }),
-    query,
+    processedQuery,
   )
     .search(studentSearchableFields)
     .filter()
