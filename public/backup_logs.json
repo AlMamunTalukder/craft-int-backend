@@ -4,24 +4,6 @@
     "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
     "code": null,
     "signal": null,
-    "backupStartTime": "2026-01-14T18:00:00.552Z",
-    "backupEndTime": "2026-01-14T18:00:00.558Z",
-    "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "failed",
-    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
-    "code": null,
-    "signal": null,
-    "backupStartTime": "2026-01-15T18:00:00.322Z",
-    "backupEndTime": "2026-01-15T18:00:00.345Z",
-    "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "failed",
-    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
-    "code": null,
-    "signal": null,
     "backupStartTime": "2026-01-16T18:00:00.230Z",
     "backupEndTime": "2026-01-16T18:00:00.240Z",
     "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
@@ -51,6 +33,15 @@
     "signal": null,
     "backupStartTime": "2026-01-21T18:00:00.175Z",
     "backupEndTime": "2026-01-21T18:00:00.200Z",
+    "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
+  },
+  {
+    "status": "failed",
+    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
+    "code": null,
+    "signal": null,
+    "backupStartTime": "2026-01-22T18:00:00.375Z",
+    "backupEndTime": "2026-01-22T18:00:00.388Z",
     "archivePath": "/home/ibrahim-sikder/Desktop/project/Craft-International-Institute/craft-int-backend/public/sarabelanews.gzip"
   }
 ]
