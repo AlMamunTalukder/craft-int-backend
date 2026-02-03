@@ -1,4 +1,3 @@
-// In your payment model
 import { Schema, model } from 'mongoose';
 
 const paymentSchema = new Schema(
@@ -51,8 +50,8 @@ const paymentSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed', 'refunded'],
-      default: 'completed',
+      // enum: ['pending', 'completed', 'failed', 'refunded'],
+      // default: 'completed',
     },
   },
   { timestamps: true },

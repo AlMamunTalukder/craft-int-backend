@@ -1,40 +1,19 @@
 import express from 'express';
-import { auth } from '../../middlewares/auth';
 import { paymentControllers } from './controller';
 
 const router = express.Router();
 
-router.post(
-  '/bulk',
-  auth('admin', 'super_admin'),
-  paymentControllers.createBulkPayment,
-);
-
-router.get(
-  '/receipt/:paymentId',
-  auth('admin', 'super_admin'),
-  paymentControllers.generateReceipt,
-);
-
-router.post(
-  '/',
-  auth('admin', 'super_admin'),
-  paymentControllers.createPayment,
-);
-
 router.get('/', paymentControllers.getAllPayments);
+router.post('/bulk', paymentControllers.createBulkPayment);
+
+router.get('/receipt/:paymentId', paymentControllers.generateReceipt);
+
+router.post('/', paymentControllers.createPayment);
+
 router.get('/:id', paymentControllers.getSinglePayment);
 
-router.patch(
-  '/:id',
-  auth('admin', 'super_admin'),
-  paymentControllers.updatePayment,
-);
+router.patch('/:id', paymentControllers.updatePayment);
 
-router.delete(
-  '/:id',
-  auth('admin', 'super_admin'),
-  paymentControllers.deletePayment,
-);
+router.delete('/:id', paymentControllers.deletePayment);
 
 export const paymentRoutes = router;

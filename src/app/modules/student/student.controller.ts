@@ -4,7 +4,6 @@ import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 import { Request, Response } from 'express';
 
-// Create new student
 const createStudent = catchAsync(async (req: Request, res: Response) => {
   const student = await studentServices.createStudent(req.body);
 
@@ -16,7 +15,6 @@ const createStudent = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Get all students
 const getAllStudents = catchAsync(async (req: Request, res: Response) => {
   const result = await studentServices.getAllStudents(req.query);
 
@@ -29,7 +27,6 @@ const getAllStudents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Get student by ID
 const getSingleStudent = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const student = await studentServices.getSingleStudent(id);
@@ -42,7 +39,6 @@ const getSingleStudent = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Update student
 const updateStudent = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   console.log(id);
@@ -56,7 +52,6 @@ const updateStudent = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// Delete student
 const deleteStudent = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const deletedStudent = await studentServices.deleteStudent(id);
