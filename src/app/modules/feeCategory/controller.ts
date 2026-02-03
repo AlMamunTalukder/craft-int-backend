@@ -4,12 +4,19 @@ import { catchAsync } from '../../../utils/catchAsync';
 import { feeCategoryServices } from './service';
 
 const createFeeCategory = catchAsync(async (req, res) => {
-  const result = await feeCategoryServices.createFeeCategory(req.body);
+  let result;
+  if (Array.isArray(req.body)) {
+    result = await feeCategoryServices.createFeeCategory(req.body);
+  } else {
+    result = await feeCategoryServices.createFeeCategory(req.body);
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: 'Fee category created successfully',
+    message: Array.isArray(req.body)
+      ? 'Fee categories created successfully'
+      : 'Fee category created successfully',
     data: result,
   });
 });

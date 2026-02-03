@@ -1,3 +1,4 @@
+// feeCategory.validation.ts
 import { z } from 'zod';
 
 export const categoryNameEnum = z.union([
@@ -32,12 +33,16 @@ const feeItemSchema = z.object({
     .positive('Amount must be greater than 0'),
 });
 
+const singleFeeCategorySchema = z.object({
+  categoryName: categoryNameEnum.optional(),
+  className: z.string().min(1, 'Class name is required'),
+  feeItems: z.array(feeItemSchema).min(1),
+});
+
+const multipleFeeCategoriesSchema = z.array(singleFeeCategorySchema);
+
 export const createFeeCategoryValidation = z.object({
-  body: z.object({
-    categoryName: categoryNameEnum.optional(),
-    className: z.string().min(1, 'Class name is required'),
-    feeItems: z.array(feeItemSchema).min(1),
-  }),
+  body: z.union([singleFeeCategorySchema, multipleFeeCategoriesSchema]),
 });
 
 export const updateFeeCategoryValidation = z.object({
