@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Student } from './student.model';
 
 export enum Gender {
@@ -13,79 +14,121 @@ export enum StudentStatus {
   GRADUATED = 'failed',
   LEFT = 'left',
 }
-
+// Updated generateStudentId function
 export const generateStudentId = async (
   className?: string,
 ): Promise<string> => {
   const currentYear = new Date().getFullYear();
   const prefix = 'CII';
 
-  // Helper function to determine the Class Code
-  const getClassCode = (className: string): string => {
-    if (!className) return '0'; // Default fallback if no class name provided
+  let classCode = '0';
 
+  if (className && typeof className === 'string' && className.trim() !== '') {
     const normalized = className.toLowerCase().trim();
-    console.log('classname check ', className, normalized);
+    console.log('Normalized class name for ID generation:', normalized);
 
-    // 1. Handle Specific Class Names with Special Codes
+    // Class name mappings - updated with your specific format
+    const specialClassMappings: { [key: string]: string } = {
+      // Pre-School classes
+      'pre one': '00',
+      'pre-one': '00',
+      preone: '00',
+      'pre 1': '00',
+      'pre-1': '00',
 
-    // 'Pre One' takes precedence over 'One'
-    if (normalized.includes('pre one')) return '00';
+      // Standard classes 1-7
+      one: '10',
+      '1': '10',
+      'class one': '10',
+      two: '20',
+      '2': '20',
+      'class two': '20',
+      three: '30',
+      '3': '30',
+      'class three': '30',
+      four: '40',
+      '4': '40',
+      'class four': '40',
+      five: '50',
+      '5': '50',
+      'class five': '50',
+      six: '60',
+      '6': '60',
+      'class six': '60',
+      seven: '70',
+      '7': '70',
+      'class seven': '70',
+      eight: '80',
+      '8': '80',
+      'class eight': '80',
+      nine: '90',
+      '9': '90',
+      'class nine': '90',
+      ten: '100',
+      '10': '100',
+      'class ten': '100',
 
-    // 'One' but NOT 'Pre One'
-    if (
-      normalized === 'one' ||
-      (normalized.includes('one') && !normalized.includes('pre'))
-    )
-      return '10';
+      // Islamic Studies
+      nurani: 'N',
+      noorani: 'N',
+      nazera: 'NA',
+      nazira: 'NA',
+      qaida: 'QA',
+      quida: 'QA',
+      hifz: 'HA',
+      'hifzul quran': 'HA',
+    };
 
-    if (normalized.includes('two')) return '20';
-    if (normalized.includes('three')) return '30';
-    if (normalized.includes('four')) return '40';
-    if (normalized.includes('five')) return '50';
-    if (normalized.includes('six')) return '60';
-    if (normalized.includes('seven')) return '70';
+    // Check for exact matches
+    if (specialClassMappings[normalized]) {
+      classCode = specialClassMappings[normalized];
+    } else {
+      // Check for partial matches
+      for (const [key, code] of Object.entries(specialClassMappings)) {
+        if (normalized.includes(key) || key.includes(normalized)) {
+          classCode = code;
+          break;
+        }
+      }
 
-    // Religious/Islamic Classes
-    if (normalized.includes('nurani')) return 'N';
-    if (normalized.includes('nazera')) return 'NA';
-    if (normalized.includes('qaida')) return 'QA';
-    if (normalized.includes('hifz')) return 'HA';
+      // If still no match, take first letter
+      if (classCode === '0') {
+        const firstLetter = normalized.charAt(0).toUpperCase();
+        if (/^[A-Za-z]$/.test(firstLetter)) {
+          classCode = firstLetter;
+        }
+      }
+    }
+  }
 
-    // 2. Default: Take the first letter of the class name (e.g., "Eight" -> "E")
-    return className.charAt(0).toUpperCase();
-  };
+  console.log('Determined class code:', classCode);
 
-  const classCode = getClassCode(className || '');
+  // Determine pattern based on class code
+  const pattern = `^${prefix}${currentYear}${classCode}\\d{3}$`;
 
-  // Sequence length is fixed to 3 digits based on your examples (001, 002)
-  const sequenceLength = 3;
-
-  // Explicitly define 'pattern' here to avoid the "Cannot find name 'pattern'" error
-  const pattern = `^${prefix}${currentYear}${classCode}\\d{${sequenceLength}}$`;
-
+  // Find the last student ID with matching pattern
   const lastStudent = await Student.findOne(
     {
-      studentId: { $regex: pattern },
+      studentId: { $regex: pattern, $options: 'i' },
     },
     { studentId: 1 },
   )
     .sort({ studentId: -1 })
     .lean();
 
-  let sequenceNumber = 1; // Default to 1 if this is the first student
+  let sequenceNumber = 1;
 
   if (lastStudent?.studentId) {
-    // Extract the last 3 digits as the sequence number
-    const sequenceStr = lastStudent.studentId.slice(-sequenceLength);
+    const lastId = lastStudent.studentId;
+    const sequenceStr = lastId.slice(-3);
     sequenceNumber = parseInt(sequenceStr, 10) + 1;
+
+    if (sequenceNumber > 999) {
+      throw new Error('Sequence number exceeded maximum for this class');
+    }
   }
 
-  // Pad sequence with leading zeros (e.g., 1 -> "001")
-  const paddedSequence = sequenceNumber
-    .toString()
-    .padStart(sequenceLength, '0');
-
-  // Construct Final ID
-  return `${prefix}${currentYear}${classCode}${paddedSequence}`;
+  const studentId = `${prefix}${currentYear}${classCode}${sequenceNumber.toString().padStart(3, '0')}`;
+  console.log('Generated Student ID:', studentId);
+  return studentId;
 };
