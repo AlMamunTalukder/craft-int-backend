@@ -5,9 +5,14 @@ import QueryBuilder from '../../builder/QueryBuilder';
 import { FeeCategory } from './model';
 import { IFeeCategory } from './interface';
 
-const createFeeCategory = async (payload: IFeeCategory) => {
-  const result = await FeeCategory.create(payload);
-  return result;
+const createFeeCategory = async (payload: IFeeCategory | IFeeCategory[]) => {
+  if (Array.isArray(payload)) {
+    const result = await FeeCategory.insertMany(payload);
+    return result;
+  } else {
+    const result = await FeeCategory.create(payload);
+    return result;
+  }
 };
 
 const getAllFeeCategories = async (query: Record<string, any>) => {
