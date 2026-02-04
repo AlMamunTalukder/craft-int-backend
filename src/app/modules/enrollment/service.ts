@@ -59,152 +59,66 @@ const getSingleEnrollment = async (id: string) => {
   return enrollment;
 };
 
-// Main enrollment creation function
 export const createEnrollment = async (payload: any) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // 1. Normalize Class Data
-    let classIds: string[] = [];
+    // 1. Normalize Class Data (Ensure we get IDs)
+    let classIds: any[] = [];
     let primaryClassName = '';
 
-    console.log('Payload className:', payload.className);
-    console.log('Payload fees:', payload.fees);
-
-    // Extract class IDs from payload
     if (Array.isArray(payload.className)) {
       classIds = payload.className
         .filter((cls: any) => cls && cls !== '')
         .map((cls: any) => {
           if (typeof cls === 'object') {
-            // Check for className from payload object
-            if (cls.className && !primaryClassName) {
+            if (cls.className && !primaryClassName)
               primaryClassName = cls.className;
-            }
-            // Check for label
-            if (cls.label && !primaryClassName) {
-              primaryClassName = cls.label;
-            }
-            return (
-              cls._id?.toString() ||
-              cls.value?.toString() ||
-              cls.id?.toString() ||
-              ''
-            );
+            if (cls.label && !primaryClassName) primaryClassName = cls.label;
+            return cls._id?.toString() || cls.value?.toString() || '';
           }
           const strVal = typeof cls === 'string' ? cls.trim() : '';
-          // If it's not an ObjectId, it might be a class name
           if (
             strVal &&
             !mongoose.Types.ObjectId.isValid(strVal) &&
             !primaryClassName
-          ) {
+          )
             primaryClassName = strVal;
-          }
           return strVal;
         })
         .filter((id: any) => id !== '');
     } else if (payload.className) {
       const cls = payload.className;
       if (typeof cls === 'object') {
-        // Check for className from payload object
-        if (cls.className && !primaryClassName) {
+        if (cls.className && !primaryClassName)
           primaryClassName = cls.className;
-        }
-        // Check for label
-        if (cls.label && !primaryClassName) {
-          primaryClassName = cls.label;
-        }
+        if (cls.label && !primaryClassName) primaryClassName = cls.label;
         const id =
           cls._id?.toString() || cls.value?.toString() || cls.id?.toString();
         if (id) classIds.push(id);
       } else if (typeof cls === 'string' && cls.trim()) {
         const strVal = cls.trim();
-        if (mongoose.Types.ObjectId.isValid(strVal)) {
+        if (mongoose.Types.ObjectId.isValid(strVal)) classIds.push(strVal);
+        else {
           classIds.push(strVal);
-        } else {
-          // If it's not an ObjectId, assume it's a class name
-          classIds.push(strVal);
-          if (!primaryClassName) {
-            primaryClassName = strVal;
-          }
+          if (!primaryClassName) primaryClassName = strVal;
         }
       }
     }
 
-    console.log('Class IDs:', classIds);
-
-    if (!classIds.length) throw new Error('At least one class is required');
-
-    // Validate ObjectIds
     const validClassIds = classIds.filter((id) =>
       mongoose.Types.ObjectId.isValid(id),
     );
 
-    // If we have non-ObjectId strings, they might be class names
-    const nonObjectIdClassNames = classIds.filter(
-      (id) => !mongoose.Types.ObjectId.isValid(id),
-    );
-
-    if (nonObjectIdClassNames.length > 0 && !primaryClassName) {
-      primaryClassName = nonObjectIdClassNames[0];
-      console.log('Using non-ObjectId as class name:', primaryClassName);
-    }
-
-    if (validClassIds.length === 0 && !primaryClassName)
-      throw new Error('Invalid class ID(s) provided');
-
-    // Use validClassIds for database operations
-    classIds = validClassIds.length > 0 ? validClassIds : classIds;
-
-    // 2. Try to get class name from Class model database
+    // Determine primaryClassName string
     if (!primaryClassName && validClassIds.length > 0) {
-      for (const classId of validClassIds) {
-        const classNameFromDB = await getClassNameFromClassModel(
-          classId,
-          session,
-        );
-        if (classNameFromDB) {
-          primaryClassName = classNameFromDB;
-          console.log('Got class name from DB:', primaryClassName);
-          break;
-        }
-      }
+      primaryClassName = validClassIds[0];
     }
-
-    // 3. If still no class name, try to get from fees
-    if (
-      !primaryClassName &&
-      payload.fees &&
-      Array.isArray(payload.fees) &&
-      payload.fees.length > 0
-    ) {
-      const firstFee = payload.fees[0];
-      if (firstFee.className) {
-        if (typeof firstFee.className === 'string') {
-          primaryClassName = firstFee.className;
-        } else if (
-          typeof firstFee.className === 'object' &&
-          firstFee.className.label
-        ) {
-          primaryClassName = firstFee.className.label;
-        }
-      }
-      if (primaryClassName) {
-        console.log('Got class name from fees:', primaryClassName);
-      }
-    }
-
-    // 4. If still no class name, use a default
-    if (!primaryClassName) {
+    if (!primaryClassName)
       primaryClassName = payload.studentDepartment === 'hifz' ? 'Hifz' : 'One';
-      console.log('Using default class name:', primaryClassName);
-    }
 
-    console.log('Final primary class name:', primaryClassName);
-
-    // 5. Prepare Enrollment Data
+    // 2. Prepare Enrollment Data
     const enrollmentData: any = {
       studentId: payload.studentId || '',
       studentName: payload.studentName || '',
@@ -212,325 +126,225 @@ export const createEnrollment = async (payload: any) => {
       studentPhoto: payload.studentPhoto || '',
       mobileNo: payload.mobileNo || '',
       rollNumber: payload.rollNumber || '',
-      gender: payload.gender || '',
-      birthDate: payload.birthDate || '',
-      birthRegistrationNo: payload.birthRegistrationNo || '',
-      bloodGroup: payload.bloodGroup || '',
-      nationality: payload.nationality || 'Bangladeshi',
-      className: classIds,
+      className: validClassIds, // STRICTLY IDs
       section: payload.section || '',
-      roll: payload.roll || payload.rollNumber || '',
       session: payload.session || new Date().getFullYear().toString(),
       batch: payload.group || '',
-      studentType: payload.studentType || '',
+      studentType: payload.studentType || payload.category || 'Residential',
       studentDepartment: payload.studentDepartment || 'hifz',
       fatherName: payload.fatherName || '',
       fatherNameBangla: payload.fatherNameBangla || '',
       fatherMobile: payload.fatherMobile || '',
-      fatherNid: payload.fatherNid || '',
-      fatherProfession: payload.fatherProfession || '',
-      fatherIncome: payload.fatherIncome || 0,
       motherName: payload.motherName || '',
       motherNameBangla: payload.motherNameBangla || '',
-      motherMobile: payload.motherMobile || '',
-      motherNid: payload.motherNid || '',
-      motherProfession: payload.motherProfession || '',
-      motherIncome: payload.motherIncome || 0,
       presentAddress: payload.presentAddress || {},
       permanentAddress: payload.permanentAddress || {},
       guardianInfo: payload.guardianInfo || {},
-      previousSchool: payload.previousSchool || {},
       documents: payload.documents || {},
       termsAccepted: payload.termsAccepted || false,
-      admissionType: payload.admissionType || 'admission',
-      paymentStatus: 'pending',
-      status: 'active',
       totalAmount: payload.totalAmount || 0,
-      totalDiscount: payload.totalDiscount || 0,
       paidAmount: payload.paidAmount || 0,
       dueAmount: payload.dueAmount || 0,
-      advanceBalance: payload.advanceBalance || 0,
-      discountType: payload.discountType || 'flat',
-      discountAmount: payload.discountAmount || 0,
       paymentMethod: payload.paymentMethod || 'cash',
     };
 
-    // 6. Handle Student (Create or Update)
+    // 3. Handle Student (Create or Update)
     let studentDoc: any = null;
-    let studentId = null;
 
     if (payload.studentId && payload.studentId.trim() !== '') {
       studentDoc = await Student.findOne({
         studentId: payload.studentId,
       }).session(session);
     }
-
-    if (!studentDoc && payload.mobileNo && payload.mobileNo.trim() !== '') {
-      studentDoc = await Student.findOne({
-        mobile: payload.mobileNo,
-      }).session(session);
+    if (!studentDoc && payload.mobileNo) {
+      studentDoc = await Student.findOne({ mobile: payload.mobileNo }).session(
+        session,
+      );
     }
 
     if (studentDoc) {
-      // Existing student
-      studentId = studentDoc._id;
       enrollmentData.studentId = studentDoc.studentId;
-
-      // Update student's class list
-      const existingClasses = studentDoc.className || [];
-      const newClassIds = classIds
-        .map((id) => new mongoose.Types.ObjectId(id))
-        .filter(
-          (id) =>
-            !existingClasses.some(
-              (existingId: mongoose.Types.ObjectId) =>
-                existingId.toString() === id.toString(),
-            ),
-        );
-
-      if (newClassIds.length > 0) {
-        studentDoc.className = [...existingClasses, ...newClassIds];
-        studentDoc.updatedAt = new Date();
-        await studentDoc.save({ session });
-      }
     } else {
-      // CREATE NEW STUDENT - Generate student ID
-      console.log('Generating student ID for class:', primaryClassName);
-      const newStudentId = await generateStudentId(primaryClassName);
-      console.log('Generated Student ID:', newStudentId);
-
-      const email =
-        payload.email || `${newStudentId.toLowerCase()}@craft.edu.bd`;
-
-      let user = null;
-      if (payload.createUser !== false) {
-        const [newUser] = await User.create(
-          [
-            {
-              name: payload.studentName || `Student ${newStudentId}`,
-              email,
-              password: 'student123',
-              role: 'student',
-              needsPasswordChange: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          ],
-          { session },
-        );
-        user = newUser;
-      }
-
+      const newStudentId = `STU-${Date.now().toString().slice(-6)}`;
       const studentData: any = {
         studentId: newStudentId,
-        smartIdCard: `CRAFT${Date.now()}`,
-        name: payload.studentName || '',
-        nameBangla: payload.nameBangla || '',
-        mobile: payload.mobileNo || '',
-        email: email,
-        user: user?._id,
-        className: classIds.map((id) => new mongoose.Types.ObjectId(id)),
-        studentDepartment: payload.studentDepartment || 'hifz',
-        birthDate: payload.birthDate || '',
-        bloodGroup: payload.bloodGroup || '',
-        fatherName: payload.fatherName || '',
-        fatherMobile: payload.fatherMobile || '',
-        motherName: payload.motherName || '',
-        motherMobile: payload.motherMobile || '',
-        presentAddress: payload.presentAddress || {},
-        permanentAddress: payload.permanentAddress || {},
-        documents: payload.documents || {},
+        name: payload.studentName,
+        nameBangla: payload.nameBangla,
+        mobile: payload.mobileNo,
+        className: validClassIds.map((id) => new mongoose.Types.ObjectId(id)),
+        studentDepartment: payload.studentDepartment,
         advanceBalance: payload.advanceBalance || 0,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date(),
       };
 
       const [newStudent] = await Student.create([studentData], { session });
       studentDoc = newStudent;
-      studentId = newStudent._id;
       enrollmentData.studentId = newStudentId;
     }
 
-    // 7. Create Enrollment
+    // 4. Create Enrollment
     const [newEnrollment] = await Enrollment.create(
-      [{ ...enrollmentData, student: studentId }],
+      [{ ...enrollmentData, student: studentDoc._id }],
       { session },
     );
 
-    // 8. Process Fees & Payments (simplified version - you can add your full logic here)
+    // 5. Process Fees
     const feeDocs: mongoose.Types.ObjectId[] = [];
-    const paymentFeesLink: {
-      fee: mongoose.Types.ObjectId;
-      amountPaid: number;
-    }[] = [];
-    const receiptFeesData: any[] = [];
+    const paidFeeIds: mongoose.Types.ObjectId[] = [];
+    let totalTransactionAmount = 0;
 
-    const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    const currentDate = new Date();
-    const currentMonthIndex = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-
-    if (
-      payload.fees &&
-      Array.isArray(payload.fees) &&
-      payload.fees.length > 0
-    ) {
+    if (payload.fees && Array.isArray(payload.fees)) {
       for (const fee of payload.fees) {
         if (!fee.feeType) continue;
 
-        const actualFeeType =
-          typeof fee.feeType === 'object'
-            ? fee.feeType.label || fee.feeType.value || fee.feeType
-            : fee.feeType;
-
-        const actualClassName = primaryClassName;
-        const category = fee.category || '';
+        const feeTypeStr =
+          typeof fee.feeType === 'string' ? fee.feeType : fee.feeType.value;
         const amount = Number(fee.amount) || 0;
-        const discount = Number(fee.discount) || 0;
-        const transactionPaidAmount = Number(fee.advanceAmount) || 0;
+        const paid = Number(fee.advanceAmount) || 0;
+        const dueAmount = Math.max(0, amount - paid);
 
-        const netAmount = Math.max(0, amount - discount);
-        const dueAmount = Math.max(0, netAmount - transactionPaidAmount);
-
-        let status = 'unpaid';
-        if (dueAmount <= 0) status = 'paid';
-        else if (transactionPaidAmount > 0) status = 'partial';
-
-        const feeData: any = {
+        const feeData = {
           enrollment: newEnrollment._id,
-          student: studentId,
+          student: studentDoc._id,
           studentId: enrollmentData.studentId,
-          feeType: actualFeeType,
-          className: actualClassName,
-          category: category,
-          month: `${monthNames[currentMonthIndex]}-${currentYear}`,
+          feeType: feeTypeStr,
           amount: amount,
-          discount: discount,
-          paidAmount: transactionPaidAmount,
+          paidAmount: paid,
           dueAmount: dueAmount,
-          status: status,
-          academicYear: currentYear.toString(),
-          isCurrentMonth: true,
-          paymentMethod: fee.paymentMethod || payload.paymentMethod || 'cash',
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          className: primaryClassName,
+          paymentMethod: payload.paymentMethod || 'cash',
+          status: paid >= amount ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
         };
 
         const [createdFee] = await Fees.create([feeData], { session });
         feeDocs.push(createdFee._id);
 
-        if (transactionPaidAmount > 0) {
-          paymentFeesLink.push({
-            fee: createdFee._id,
-            amountPaid: transactionPaidAmount,
-          });
-          receiptFeesData.push({
-            feeId: createdFee._id,
-            feeType: actualFeeType,
-            month: 'One-time',
-            originalAmount: amount,
-            discount: discount,
-            waiver: 0,
-            netAmount: netAmount,
-            paidAmount: transactionPaidAmount,
-          });
+        if (paid > 0) {
+          totalTransactionAmount += paid;
+          paidFeeIds.push(createdFee._id);
         }
       }
     }
 
-    // Create Payment Document if anything was paid
-    let createdPaymentId = null;
-    if (paymentFeesLink.length > 0) {
-      const totalTransactionAmount = paymentFeesLink.reduce(
-        (sum, item) => sum + item.amountPaid,
-        0,
-      );
+    // 6. Create Payment & Receipt (Only if amount > 0)
+    let createdPayment: any = null;
+    let createdReceipt: any = null;
 
+    if (totalTransactionAmount > 0) {
+      // Create Payment
       const paymentData = {
-        student: studentId,
+        student: studentDoc._id,
         enrollment: newEnrollment._id,
-        fees: paymentFeesLink.map((d) => d.fee),
+        fees: paidFeeIds, // Link specific fee IDs that were paid
+        totalAmount: totalTransactionAmount,
+        paymentMethod: payload.paymentMethod || 'cash',
+        receiptNo: `PAY-${Date.now()}`,
+        transactionId: `TXN-${Date.now()}`,
+        status: 'completed',
+      };
+      [createdPayment] = await Payment.create([paymentData], { session });
+
+      // Create Receipt
+      const detailedReceiptFees = await Fees.find({
+        _id: { $in: paidFeeIds },
+      })
+        .session(session)
+        .lean();
+
+      const receiptFeesStructure = detailedReceiptFees.map((f: any) => ({
+        feeType: f.feeType,
+        month: 'Admission',
+        originalAmount: f.amount,
+        discount: 0,
+        waiver: 0,
+        netAmount: f.amount - 0,
+        paidAmount: f.paidAmount,
+      }));
+
+      const receiptData = {
+        receiptNo: `RCP-${Date.now()}`,
+        student: studentDoc._id,
+        studentName: payload.studentName,
+        studentId: enrollmentData.studentId,
+        className: primaryClassName,
+        paymentId: createdPayment._id,
         totalAmount: totalTransactionAmount,
         paymentMethod: payload.paymentMethod || 'cash',
         paymentDate: new Date(),
-        receiptNo: `RCP-${Date.now()}`,
-        transactionId: `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        note: 'Enrollment Payment',
-        collectedBy: payload.collectedBy || 'System',
-        status: 'completed',
-        receiptType: 'bulk',
-        receiptData: { items: paymentFeesLink },
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        collectedBy: payload.collectedBy || 'Admin',
+        transactionId: createdPayment.transactionId,
+        fees: receiptFeesStructure,
+        summary: {
+          totalItems: receiptFeesStructure.length,
+          subtotal: totalTransactionAmount,
+          totalDiscount: 0,
+          totalWaiver: 0,
+          totalNetAmount: totalTransactionAmount,
+          amountPaid: totalTransactionAmount,
+        },
+        status: 'active',
       };
+      [createdReceipt] = await Receipt.create([receiptData], { session });
 
-      const [newPayment] = await Payment.create([paymentData], { session });
-      createdPaymentId = newPayment._id;
+      // LINK TO STUDENT
+      if (createdPayment) {
+        studentDoc.payments = [
+          ...(studentDoc.payments || []),
+          createdPayment._id,
+        ];
+      }
+      if (createdReceipt) {
+        studentDoc.receipts = [
+          ...(studentDoc.receipts || []),
+          createdReceipt._id,
+        ];
+      }
     }
 
-    // Update Enrollment with fees
+    // 7. Update Enrollment & Student with Fee Links
     if (feeDocs.length > 0) {
       newEnrollment.fees = feeDocs;
       await newEnrollment.save({ session });
 
-      // Link fees to student
-      const existingFees = studentDoc.fees || [];
-      const newFeeIds = feeDocs
-        .map((id) => id.toString())
-        .filter((id) => !existingFees.includes(id));
-
-      if (newFeeIds.length > 0) {
-        studentDoc.fees = [...existingFees, ...newFeeIds].map(
-          (id) => new mongoose.Types.ObjectId(id),
-        );
-
-        studentDoc.updatedAt = new Date();
-        await studentDoc.save({ session });
-      }
+      // Link Fees to Student
+      studentDoc.fees = [...(studentDoc.fees || []), ...feeDocs];
+      await studentDoc.save({ session });
     }
 
     await session.commitTransaction();
     session.endSession();
 
-    // Populate and return
+    // 8. POPULATE AND RETURN
     const populatedEnrollment = await Enrollment.findById(newEnrollment._id)
       .populate('student')
-      .populate('fees')
-      .populate('className');
+      .populate('className')
+      .lean();
+
+    const populatedStudent = await Student.findById(studentDoc._id).lean();
 
     return {
       success: true,
       message: 'Enrollment created successfully',
-      data: populatedEnrollment,
-      studentId: enrollmentData.studentId,
-      enrollmentId: newEnrollment._id,
+      data: {
+        ...populatedEnrollment,
+        student: populatedStudent,
+        receipt: createdReceipt ? createdReceipt.toObject() : null,
+        payment: createdPayment ? createdPayment.toObject() : null,
+      },
     };
   } catch (error: any) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
+
     console.error('Enrollment creation error:', error);
     return {
       success: false,
       message: error.message || 'Internal Server Error',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      error: error,
     };
   }
 };
-
 export const updateEnrollment = async (id: string, payload: any) => {
   const session = await mongoose.startSession();
   session.startTransaction();
