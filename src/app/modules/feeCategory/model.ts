@@ -26,16 +26,7 @@ const feeCategorySchema = new Schema(
         feeType: {
           type: String,
           required: true,
-          enum: [
-            'Monthly Fee',
-            'Tuition Fee',
-            'Meal Fee',
-            'Seat Rent',
-            'Day Care Fee',
-            'One Meal',
-            'Exam Fee',
-            'Admission Fee',
-          ],
+          trim: true,
         },
         amount: {
           type: Number,
