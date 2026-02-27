@@ -3,22 +3,7 @@ import { AppError } from '../../error/AppError';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { AdmissionApplication } from './model';
 import { TAdmissionApplication } from './interface';
-
-const generateApplicationId = async () => {
-  const lastApplication = await AdmissionApplication.findOne()
-    .sort({ createdAt: -1 })
-    .lean();
-
-  let newId = 'APP-0001';
-
-  if (lastApplication?.applicationId) {
-    const lastNumber = parseInt(lastApplication.applicationId.split('-')[1]);
-    const nextNumber = (lastNumber + 1).toString().padStart(4, '0');
-    newId = `APP-${nextNumber}`;
-  }
-
-  return newId;
-};
+import { generateApplicationId } from './utils';
 
 const createAdmissionApplication = async (payload: TAdmissionApplication) => {
   const applicationId = await generateApplicationId();
