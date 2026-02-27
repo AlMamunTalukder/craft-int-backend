@@ -12,19 +12,15 @@ export const categoryNameEnum = z.union([
   z.literal(''),
 ]);
 
-export const feeTypeEnum = z.enum([
-  'Monthly Fee',
-  'Tuition Fee',
-  'Meal Fee',
-  'Seat Rent',
-  'Day Care Fee',
-  'One Meal',
-  'Exam Fee',
-  'Admission Fee',
-]);
+export const feeTypeSchema = z
+  .string({
+    required_error: 'Fee type is required',
+  })
+  .min(2, 'Fee type must be at least 2 characters')
+  .max(50, 'Fee type too long');
 
 const feeItemSchema = z.object({
-  feeType: feeTypeEnum,
+  feeType: feeTypeSchema,
   amount: z
     .number({
       required_error: 'Amount is required',
