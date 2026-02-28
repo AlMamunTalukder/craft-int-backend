@@ -84,7 +84,7 @@ export interface IEnrollment {
   dueAmount?: number;
   totalDiscount?: number;
   advanceBalance?: number;
-  // --------------------------------
+  payment?: Types.ObjectId;
 
   createdAt?: Date;
   updatedAt?: Date;

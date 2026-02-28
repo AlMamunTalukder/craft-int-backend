@@ -46,6 +46,7 @@ import { feeAdjustmentRoutes } from '../modules/feeAdjustment/route';
 import { paymentRoutes } from '../modules/payment/route';
 import { receiptRoutes } from '../modules/receipt/route';
 import { admissionApplicationRoutes } from '../modules/admissionApplication/route';
+import { lateFeeRoutes } from '../modules/fees/lateFeeRoute';
 const router = Router();
 
 const moduleRoutes = [
@@ -225,6 +226,10 @@ const moduleRoutes = [
   {
     path: '/receipts',
     route: receiptRoutes,
+  },
+  {
+    path: '/late-fee',
+    route: lateFeeRoutes,
   },
   {
     path: '/admission-application',
