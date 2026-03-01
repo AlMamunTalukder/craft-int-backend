@@ -43,24 +43,50 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+
 const allowedOrigins = [
   config.CROSS_ORIGIN_CLIENT,
   config.LOCALHOST_CLIENT,
   config.CROSS_ORIGIN_ADMIN,
-];
+  'https://craftinternationalinstitute.com', 
+  'https://admin.craftinternationalinstitute.com', 
+  'http://localhost:3000'
+].filter(Boolean); 
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+     
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.warn(`CORS blocked origin: ${origin}`); 
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
-  }),
+  })
 );
+
+// const allowedOrigins = [
+//   config.CROSS_ORIGIN_CLIENT,
+//   config.LOCALHOST_CLIENT,
+//   config.CROSS_ORIGIN_ADMIN,
+// ];
+
+// app.use(
+//   cors({
+//     origin: (origin, callback) => {
+//       if (!origin || allowedOrigins.includes(origin)) {
+//         callback(null, true);
+//       } else {
+//         callback(new Error('Not allowed by CORS'));
+//       }
+//     },
+//     credentials: true,
+//   }),
+// );
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {
