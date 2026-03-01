@@ -1,10 +1,14 @@
 import express from 'express';
 import { feesControllers } from './controller';
 import { validateRequest } from '../../middlewares/validateRequest';
-import { createFeeZodSchema } from './validation';
+import { createFeeSchema } from './validation';
 
 const router = express.Router();
-
+router.post(
+  '/students/:studentId/fees',
+  validateRequest(createFeeSchema),
+  feesControllers.createSingleFee,
+);
 router.get('/due', feesControllers.getAllDueFees);
 router.post('/create-monthly', feesControllers.createMonthlyFees);
 router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);
@@ -19,9 +23,5 @@ router.get('/', feesControllers.getAllFees);
 router.get('/:id', feesControllers.getSingleFee);
 router.patch('/:id', feesControllers.updateFee);
 router.delete('/:id', feesControllers.deleteFee);
-router.post(
-  '/students/:studentId/fees',
-  validateRequest(createFeeZodSchema),
-  feesControllers.createSingleFee,
-);
+
 export const feesRoutes = router;
