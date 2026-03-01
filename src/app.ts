@@ -48,6 +48,9 @@ const allowedOrigins = [
   config.CROSS_ORIGIN_CLIENT,
   config.LOCALHOST_CLIENT,
   config.CROSS_ORIGIN_ADMIN,
+  'https://craftinternationalinstitute.com', 
+  'https://admin.craftinternationalinstitute.com', 
+  'http://localhost:3000'
 ].filter(Boolean); 
 
 app.use(
