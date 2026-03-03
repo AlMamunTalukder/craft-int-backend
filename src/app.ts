@@ -44,31 +44,50 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 
+
 const allowedOrigins = [
-  config.CROSS_ORIGIN_CLIENT,
-  config.LOCALHOST_CLIENT,
-  config.CROSS_ORIGIN_ADMIN,
-  'https://craftinternationalinstitute.com', 
-  'https://admin.craftinternationalinstitute.com', 
+  'https://craftinternationalinstitute.com',
+  'https://www.craftinternationalinstitute.com',
+  'https://admin.craftinternationalinstitute.com',
+  'https://server.craftinternationalinstitute.com',
   'http://localhost:3000',
-  'http://localhost:3001'
-].filter(Boolean); 
+  'http://localhost:3001',
+];
+
+// const allowedOrigins = [
+//   config.CROSS_ORIGIN_CLIENT,
+//   config.LOCALHOST_CLIENT,
+//   config.CROSS_ORIGIN_ADMIN,
+//   'https://craftinternationalinstitute.com', 
+//   'https://admin.craftinternationalinstitute.com', 
+//   'http://localhost:3000',
+//   'http://localhost:3001'
+// ].filter(Boolean); 
 
 app.use(
   cors({
     origin: (origin, callback) => {
      
       if (!origin) return callback(null, true);
+
+       console.log('Incoming Origin:', origin);
+
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked origin: ${origin}`); 
-        callback(new Error('Not allowed by CORS'));
+        // console.warn(`CORS blocked origin: ${origin}`); 
+        // callback(new Error('Not allowed by CORS'));
+        console.error('Blocked by CORS:', origin);
+        callback(null, false); // NEVER throw error
       }
     },
     credentials: true,
+     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
+app.options('*', cors());
 
 // const allowedOrigins = [
 //   config.CROSS_ORIGIN_CLIENT,
