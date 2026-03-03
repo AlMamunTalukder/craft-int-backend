@@ -50,7 +50,8 @@ const allowedOrigins = [
   config.CROSS_ORIGIN_ADMIN,
   'https://craftinternationalinstitute.com', 
   'https://admin.craftinternationalinstitute.com', 
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://localhost:3001'
 ].filter(Boolean); 
 
 app.use(
