@@ -202,6 +202,10 @@ export const getSingleStudent = async (id: string): Promise<IStudent> => {
     .populate({
       path: 'payments',
       model: 'Payment',
+    })
+    .populate({
+      path: 'receipts',
+      model: 'Receipt',
     });
 
   if (!student) {

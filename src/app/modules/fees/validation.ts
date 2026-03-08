@@ -1,115 +1,77 @@
-import mongoose from 'mongoose';
-import { z } from 'zod';
 
-const flexibleEnrollment = z
-  .union([z.string(), z.null(), z.undefined()])
-  .optional()
-  .transform((val) => {
-    if (!val) return undefined;
-    return val;
-  });
+import { z } from 'zod';
+import mongoose from 'mongoose';
+
 const objectId = z
   .string()
   .refine((val) => mongoose.Types.ObjectId.isValid(val), {
     message: 'Invalid ObjectId',
-  })
-  .optional();
-
-const dateField = z.preprocess(
-  (arg) => (arg ? new Date(arg as string) : undefined),
-  z.date().optional(),
-);
-
-const paymentMethodEnum = z.enum(['cash', 'bkash', 'nagad', 'bank', 'online']); // Added 'nagad' as seen in frontend
+  });
 
 export const createFeeSchema = z.object({
   body: z.object({
-    // enrollment: flexibleEnrollment,
-    student: flexibleEnrollment,
-    class: z.string({
-      required_error: 'Class is required',
-    }),
-
-    month: z.string({
-      required_error: 'Month is required',
-    }),
-
-    amount: z
-      .number({ required_error: 'Amount is required' })
-      .min(0, 'Amount cannot be negative'),
-
-    discount: z.number().min(0).optional().default(0),
-    waiver: z.number().min(0).optional().default(0),
-
-    feeType: z.string({
-      required_error: 'Fee type is required',
-    }),
-
-    academicYear: z.string({
-      required_error: 'Academic year is required',
-    }),
-
+    // student: objectId,
+    feeType: z.string({ required_error: 'Fee type is required' }),
+    month: z.string().optional(),
+    amount: z.number({ required_error: 'Amount is required' }),
+    paymentMethod: z.string().optional(),
     paidAmount: z.number().min(0).optional().default(0),
-    advanceUsed: z.number().min(0).optional().default(0),
-
-    isCurrentMonth: z.boolean().optional(),
+    transactionId: z.string().optional(),
+    receiptNo: z.string().optional(),
+    paymentDate: z.preprocess(
+      (arg) => (arg ? new Date(arg as string) : undefined),
+      z.date().optional(),
+    ),
   }),
 });
-/* -----------------------------------------------------
-   Other Schemas (Kept for reference)
------------------------------------------------------ */
 
 export const payFeeSchema = z.object({
   body: z.object({
-    feeId: flexibleEnrollment,
-    payAmount: z
-      .number({ required_error: 'Payment amount is required' })
-      .min(1),
-    paymentMethod: paymentMethodEnum,
+    feeId: objectId,
+    payAmount: z.number().min(1, 'Pay at least 1'),
+    paymentMethod: z.enum(['cash', 'bkash', 'bank', 'online']).optional(),
     transactionId: z.string().optional(),
     receiptNo: z.string().optional(),
     paymentDate: z.preprocess(
       (arg) => (arg ? new Date(arg as string) : new Date()),
-      z.date(),
+      z.date().optional(),
     ),
   }),
 });
 
 export const updateFeeSchema = z.object({
   params: z.object({ id: objectId }),
-  body: z.object({
-    amount: z.number().min(0).optional(),
-    paidAmount: z.number().min(0).optional(),
-    advanceUsed: z.number().min(0).optional(),
-    discount: z.number().min(0).optional(),
-    waiver: z.number().min(0).optional(),
-    status: z.enum(['paid', 'partial', 'unpaid']).optional(),
-    paymentMethod: paymentMethodEnum.optional(),
-    transactionId: z.string().optional(),
-    receiptNo: z.string().optional(),
-    paymentDate: dateField,
-    dueDate: dateField,
-    lateFeePerDay: z.number().min(0).optional(),
-    lateFeeAmount: z.number().min(0).optional(),
-    isCurrentMonth: z.boolean().optional(),
-  }),
+  body: z
+    .object({
+      amount: z.number().min(0).optional(),
+      paidAmount: z.number().min(0).optional(),
+      status: z.enum(['paid', 'partial', 'unpaid']).optional(),
+      paymentMethod: z.enum(['cash', 'bkash', 'bank', 'online']).optional(),
+      transactionId: z.string().optional(),
+      receiptNo: z.string().optional(),
+      paymentDate: z.preprocess(
+        (arg) => (arg ? new Date(arg as string) : undefined),
+        z.date().optional(),
+      ),
+    })
+    .partial(),
 });
 
-export const customizeLateFeeSchema = z.object({
-  params: z.object({ id: objectId }),
+export const createFeeZodSchema = z.object({
   body: z.object({
-    newAmount: z.number({ required_error: 'New amount is required' }).min(0),
-    reason: z.string({ required_error: 'Reason is required' }).min(5),
-    customizedBy: z
-      .string({ required_error: 'Customized by is required' })
-      .min(2),
-    notes: z.string().optional(),
+    class: z.string({
+      required_error: 'Class is required',
+    }),
+
+    amount: z.number().optional(),
+    feeType: z.string().optional(),
+    academicYear: z.string().optional(),
+    discount: z.number().min(0).optional(),
+    waiver: z.number().min(0).optional(),
+    dueDate: z.string().optional(),
   }),
 });
 
 export const FeeValidation = {
-  createFeeSchema,
-  payFeeSchema,
-  updateFeeSchema,
-  customizeLateFeeSchema,
+  createFeeZodSchema,
 };

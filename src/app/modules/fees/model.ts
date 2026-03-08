@@ -1,4 +1,3 @@
-// modules/fees/model.ts
 import { Schema, model } from 'mongoose';
 import { IFees } from './interface';
 
@@ -31,22 +30,18 @@ const FeesSchema = new Schema<IFees>(
     academicYear: { type: String, required: true },
     isCurrentMonth: { type: Boolean, default: false },
 
-    // ✅ Late Fee Fields (Single dueDate field)
-    dueDate: { type: Date }, // When the fee was due (e.g., 10th of month)
+    dueDate: { type: Date },
 
-    // Auto-calculated late fee
-    lateFeePerDay: { type: Number, default: 100 }, // Default 100tk per day
-    lateFeeCalculated: { type: Number, default: 0 }, // Auto-calculated amount
-    lateFeeDays: { type: Number, default: 0 }, // Number of days late
+    lateFeePerDay: { type: Number, default: 100 },
+    lateFeeCalculated: { type: Number, default: 0 },
+    lateFeeDays: { type: Number, default: 0 },
 
-    // Final late fee (after customization)
-    lateFeeAmount: { type: Number, default: 0 }, // Final amount after customization
+    lateFeeAmount: { type: Number, default: 0 },
     lateFeeApplied: { type: Boolean, default: false },
     lateFeeAppliedDate: { type: Date },
     lastLateFeeCalculation: { type: Date },
     totalLateFeePaid: { type: Number, default: 0 },
 
-    // Customization tracking
     lateFeeCustomized: { type: Boolean, default: false },
     lateFeeCustomizations: [
       {
@@ -59,13 +54,10 @@ const FeesSchema = new Schema<IFees>(
       },
     ],
 
-    // For tracking late fee records
     isLateFeeRecord: { type: Boolean, default: false },
     originalFeeId: { type: Schema.Types.ObjectId, ref: 'Fees' },
     monthsOverdue: { type: Number, default: 0 },
     daysOverdue: { type: Number, default: 0 },
-
-    // Last payment info
     lastPaymentDate: { type: Date },
     lastPaymentAmount: { type: Number },
   },

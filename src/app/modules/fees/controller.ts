@@ -198,8 +198,8 @@ const getAllDueFees = catchAsync(async (req, res) => {
 });
 
 const createSingleFee = catchAsync(async (req, res) => {
-  const { studentId } = req.params;
-  console.log('test student id', studentId);
+  const studentId = req.params.studentId || req.body.student;
+
   const payload = req.body;
   console.log('payload check this ', payload);
 

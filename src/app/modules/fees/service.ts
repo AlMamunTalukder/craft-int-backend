@@ -492,7 +492,6 @@ const createSingleFee = async (
     amount: number;
     feeType?: string;
     academicYear: string;
-    enrollmentId?: string;
     discount?: number;
     discountType?: 'flat' | 'percentage';
     waiver?: number;
@@ -508,13 +507,13 @@ const createSingleFee = async (
   session.startTransaction();
 
   try {
-    // Check if student exists
+    // ✅ Check student
     const student = await Student.findById(studentId).session(session);
     if (!student) {
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
 
-    // Calculate actual discount and waiver
+    // ✅ Calculate discount
     let actualDiscount = payload.discount || 0;
     let actualWaiver = payload.waiver || 0;
 
@@ -526,14 +525,13 @@ const createSingleFee = async (
       actualWaiver = (payload.amount * actualWaiver) / 100;
     }
 
-    // Ensure adjustments don't exceed amount
+    // Prevent overflow
     actualDiscount = Math.min(actualDiscount, payload.amount);
     actualWaiver = Math.min(actualWaiver, payload.amount - actualDiscount);
 
-    // Calculate net amount
     const netAmount = payload.amount - actualDiscount - actualWaiver;
 
-    // Check if fee already exists for this month and class
+    // ✅ Prevent duplicate fee (same month + class + year)
     const existingFee = await Fees.findOne({
       student: studentId,
       class: payload.class,
@@ -549,12 +547,9 @@ const createSingleFee = async (
       );
     }
 
-    // Create new fee
+    // ✅ Create fee
     const feeData = {
       student: new Types.ObjectId(studentId),
-      enrollment: payload.enrollmentId
-        ? new Types.ObjectId(payload.enrollmentId)
-        : undefined,
       class: payload.class,
       month: payload.month,
       amount: payload.amount,
@@ -571,62 +566,58 @@ const createSingleFee = async (
 
     const [newFee] = await Fees.create([feeData], { session });
 
-    // Update student's fees array
+    // ✅ Push fee into student
     await Student.findByIdAndUpdate(
       studentId,
       { $push: { fees: newFee._id } },
       { session },
     );
 
-    // Update enrollment if provided
-    if (payload.enrollmentId) {
-      await Enrollment.findByIdAndUpdate(
-        payload.enrollmentId,
-        { $push: { fees: newFee._id } },
+
+    if (actualDiscount > 0) {
+      await FeeAdjustment.create(
+        [
+          {
+            student: studentId,
+            fee: newFee._id,
+            type: 'discount',
+            adjustmentType: payload.discountType || 'flat',
+            value: actualDiscount,
+            reason: payload.reason || 'Manual discount',
+            approvedBy: null,
+            startMonth: payload.month,
+            endMonth: payload.month,
+            academicYear: payload.academicYear,
+            isActive: true,
+            isRecurring: payload.isRecurring || false,
+          },
+        ],
         { session },
       );
     }
 
-    // Create fee adjustment records for discount and waiver
-    if (actualDiscount > 0) {
-      const discountAdjustment = {
-        student: studentId,
-        fee: newFee._id,
-        enrollment: payload.enrollmentId,
-        type: 'discount' as const,
-        adjustmentType: payload.discountType || 'flat',
-        value: actualDiscount,
-        reason: payload.reason || 'Manual discount',
-        approvedBy: null,
-        startMonth: payload.month,
-        endMonth: payload.month,
-        academicYear: payload.academicYear,
-        isActive: true,
-        isRecurring: payload.isRecurring || false,
-      };
-      await FeeAdjustment.create([discountAdjustment], { session });
-    }
-
     if (actualWaiver > 0) {
-      const waiverAdjustment = {
-        student: studentId,
-        fee: newFee._id,
-        enrollment: payload.enrollmentId,
-        type: 'waiver' as const,
-        adjustmentType: payload.waiverType || 'flat',
-        value: actualWaiver,
-        reason: payload.reason || 'Manual waiver',
-        approvedBy: null,
-        startMonth: payload.month,
-        endMonth: payload.month,
-        academicYear: payload.academicYear,
-        isActive: true,
-        isRecurring: payload.isRecurring || false,
-      };
-      await FeeAdjustment.create([waiverAdjustment], { session });
+      await FeeAdjustment.create(
+        [
+          {
+            student: studentId,
+            fee: newFee._id,
+            type: 'waiver',
+            adjustmentType: payload.waiverType || 'flat',
+            value: actualWaiver,
+            reason: payload.reason || 'Manual waiver',
+            approvedBy: null,
+            startMonth: payload.month,
+            endMonth: payload.month,
+            academicYear: payload.academicYear,
+            isActive: true,
+            isRecurring: payload.isRecurring || false,
+          },
+        ],
+        { session },
+      );
     }
 
-    // Apply auto adjustments if any
     await feeAdjustmentServices.applyAutoAdjustments(
       newFee._id.toString(),
       studentId,
@@ -635,10 +626,9 @@ const createSingleFee = async (
 
     await session.commitTransaction();
 
-    // Re-fetch the fee with adjustments applied
     const updatedFee = await Fees.findById(newFee._id)
       .populate('student')
-      .populate('enrollment');
+      .session(session);
 
     return updatedFee;
   } catch (error) {
