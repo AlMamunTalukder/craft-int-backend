@@ -73,6 +73,7 @@ const studentSchema = new Schema<IStudent>(
     status: {
       type: String,
     },
+    user: {},
   },
   { timestamps: true },
 );

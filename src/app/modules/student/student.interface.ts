@@ -69,7 +69,7 @@ export interface IStudent extends Document {
     policeStation?: string;
     district?: string;
   };
-
+  user: string;
   documents?: {
     birthCertificate?: boolean;
     transferCertificate?: boolean;

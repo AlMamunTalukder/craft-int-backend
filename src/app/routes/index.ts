@@ -45,7 +45,7 @@ import { feeCategoryRoutes } from '../modules/feeCategory/route';
 import { feeAdjustmentRoutes } from '../modules/feeAdjustment/route';
 import { paymentRoutes } from '../modules/payment/route';
 import { receiptRoutes } from '../modules/receipt/route';
-import { admissionApplicationRoutes } from '../modules/admissionApplication/route';
+import { admissionApplicationRoutes } from '../modules/onlineAdmission/route';
 import { lateFeeRoutes } from '../modules/fees/lateFeeRoute';
 const router = Router();
 

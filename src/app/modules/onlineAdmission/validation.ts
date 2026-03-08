@@ -45,7 +45,7 @@ const createAdmissionApplicationValidation = z.object({
 
 const updateAdmissionApplicationValidation = z.object({
   body: z.object({
-    status: z.enum(['pending', 'approved', 'rejected']).optional(),
+    status: z.enum(['pending', 'approved', 'rejected', 'enrolled']).optional(),
   }),
 });
 
