@@ -8,7 +8,6 @@ const FeesSchema = new Schema<IFees>(
       type: Schema.Types.ObjectId,
       ref: 'Enrollment',
     },
-
     class: { type: String },
     month: { type: String },
     amount: { type: Number, required: true },
@@ -23,6 +22,7 @@ const FeesSchema = new Schema<IFees>(
       enum: ['paid', 'partial', 'unpaid'],
       default: 'unpaid',
     },
+
     paymentMethod: { type: String, enum: ['cash', 'bkash', 'bank', 'online'] },
     transactionId: { type: String },
     receiptNo: { type: String },
