@@ -6,8 +6,8 @@ export interface TUser {
   name: string;
   email: string;
   password: string;
-  needPasswordChange: boolean;
   userId: string;
+  needPasswordChange: boolean;
   role: 'admin' | 'user' | 'super_admin' | 'teacher' | 'student' | 'accountant';
   isDeleted: boolean;
   status: 'active' | 'inactive';
@@ -15,11 +15,13 @@ export interface TUser {
 }
 
 export interface UserModel extends Model<TUser> {
-  isUserExistsByCustomId(email: string): Promise<TUser>;
+  isUserExistsByCredential(credential: string): Promise<TUser | null>;
+
   isPasswordMatched(
-    plaingTextPassword: string,
+    plainTextPassword: string,
     hashedPassword: string,
   ): Promise<boolean>;
+
   isJWTIssuedBeforePasswordChanged(
     passwordChangedTimestamp: Date,
     jwtIssuedTimestamp: number,

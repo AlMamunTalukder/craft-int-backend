@@ -17,7 +17,7 @@ const userSchema = new Schema<TUser, UserModel>(
       type: String,
     },
     userId: {
-      Type: String,
+      type: String,
       required: true,
     },
     passwordChangeAt: {
@@ -91,4 +91,13 @@ userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
   return passwordChangedTime > jwtIssuedTimestamp;
 };
 
+userSchema.statics.isUserExistsByCredential = async function (
+  credential: string,
+) {
+  const isUserExists = await User.findOne({
+    $or: [{ email: credential }, { userId: credential }],
+  }).select('+password');
+
+  return isUserExists;
+};
 export const User = model<TUser, UserModel>('User', userSchema);

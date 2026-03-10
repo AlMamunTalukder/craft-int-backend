@@ -72,6 +72,7 @@ export const createEnrollment = async (
     let classNameForId = '';
     console.log('payload this ', JSON.stringify(payload, null, 2));
 
+    // Process class names (same as your existing code)
     if (Array.isArray(payload.className)) {
       classIds = payload.className
         .filter((cls: any) => cls && cls !== '')
@@ -253,7 +254,6 @@ export const createEnrollment = async (
     // Create new student if not found
     if (!studentDoc) {
       // Generate student ID using the reusable function
-      // Pass the class name to get the appropriate format
       generatedStudentId = await generateStudentId(
         classNameForId || primaryClassName,
       );
@@ -266,42 +266,45 @@ export const createEnrollment = async (
         `student${Date.now().toString().slice(-6)}@craft.edu`;
 
       // Generate default password
-      // const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
       const defaultPassword = 'CIIStudent123';
 
       // Check if user already exists with this email
       const existingUser = await User.findOne({ email }).session(session);
 
       if (!existingUser) {
-        // Create user account for student
+        // Create user account for student with userId = generatedStudentId
         const userData = {
           email: email,
-          userId: generatedStudentId,
           name: payload.studentName || 'Student',
           password: defaultPassword,
+          userId: generatedStudentId, // This will now work with the fixed schema
           needPasswordChange: true,
           role: 'student',
           status: 'active',
           isDeleted: false,
         };
 
+        console.log('Creating user with data:', userData);
+
         const [newUser] = await User.create([userData], { session });
         userDoc = newUser;
 
-        console.log('User created for student:', {
+        console.log('User created successfully:', {
+          id: userDoc._id,
           email: userDoc.email,
+          userId: userDoc.userId,
           role: userDoc.role,
-          userId: userDoc._id,
         });
       } else {
         userDoc = existingUser;
-        console.log('Existing user found for student:', {
+        console.log('Existing user found:', {
+          id: userDoc._id,
           email: userDoc.email,
-          role: userDoc.role,
-          userId: userDoc._id,
+          userId: userDoc.userId,
         });
       }
 
+      // Create student data
       const studentData: any = {
         studentId: generatedStudentId,
         name: payload.studentName,
@@ -321,7 +324,7 @@ export const createEnrollment = async (
         presentAddress: payload.presentAddress,
         permanentAddress: payload.permanentAddress,
         guardianInfo: payload.guardianInfo,
-        user: userDoc?._id,
+        user: userDoc ? [userDoc._id] : [], // Store as array with single user ID
         birthDate: payload.birthDate,
         birthRegistrationNo: payload.birthRegistrationNo,
         bloodGroup: payload.bloodGroup,
@@ -334,19 +337,29 @@ export const createEnrollment = async (
         documents: payload.documents,
       };
 
+      console.log('Creating student with data:', {
+        studentId: studentData.studentId,
+        name: studentData.name,
+        user: studentData.user,
+      });
+
       const [newStudent] = await Student.create([studentData], { session });
       studentDoc = newStudent;
       enrollmentData.studentId = generatedStudentId;
       enrollmentData.student = studentDoc._id;
 
-      console.log('Generated Student ID:', generatedStudentId);
+      console.log('Student created successfully:', {
+        id: studentDoc._id,
+        studentId: studentDoc.studentId,
+        user: studentDoc.user,
+      });
     } else {
       // If student exists, use their existing studentId
       generatedStudentId = studentDoc.studentId;
       enrollmentData.studentId = studentDoc.studentId;
 
       // Check if they have a user account
-      if (!studentDoc.user) {
+      if (!studentDoc.user || studentDoc.user.length === 0) {
         // Create user for existing student
         const email =
           payload.email ||
@@ -362,29 +375,42 @@ export const createEnrollment = async (
             email: email,
             name: studentDoc.name || 'Student',
             password: defaultPassword,
+            userId: generatedStudentId,
             needPasswordChange: true,
             role: 'student',
             status: 'active',
             isDeleted: false,
           };
 
+          console.log('Creating user for existing student:', userData);
+
           const [newUser] = await User.create([userData], { session });
           userDoc = newUser;
 
-          // Update student with user reference
-          studentDoc.user = userDoc._id;
+          // Update student with user reference (as array)
+          studentDoc.user = [userDoc._id];
           await studentDoc.save({ session });
+
+          console.log('User created and linked to existing student');
         } else {
           userDoc = existingUser;
-          // Update student with existing user reference
-          studentDoc.user = userDoc._id;
+          // Update student with existing user reference (as array)
+          studentDoc.user = [userDoc._id];
           await studentDoc.save({ session });
+          console.log('Existing user linked to student');
         }
       } else {
-        userDoc = await User.findById(studentDoc.user).session(session);
+        // Student already has user(s), get the first one
+        userDoc = await User.findById(studentDoc.user[0]).session(session);
+        console.log('Student already has user:', userDoc?._id);
       }
 
       enrollmentData.student = studentDoc._id;
+    }
+
+    // Verify user was created
+    if (!userDoc) {
+      throw new Error('Failed to create or find user for student');
     }
 
     // 4. Create Enrollment
@@ -392,7 +418,9 @@ export const createEnrollment = async (
       session,
     });
 
-    // 5. Process Fees
+    console.log('Enrollment created:', newEnrollment._id);
+
+    // 5. Process Fees (your existing fee processing code - unchanged)
     const feeDocs: mongoose.Types.ObjectId[] = [];
     const paidFeeIds: mongoose.Types.ObjectId[] = [];
     let totalTransactionAmount = 0;
@@ -411,11 +439,9 @@ export const createEnrollment = async (
       'December',
     ];
 
-    // Track total paid amount from payload
     const totalPaidAmount = Number(payload.paidAmount) || 0;
     let remainingPayment = totalPaidAmount;
 
-    // Check if fees array exists and has items
     if (
       !payload.fees ||
       !Array.isArray(payload.fees) ||
@@ -424,37 +450,21 @@ export const createEnrollment = async (
       throw new Error('No fee categories were provided');
     }
 
-    console.log(
-      'Processing fees from payload:',
-      JSON.stringify(payload.fees, null, 2),
-    );
-
-    // First, calculate total fee amount to determine payment distribution
     const allFeeItems: any[] = [];
 
-    // Collect all fee items from all fee categories
     for (const feeCategory of payload.fees) {
       if (
         feeCategory.feeItems &&
         Array.isArray(feeCategory.feeItems) &&
         feeCategory.feeItems.length > 0
       ) {
-        console.log(
-          `Processing fee category: ${feeCategory.category || 'Unknown'}, items:`,
-          feeCategory.feeItems.length,
-        );
-
         for (const feeItem of feeCategory.feeItems) {
-          // Get fee type string
           const feeTypeStr =
             typeof feeItem.feeType === 'string'
               ? feeItem.feeType
               : feeItem.feeType?.value || feeItem.feeType?.label || '';
 
-          if (!feeTypeStr) {
-            console.log('Skipping fee item with no fee type');
-            continue;
-          }
+          if (!feeTypeStr) continue;
 
           const className =
             feeCategory.className && feeCategory.className.length > 0
@@ -463,11 +473,6 @@ export const createEnrollment = async (
                 primaryClassName
               : primaryClassName;
 
-          console.log(
-            `Processing fee item: ${feeTypeStr}, isMonthly: ${feeItem.isMonthly}, amount: ${feeItem.amount}`,
-          );
-
-          // Check if this is a monthly fee
           if (feeItem.isMonthly) {
             const amount = Number(feeItem.amount) || 0;
             const discountRangeStart = feeItem.discountRangeStart || '';
@@ -478,8 +483,6 @@ export const createEnrollment = async (
 
             const startIndex = MONTHS.indexOf(discountRangeStart);
             const endIndex = MONTHS.indexOf(discountRangeEnd);
-
-            // Check if we have a valid range
             const hasValidRange =
               discountRangeStart &&
               discountRangeEnd &&
@@ -489,19 +492,14 @@ export const createEnrollment = async (
             for (let i = 0; i < 12; i++) {
               const month = MONTHS[i];
               const monthLabel = `Monthly Fee - ${month}`;
-
               let itemDiscount = baseDiscount;
 
-              // Apply range discount ONLY if this month is within the specified range
               if (hasValidRange) {
                 const minIdx = Math.min(startIndex, endIndex);
                 const maxIdx = Math.max(startIndex, endIndex);
-
-                // Only apply range discount if current month is between start and end (inclusive)
                 if (i >= minIdx && i <= maxIdx) {
-                  itemDiscount = discountRangeAmount; // Use range amount for these months
+                  itemDiscount = discountRangeAmount;
                 }
-                // Else keep the base discount (don't change)
               }
 
               allFeeItems.push({
@@ -518,7 +516,6 @@ export const createEnrollment = async (
               });
             }
           } else {
-            // Non-monthly fee
             const amount = Number(feeItem.amount) || 0;
             const discount = Number(feeItem.discount) || 0;
 
@@ -535,32 +532,23 @@ export const createEnrollment = async (
             });
           }
         }
-      } else {
-        console.log(`Fee category has no feeItems:`, feeCategory);
       }
     }
 
-    // Check if any fee items were collected
     if (allFeeItems.length === 0) {
-      console.error('No fee items were collected from payload');
       throw new Error('No fee items were created - no items found in payload');
     }
 
-    console.log(`Collected ${allFeeItems.length} fee items`);
-
-    // Sort fee items: Admission fee first, then monthly fees in order
     allFeeItems.sort((a, b) => {
       if (a.month === 'Admission') return -1;
       if (b.month === 'Admission') return 1;
       return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
     });
 
-    // Create fee documents with proper paid amount distribution
     for (const item of allFeeItems) {
       const netAmount = item.amount - item.discount;
-
-      // Determine paid amount for this fee item
       let paidForThisItem = 0;
+
       if (remainingPayment > 0) {
         paidForThisItem = Math.min(remainingPayment, netAmount);
         remainingPayment -= paidForThisItem;
@@ -571,7 +559,7 @@ export const createEnrollment = async (
       const feeData = {
         enrollment: newEnrollment._id,
         student: studentDoc._id,
-        studentId: generatedStudentId, // Use the generated student ID here
+        studentId: generatedStudentId,
         feeType: item.feeType,
         amount: item.amount,
         discount: item.discount,
@@ -587,17 +575,12 @@ export const createEnrollment = async (
             : paidForThisItem > 0
               ? 'partial'
               : 'unpaid',
-        // Store range data for monthly fees
         ...(item.isMonthly && {
           discountRangeStart: item.discountRangeStart || '',
           discountRangeEnd: item.discountRangeEnd || '',
           discountRangeAmount: item.discountRangeAmount || 0,
         }),
       };
-
-      console.log(
-        `Creating fee: ${item.feeType}, amount: ${item.amount}, discount: ${item.discount}, paid: ${paidForThisItem}`,
-      );
 
       const [createdFee] = await Fees.create([feeData], { session });
       feeDocs.push(createdFee._id);
@@ -608,33 +591,26 @@ export const createEnrollment = async (
       }
     }
 
-    // IMPORTANT: Check if any fees were created
     if (feeDocs.length === 0) {
       throw new Error('No fee items were created - fee creation failed');
     }
 
-    console.log(`Created ${feeDocs.length} fee documents`);
-
-    // Update enrollment with fees
     newEnrollment.fees = feeDocs;
     await newEnrollment.save({ session });
 
-    // Update student with fees
     studentDoc.fees = [...(studentDoc.fees || []), ...feeDocs];
     await studentDoc.save({ session });
 
-    // 6. Create Payment & Receipt (if any payment was made)
+    // 6. Create Payment & Receipt
     let createdPayment: any = null;
     let createdReceipt: any = null;
 
     if (totalTransactionAmount > 0 && paidFeeIds.length > 0) {
-      // Generate unique receipt number
       const timestamp = Date.now();
       const random = Math.floor(Math.random() * 10000);
       const receiptNo = `RCP-${timestamp}-${random}`;
       const transactionId = `TXN-${timestamp}`;
 
-      // Create Payment
       const paymentData = {
         student: studentDoc._id,
         enrollment: newEnrollment._id,
@@ -651,18 +627,14 @@ export const createEnrollment = async (
       const [payment] = await Payment.create([paymentData], { session });
       createdPayment = payment;
 
-      // Get detailed fees for receipt
-      const detailedReceiptFees = await Fees.find({
-        _id: { $in: paidFeeIds },
-      })
+      const detailedReceiptFees = await Fees.find({ _id: { $in: paidFeeIds } })
         .session(session)
         .lean();
 
       const receiptFeesStructure = detailedReceiptFees.map((f: any) => {
         const netAmount = Math.max(0, f.amount - (f.discount || 0));
-
-        // Extract month for receipt
         let month = 'Admission';
+
         if (f.feeType && f.feeType.includes('Monthly Fee - ')) {
           const parts = f.feeType.split(' - ');
           if (parts.length > 1) month = parts[1];
@@ -686,12 +658,11 @@ export const createEnrollment = async (
         0,
       );
 
-      // Create Receipt - FIXED: Use generatedStudentId which is guaranteed to have a value
       const receiptData = {
         receiptNo: receiptNo,
         student: studentDoc._id,
         studentName: payload.studentName,
-        studentId: generatedStudentId, // Use generatedStudentId here instead of enrollmentData.studentId
+        studentId: generatedStudentId,
         className: primaryClassName,
         paymentId: createdPayment._id,
         totalAmount: totalTransactionAmount,
@@ -720,7 +691,6 @@ export const createEnrollment = async (
       const [receipt] = await Receipt.create([receiptData], { session });
       createdReceipt = receipt;
 
-      // Update student document with payment and receipt references
       studentDoc.payments = [
         ...(studentDoc.payments || []),
         createdPayment._id,
@@ -731,32 +701,23 @@ export const createEnrollment = async (
       ];
       await studentDoc.save({ session });
 
-      // Update enrollment with payment reference
       newEnrollment.payment = createdPayment._id;
       await newEnrollment.save({ session });
     }
 
-    // 7. Update Admission Application status to 'enrolled' if applicationId is provided
+    // 7. Update Admission Application
     if (applicationId) {
-      const updatedApplication = await AdmissionApplication.findOneAndUpdate(
+      await AdmissionApplication.findOneAndUpdate(
         { applicationId: applicationId },
         { status: 'enrolled' },
         { new: true, session },
       );
-
-      if (updatedApplication) {
-        console.log(
-          `Admission application ${applicationId} updated to enrolled successfully`,
-        );
-      } else {
-        console.log(`Admission application with ID ${applicationId} not found`);
-      }
     }
 
     await session.commitTransaction();
     session.endSession();
 
-    // Populate all relations for the response
+    // Populate all relations for response
     const populatedEnrollment = (await Enrollment.findById(newEnrollment._id)
       .populate({
         path: 'student',
@@ -771,7 +732,6 @@ export const createEnrollment = async (
       .populate('fees')
       .lean()) as any;
 
-    // Get the fully populated student with all relations
     const populatedStudent = (await Student.findById(studentDoc._id)
       .populate('payments')
       .populate('receipts')
@@ -779,7 +739,6 @@ export const createEnrollment = async (
       .populate('user')
       .lean()) as any;
 
-    // Get the populated payment and receipt
     let populatedPayment = null;
     let populatedReceipt = null;
 
@@ -806,6 +765,8 @@ export const createEnrollment = async (
         userCredentials: userDoc
           ? {
               email: userDoc.email,
+              userId: userDoc.userId || generatedStudentId,
+              password: `Craft@${Date.now().toString().slice(-6)}`, // Return the generated password
               role: userDoc.role,
             }
           : null,
@@ -820,7 +781,6 @@ export const createEnrollment = async (
 
     console.error('Enrollment creation error:', error);
 
-    // Return proper error response
     return {
       success: false,
       message: error.message || 'Internal Server Error',
@@ -830,9 +790,8 @@ export const createEnrollment = async (
   }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
 // UPDATE ENROLLMENT
-// ═════════════════════════════════════════════════════════════════════════════
+
 export const updateEnrollment = async (id: string, payload: any) => {
   const session = await mongoose.startSession();
   session.startTransaction();

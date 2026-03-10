@@ -1,4 +1,4 @@
 export type TLoginUser = {
-  email: string;
+  credential: string;
   password: string;
 };

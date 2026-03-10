@@ -9,27 +9,30 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import { User } from '../user/user.model';
 
 const loginUser = async (payload: TLoginUser) => {
-  const user = await User.isUserExistsByCustomId(payload.email);
+  const user = await User.isUserExistsByCredential(payload.credential);
+  console.log('check user ', user);
 
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Email not found');
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
   if (user.isDeleted) {
     throw new AppError(httpStatus.FORBIDDEN, 'This account has been deleted!');
   }
 
-  // Then check if password matches
-  const isPasswordValid = await User.isPasswordMatched(payload.password, user.password);
+  const isPasswordValid = await User.isPasswordMatched(
+    payload.password,
+    user.password,
+  );
+
   if (!isPasswordValid) {
     throw new AppError(httpStatus.FORBIDDEN, 'Password does not match');
   }
 
-
   const JwtPayload = {
-    userId: user?._id as unknown as string,
-    role: user?.role,
-    email: user?.email,
+    userId: user.userId,
+    role: user.role,
+    email: user.email,
   };
 
   const accessToken = createToken(
@@ -48,11 +51,10 @@ const loginUser = async (payload: TLoginUser) => {
     accessToken,
     refreshToken,
     user: {
-      userId: user._id,
+      userId: user.userId,
       email: user.email,
       name: user.name,
       role: user.role,
-      // token: accessToken,
     },
   };
 };
@@ -61,7 +63,7 @@ const changePassword = async (
   userData: JwtPayload,
   payload: { oldPassword: string; newPassword: string },
 ) => {
-  const user = await User.isUserExistsByCustomId(userData.userId);
+  const user = await User.isUserExistsByCredential(userData.userId);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'This user is not found ');
