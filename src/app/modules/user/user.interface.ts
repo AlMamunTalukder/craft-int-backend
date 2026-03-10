@@ -3,10 +3,11 @@ import { USER_ROLE } from './user.constant';
 
 export interface TUser {
   _id: ObjectId;
-  name:string,
+  name: string;
   email: string;
   password: string;
   needPasswordChange: boolean;
+  userId: string;
   role: 'admin' | 'user' | 'super_admin' | 'teacher' | 'student' | 'accountant';
   isDeleted: boolean;
   status: 'active' | 'inactive';

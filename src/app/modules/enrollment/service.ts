@@ -67,10 +67,9 @@ export const createEnrollment = async (
   session.startTransaction();
 
   try {
-    // 1. Normalize Class Data
     let classIds: any[] = [];
     let primaryClassName = '';
-    let classNameForId = ''; // For student ID generation
+    let classNameForId = '';
     console.log('payload this ', JSON.stringify(payload, null, 2));
 
     if (Array.isArray(payload.className)) {
@@ -267,7 +266,8 @@ export const createEnrollment = async (
         `student${Date.now().toString().slice(-6)}@craft.edu`;
 
       // Generate default password
-      const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+      // const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+      const defaultPassword = 'CIIStudent123';
 
       // Check if user already exists with this email
       const existingUser = await User.findOne({ email }).session(session);
@@ -276,6 +276,7 @@ export const createEnrollment = async (
         // Create user account for student
         const userData = {
           email: email,
+          userId: generatedStudentId,
           name: payload.studentName || 'Student',
           password: defaultPassword,
           needPasswordChange: true,
@@ -716,8 +717,6 @@ export const createEnrollment = async (
         status: 'active',
       };
 
-      console.log('Creating receipt with studentId:', generatedStudentId); // Debug log
-
       const [receipt] = await Receipt.create([receiptData], { session });
       createdReceipt = receipt;
 
@@ -739,10 +738,6 @@ export const createEnrollment = async (
 
     // 7. Update Admission Application status to 'enrolled' if applicationId is provided
     if (applicationId) {
-      console.log(
-        `Updating admission application ${applicationId} status to enrolled`,
-      );
-
       const updatedApplication = await AdmissionApplication.findOneAndUpdate(
         { applicationId: applicationId },
         { status: 'enrolled' },

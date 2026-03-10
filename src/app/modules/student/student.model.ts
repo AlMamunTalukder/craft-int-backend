@@ -73,7 +73,7 @@ const studentSchema = new Schema<IStudent>(
     status: {
       type: String,
     },
-    user: {},
+    user: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true },
 );
