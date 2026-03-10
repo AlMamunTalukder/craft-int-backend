@@ -19,6 +19,7 @@ const app: Application = express();
 app.use(helmet());
 import './queue/classReport.worker';
 import { lateFeeService } from './app/modules/fees/lateFeeService';
+import { startLateFeeCron } from './jobs/lateFee.job';
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
 const ARCHIVE_PATH = path.join(rootDir, 'public', 'craftmanagement.gzip');
@@ -47,8 +48,6 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-
-
 const allowedOrigins = [
   'https://craftinternationalinstitute.com',
   'https://www.craftinternationalinstitute.com',
@@ -58,59 +57,27 @@ const allowedOrigins = [
   'http://localhost:3001',
 ];
 
-// const allowedOrigins = [
-//   config.CROSS_ORIGIN_CLIENT,
-//   config.LOCALHOST_CLIENT,
-//   config.CROSS_ORIGIN_ADMIN,
-//   'https://craftinternationalinstitute.com', 
-//   'https://admin.craftinternationalinstitute.com', 
-//   'http://localhost:3000',
-//   'http://localhost:3001'
-// ].filter(Boolean); 
-
 app.use(
   cors({
     origin: (origin, callback) => {
-     
       if (!origin) return callback(null, true);
 
-       console.log('Incoming Origin:', origin);
+      console.log('Incoming Origin:', origin);
 
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        // console.warn(`CORS blocked origin: ${origin}`); 
-        // callback(new Error('Not allowed by CORS'));
         console.error('Blocked by CORS:', origin);
-        callback(null, false); // NEVER throw error
+        callback(null, false);
       }
     },
     credentials: true,
-     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-  })
+  }),
 );
 
 app.options('*', cors());
-
-// const allowedOrigins = [
-//   config.CROSS_ORIGIN_CLIENT,
-//   config.LOCALHOST_CLIENT,
-//   config.CROSS_ORIGIN_ADMIN,
-// ];
-
-// app.use(
-//   cors({
-//     origin: (origin, callback) => {
-//       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true);
-//       } else {
-//         callback(new Error('Not allowed by CORS'));
-//       }
-//     },
-//     credentials: true,
-//   }),
-// );
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {
@@ -134,11 +101,13 @@ app.get('/', (req: Request, res: Response) => {
 
 lateFeeService.initialize({
   enabled: true,
-  dueDayOfMonth: 10, // Due on 10th of each month
-  defaultLateFeePerDay: 100, // 100tk per day
-  maxLateFeePercentage: 100, // Maximum 100% of original fee
-  gracePeriodDays: 0, // No grace period
+  dueDayOfMonth: 10,
+  defaultLateFeePerDay: 100,
+  maxLateFeePercentage: 100,
+  gracePeriodDays: 0,
 });
+
+startLateFeeCron();
 
 app.get('/api/v1/logs', async (req: Request, res: Response) => {
   try {

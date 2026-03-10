@@ -12,6 +12,7 @@ import { generateStudentId } from '../student/student.utils';
 import { Payment } from '../payment/model';
 import { Class } from '../class/class.model';
 import { Receipt } from '../receipt/model';
+import { AdmissionApplication } from '../onlineAdmission/model';
 
 const getAllEnrollments = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(Enrollment.find(), query)
@@ -58,15 +59,17 @@ const getSingleEnrollment = async (id: string) => {
   return enrollment;
 };
 
-export const createEnrollment = async (payload: any) => {
+export const createEnrollment = async (
+  payload: any,
+  applicationId?: string,
+) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // 1. Normalize Class Data
     let classIds: any[] = [];
     let primaryClassName = '';
-    let classNameForId = ''; // For student ID generation
+    let classNameForId = '';
     console.log('payload this ', JSON.stringify(payload, null, 2));
 
     if (Array.isArray(payload.className)) {
@@ -233,6 +236,7 @@ export const createEnrollment = async (payload: any) => {
     // 3. Handle Student
     let studentDoc: any = null;
     let userDoc: any = null;
+    let generatedStudentId = '';
 
     // Try to find existing student by ID or mobile
     if (payload.studentId && payload.studentId.trim() !== '') {
@@ -250,10 +254,10 @@ export const createEnrollment = async (payload: any) => {
     if (!studentDoc) {
       // Generate student ID using the reusable function
       // Pass the class name to get the appropriate format
-      const newStudentId = await generateStudentId(
+      generatedStudentId = await generateStudentId(
         classNameForId || primaryClassName,
       );
-      console.log('Generated Student ID:', newStudentId);
+      console.log('Generated Student ID:', generatedStudentId);
 
       // Generate email from student name or mobile
       const email =
@@ -262,7 +266,8 @@ export const createEnrollment = async (payload: any) => {
         `student${Date.now().toString().slice(-6)}@craft.edu`;
 
       // Generate default password
-      const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+      // const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+      const defaultPassword = 'CIIStudent123';
 
       // Check if user already exists with this email
       const existingUser = await User.findOne({ email }).session(session);
@@ -271,6 +276,7 @@ export const createEnrollment = async (payload: any) => {
         // Create user account for student
         const userData = {
           email: email,
+          userId: generatedStudentId,
           name: payload.studentName || 'Student',
           password: defaultPassword,
           needPasswordChange: true,
@@ -297,7 +303,7 @@ export const createEnrollment = async (payload: any) => {
       }
 
       const studentData: any = {
-        studentId: newStudentId,
+        studentId: generatedStudentId,
         name: payload.studentName,
         nameBangla: payload.nameBangla,
         email: email,
@@ -330,12 +336,16 @@ export const createEnrollment = async (payload: any) => {
 
       const [newStudent] = await Student.create([studentData], { session });
       studentDoc = newStudent;
-      enrollmentData.studentId = newStudentId;
+      enrollmentData.studentId = generatedStudentId;
       enrollmentData.student = studentDoc._id;
 
-      console.log('Generated Student ID:', newStudentId);
+      console.log('Generated Student ID:', generatedStudentId);
     } else {
-      // If student exists, check if they have a user account
+      // If student exists, use their existing studentId
+      generatedStudentId = studentDoc.studentId;
+      enrollmentData.studentId = studentDoc.studentId;
+
+      // Check if they have a user account
       if (!studentDoc.user) {
         // Create user for existing student
         const email =
@@ -561,7 +571,7 @@ export const createEnrollment = async (payload: any) => {
       const feeData = {
         enrollment: newEnrollment._id,
         student: studentDoc._id,
-        studentId: enrollmentData.studentId,
+        studentId: generatedStudentId, // Use the generated student ID here
         feeType: item.feeType,
         amount: item.amount,
         discount: item.discount,
@@ -676,12 +686,12 @@ export const createEnrollment = async (payload: any) => {
         0,
       );
 
-      // Create Receipt
+      // Create Receipt - FIXED: Use generatedStudentId which is guaranteed to have a value
       const receiptData = {
         receiptNo: receiptNo,
         student: studentDoc._id,
         studentName: payload.studentName,
-        studentId: enrollmentData.studentId,
+        studentId: generatedStudentId, // Use generatedStudentId here instead of enrollmentData.studentId
         className: primaryClassName,
         paymentId: createdPayment._id,
         totalAmount: totalTransactionAmount,
@@ -724,6 +734,23 @@ export const createEnrollment = async (payload: any) => {
       // Update enrollment with payment reference
       newEnrollment.payment = createdPayment._id;
       await newEnrollment.save({ session });
+    }
+
+    // 7. Update Admission Application status to 'enrolled' if applicationId is provided
+    if (applicationId) {
+      const updatedApplication = await AdmissionApplication.findOneAndUpdate(
+        { applicationId: applicationId },
+        { status: 'enrolled' },
+        { new: true, session },
+      );
+
+      if (updatedApplication) {
+        console.log(
+          `Admission application ${applicationId} updated to enrolled successfully`,
+        );
+      } else {
+        console.log(`Admission application with ID ${applicationId} not found`);
+      }
     }
 
     await session.commitTransaction();
@@ -782,6 +809,7 @@ export const createEnrollment = async (payload: any) => {
               role: userDoc.role,
             }
           : null,
+        applicationUpdated: applicationId ? true : false,
       },
     };
   } catch (error: any) {

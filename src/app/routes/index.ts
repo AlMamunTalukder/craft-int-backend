@@ -228,10 +228,6 @@ const moduleRoutes = [
     route: receiptRoutes,
   },
   {
-    path: '/late-fee',
-    route: lateFeeRoutes,
-  },
-  {
     path: '/admission-application',
     route: admissionApplicationRoutes,
   },

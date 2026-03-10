@@ -3,22 +3,25 @@ import { lateFeeControllers } from './latefeeControler';
 
 const router = express.Router();
 
-// Configuration
+// Config
 router.get('/config', lateFeeControllers.getConfig);
-router.post('/config', lateFeeControllers.updateConfig);
+router.patch('/config', lateFeeControllers.updateConfig);
 
-// Manual calculation
+// Daily calculation (manual trigger)
 router.post('/calculate-daily', lateFeeControllers.calculateDailyLateFees);
 
-// Customization
-router.post('/customize/:feeId', lateFeeControllers.customizeLateFee);
-router.post(
+// Late fee customization
+router.patch('/customize/:feeId', lateFeeControllers.customizeLateFee);
+router.patch(
   '/bulk-customize/student/:studentId',
   lateFeeControllers.bulkCustomizeStudentLateFees,
 );
 
-// History and summary
+// History & summary
 router.get('/history/:feeId', lateFeeControllers.getCustomizationHistory);
 router.get('/summary/:feeId', lateFeeControllers.getFeeDueSummary);
+
+// Optional: list all late fees for a student
+router.get('/student/:studentId', lateFeeControllers.getStudentLateFees);
 
 export const lateFeeRoutes = router;

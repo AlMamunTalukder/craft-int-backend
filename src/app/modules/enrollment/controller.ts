@@ -513,7 +513,13 @@ import { enrollmentServices } from './service';
 // };
 
 const createEnrollment = catchAsync(async (req, res) => {
-  const result = await enrollmentServices.createEnrollment(req.body);
+  const applicationId = req.query.applicationId as string;
+
+  const result = await enrollmentServices.createEnrollment(
+    req.body,
+    applicationId,
+  );
+  console.log('applicationId check this', applicationId);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,

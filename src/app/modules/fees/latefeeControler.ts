@@ -1,9 +1,10 @@
-// modules/fees/controllers/lateFee.controller.ts
 import { catchAsync } from '../../../utils/catchAsync';
 import sendResponse from '../../../utils/sendResponse';
 import httpStatus from 'http-status';
 import { lateFeeService } from './lateFeeService';
+import { z } from 'zod';
 
+// Config APIs
 const getConfig = catchAsync(async (req, res) => {
   const config = lateFeeService.getConfig();
   sendResponse(res, {
@@ -15,7 +16,16 @@ const getConfig = catchAsync(async (req, res) => {
 });
 
 const updateConfig = catchAsync(async (req, res) => {
-  const config = lateFeeService.updateConfig(req.body);
+  const schema = z.object({
+    enabled: z.boolean().optional(),
+    dueDayOfMonth: z.number().min(1).max(31).optional(),
+    defaultLateFeePerDay: z.number().min(0).optional(),
+    maxLateFeePercentage: z.number().min(0).max(100).optional(),
+    gracePeriodDays: z.number().min(0).optional(),
+  });
+  const validated = schema.parse(req.body);
+
+  const config = lateFeeService.updateConfig(validated);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -24,6 +34,7 @@ const updateConfig = catchAsync(async (req, res) => {
   });
 });
 
+// Manual daily late fee calculation
 const calculateDailyLateFees = catchAsync(async (req, res) => {
   const result = await lateFeeService.applyDailyLateFees();
   sendResponse(res, {
@@ -34,18 +45,25 @@ const calculateDailyLateFees = catchAsync(async (req, res) => {
   });
 });
 
+// Customize single fee
 const customizeLateFee = catchAsync(async (req, res) => {
+  const schema = z.object({
+    newLateFeeAmount: z.number().min(0),
+    reason: z.string(),
+    customizedBy: z.string(),
+    perDayRate: z.number().optional(),
+    notes: z.string().optional(),
+  });
+  const validated = schema.parse(req.body);
   const { feeId } = req.params;
-  const { newLateFeeAmount, reason, customizedBy, perDayRate, notes } =
-    req.body;
 
   const result = await lateFeeService.customizeLateFee(
     feeId,
-    newLateFeeAmount,
-    reason,
-    customizedBy,
-    perDayRate,
-    notes,
+    validated.newLateFeeAmount,
+    validated.reason,
+    validated.customizedBy,
+    validated.perDayRate,
+    validated.notes,
   );
 
   sendResponse(res, {
@@ -56,18 +74,25 @@ const customizeLateFee = catchAsync(async (req, res) => {
   });
 });
 
+// Bulk customize student
 const bulkCustomizeStudentLateFees = catchAsync(async (req, res) => {
+  const schema = z.object({
+    newLateFeeAmount: z.number().min(0),
+    reason: z.string(),
+    customizedBy: z.string(),
+    month: z.string().optional(),
+    academicYear: z.string().optional(),
+  });
+  const validated = schema.parse(req.body);
   const { studentId } = req.params;
-  const { newLateFeeAmount, reason, customizedBy, month, academicYear } =
-    req.body;
 
   const result = await lateFeeService.bulkCustomizeStudentLateFees(
     studentId,
-    newLateFeeAmount,
-    reason,
-    customizedBy,
-    month,
-    academicYear,
+    validated.newLateFeeAmount,
+    validated.reason,
+    validated.customizedBy,
+    validated.month,
+    validated.academicYear,
   );
 
   sendResponse(res, {
@@ -78,6 +103,7 @@ const bulkCustomizeStudentLateFees = catchAsync(async (req, res) => {
   });
 });
 
+// History
 const getCustomizationHistory = catchAsync(async (req, res) => {
   const { feeId } = req.params;
   const result = await lateFeeService.getCustomizationHistory(feeId);
@@ -90,6 +116,7 @@ const getCustomizationHistory = catchAsync(async (req, res) => {
   });
 });
 
+// Fee summary
 const getFeeDueSummary = catchAsync(async (req, res) => {
   const { feeId } = req.params;
   const result = await lateFeeService.getFeeDueSummary(feeId);
@@ -102,6 +129,19 @@ const getFeeDueSummary = catchAsync(async (req, res) => {
   });
 });
 
+// Optional: student late fee list
+const getStudentLateFees = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
+  const result = await lateFeeService.getStudentLateFees(studentId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Student late fees retrieved successfully',
+    data: result,
+  });
+});
+
 export const lateFeeControllers = {
   getConfig,
   updateConfig,
@@ -110,4 +150,5 @@ export const lateFeeControllers = {
   bulkCustomizeStudentLateFees,
   getCustomizationHistory,
   getFeeDueSummary,
+  getStudentLateFees,
 };
