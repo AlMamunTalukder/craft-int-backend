@@ -31,6 +31,8 @@ const loginUser = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+
 const changePassword = catchAsync(async (req, res) => {
   const user = req.user;
 
