@@ -5,24 +5,28 @@ import sendResponse from '../../../utils/sendResponse';
 import { AuthServices } from './auth.service';
 import config from '../../config';
 
+// In your backend auth.controller.ts
 const loginUser = catchAsync(async (req, res) => {
   const result = await AuthServices.loginUser(req.body);
   const { accessToken, refreshToken } = result;
 
+  // Set cookies for the main domain - THIS IS THE KEY FIX
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: true,
-    sameSite: 'none',
+    secure: true, // Your site uses HTTPS
+    sameSite: 'lax', // Change from 'none' to 'lax' for same-site requests
     maxAge: 1000 * 60 * 15, // 15 minutes
     path: '/',
+    domain: '.craftinternationalinstitute.com', // Note the dot at the beginning
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: true,
-    sameSite: 'none',
+    sameSite: 'lax', // Change from 'none' to 'lax'
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     path: '/',
+    domain: '.craftinternationalinstitute.com', // Same domain
   });
 
   sendResponse(res, {
