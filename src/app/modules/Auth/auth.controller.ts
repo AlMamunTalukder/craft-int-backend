@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import httpStatus from 'http-status';
 import { catchAsync } from '../../../utils/catchAsync';
 import sendResponse from '../../../utils/sendResponse';
@@ -10,18 +11,31 @@ const loginUser = catchAsync(async (req, res) => {
 
   const isProduction = config.NODE_ENV === 'production';
 
+  // res.cookie('accessToken', accessToken, {
+  //   httpOnly: true,
+  //   secure: isProduction, // true in prod
+  //   sameSite: isProduction ? 'none' : 'lax',
+  //   maxAge: 1000 * 60 * 15, // 15 minutes
+  // });
+
+  // res.cookie('refreshToken', refreshToken, {
+  //   httpOnly: true,
+  //   secure: isProduction,
+  //   sameSite: isProduction ? 'none' : 'lax',
+  //   maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+  // });
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: isProduction, // true in prod
-    sameSite: isProduction ? 'none' : 'lax',
-    maxAge: 1000 * 60 * 15, // 15 minutes
+    secure: true,
+    sameSite: 'none',
+    maxAge: 1000 * 60 * 15,
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    secure: true,
+    sameSite: 'none',
+    maxAge: 1000 * 60 * 60 * 24 * 7,
   });
 
   sendResponse(res, {
@@ -31,7 +45,6 @@ const loginUser = catchAsync(async (req, res) => {
     data: result,
   });
 });
-
 
 const changePassword = catchAsync(async (req, res) => {
   const user = req.user;
