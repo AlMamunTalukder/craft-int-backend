@@ -9,33 +9,20 @@ const loginUser = catchAsync(async (req, res) => {
   const result = await AuthServices.loginUser(req.body);
   const { accessToken, refreshToken } = result;
 
-  const isProduction = config.NODE_ENV === 'production';
-
-  // res.cookie('accessToken', accessToken, {
-  //   httpOnly: true,
-  //   secure: isProduction, // true in prod
-  //   sameSite: isProduction ? 'none' : 'lax',
-  //   maxAge: 1000 * 60 * 15, // 15 minutes
-  // });
-
-  // res.cookie('refreshToken', refreshToken, {
-  //   httpOnly: true,
-  //   secure: isProduction,
-  //   sameSite: isProduction ? 'none' : 'lax',
-  //   maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-  // });
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
     secure: true,
     sameSite: 'none',
-    maxAge: 1000 * 60 * 15,
+    maxAge: 1000 * 60 * 15, // 15 minutes
+    path: '/',
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: true,
     sameSite: 'none',
-    maxAge: 1000 * 60 * 60 * 24 * 7,
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    path: '/',
   });
 
   sendResponse(res, {
@@ -48,7 +35,6 @@ const loginUser = catchAsync(async (req, res) => {
 
 const changePassword = catchAsync(async (req, res) => {
   const user = req.user;
-
   const { ...passwordData } = req.body;
   const result = await AuthServices.changePassword(user, passwordData);
 
@@ -60,7 +46,20 @@ const changePassword = catchAsync(async (req, res) => {
   });
 });
 
+// ✅ NEW: Get current user info
+const getMe = catchAsync(async (req, res) => {
+  const user = req.user; // This comes from auth middleware
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User info retrieved successfully!',
+    data: user,
+  });
+});
+
 export const AuthController = {
   loginUser,
   changePassword,
+  getMe, // Export the new method
 };
