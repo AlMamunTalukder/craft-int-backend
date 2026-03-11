@@ -31,6 +31,7 @@ if (config.NODE_ENV === 'development') {
 app.set('view engine', 'ejs');
 app.use(express.static(path.join('public')));
 
+app.set('trust proxy', 1);
 // Rate limiting middleware
 app.use(
   rateLimit({
