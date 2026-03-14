@@ -59,6 +59,43 @@ const loginUser = async (payload: TLoginUser) => {
   };
 };
 
+const refreshToken = async (token: string) => {
+  if (!token) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Refresh token not found!');
+  }
+
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(
+      token,
+      config.jwt_refresh_secret as string,
+    ) as JwtPayload;
+  } catch {
+    throw new AppError(
+      httpStatus.UNAUTHORIZED,
+      'Invalid or expired refresh token!',
+    );
+  }
+
+  const user = await User.findOne({ userId: decoded.userId });
+  if (!user || user.isDeleted) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  }
+
+  const jwtPayload = {
+    userId: user.userId,
+    role: user.role,
+    email: user.email,
+  };
+
+  const accessToken = createToken(
+    jwtPayload,
+    config.jwt_access_secret as string,
+    config.jwt_access_expires_in as string,
+  );
+
+  return { accessToken };
+};
 const changePassword = async (
   userData: JwtPayload,
   payload: { oldPassword: string; newPassword: string },
@@ -101,4 +138,5 @@ const changePassword = async (
 export const AuthServices = {
   loginUser,
   changePassword,
+  refreshToken,
 };

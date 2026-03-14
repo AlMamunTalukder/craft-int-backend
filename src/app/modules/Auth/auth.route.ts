@@ -17,7 +17,8 @@ router.post(
   validateRequest(AuthValidation.changePasswordValidationSchema),
   AuthController.changePassword,
 );
-
+router.post('/refresh-token', AuthController.refreshToken);
+router.post('/logout', AuthController.logoutUser);
 router.get(
   '/me',
   auth('admin', 'super_admin', 'teacher', 'student', 'class_teacher'),

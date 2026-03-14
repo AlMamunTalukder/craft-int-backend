@@ -5,7 +5,6 @@ import { AdmissionApplication } from './model';
 import { TAdmissionApplication } from './interface';
 import { generateApplicationId } from './utils';
 
-
 const createAdmissionApplication = async (payload: TAdmissionApplication) => {
   try {
     const applicationId = await generateApplicationId();
@@ -15,8 +14,8 @@ const createAdmissionApplication = async (payload: TAdmissionApplication) => {
     });
     return result;
   } catch (error) {
-    console.error('❌ createAdmissionApplication error:', error);
-    throw error; 
+    console.error(' createAdmissionApplication error:', error);
+    throw error;
   }
 };
 

@@ -17,7 +17,7 @@ import { subjectRoutes } from '../modules/subject/subject.route';
 import { todayTaskRoutes } from '../modules/todaytask/todaytask.route';
 import { dailyClassReportRoutes } from '../modules/dailyclassreport/dailyClassReport.route';
 import { staffRoutes } from '../modules/staff/staff.route';
-import { metaroute } from '../modules/meta/meta.route';
+import { metaRoute } from '../modules/meta/meta.route';
 import { admissionRoutes } from '../modules/admission/admission.route';
 import { announcementRoutes } from '../modules/announcement/announcement.route';
 import { notificationRoutes } from '../modules/notification/notification.route';
@@ -230,6 +230,10 @@ const moduleRoutes = [
   {
     path: '/admission-application',
     route: admissionApplicationRoutes,
+  },
+  {
+    path: '/meta',
+    route: metaRoute,
   },
 ];
 
