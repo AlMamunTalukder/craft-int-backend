@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
@@ -234,26 +235,48 @@ const payFeeWithAdvance = async (
   }
 };
 
-const getStudentDueFees = async (studentId: string, year?: number) => {
+const getStudentDueFees = async (studentId?: string, year?: number) => {
   const currentYear = year || new Date().getFullYear();
 
-  const dueFees = await Fees.find({
-    student: new Types.ObjectId(studentId),
-    dueAmount: { $gt: 0 },
-    academicYear: currentYear.toString(),
-  }).sort({ month: 1 });
-  const totalDue = dueFees.reduce((sum, fee) => sum + fee.dueAmount, 0);
-  const paidFees = await Fees.find({
-    student: new Types.ObjectId(studentId),
-    dueAmount: 0,
-    academicYear: currentYear.toString(),
-  }).sort({ month: 1 });
+  const query: any = {
+    status: { $in: ['unpaid', 'partial'] },
+    isLateFeeRecord: false,
+  };
+
+  if (studentId) {
+    query.student = new Types.ObjectId(studentId);
+  }
+
+  const dueFees = await Fees.find(query)
+    .populate({
+      path: 'student',
+      // select: 'nameEnglish nameBangla studentId class',
+    })
+    .populate({
+      path: 'enrollment',
+      // select: 'roll class section academicYear',
+    })
+    .populate({
+      path: 'originalFeeId',
+      select: 'month amount',
+    })
+    .sort({ createdAt: -1 });
+
+  let totalDue = 0;
+  let totalPaid = 0;
+
+  dueFees.forEach((fee) => {
+    totalDue += fee.dueAmount || 0;
+    totalPaid += fee.paidAmount || 0;
+  });
+
+  const totalFees = dueFees.reduce((sum, fee) => sum + fee.amount, 0);
 
   return {
     dueFees,
-    paidFees,
     totalDue,
-    totalPaid: paidFees.reduce((sum, fee) => sum + fee.paidAmount, 0),
+    totalPaid,
+    totalFees,
   };
 };
 
@@ -572,7 +595,6 @@ const createSingleFee = async (
       { $push: { fees: newFee._id } },
       { session },
     );
-
 
     if (actualDiscount > 0) {
       await FeeAdjustment.create(
