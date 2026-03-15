@@ -8,15 +8,15 @@ import { User } from './user.model';
 import { createToken } from '../Auth/auth.utils';
 import config from '../../config';
 import bcrypt from 'bcrypt';
-const createUser = async (payload: TUser) => {
 
-  const userByEmail = await User.isUserExistsByCustomId(payload.email);
+const createUser = async (payload: TUser) => {
+  const userByEmail = await User.isUserExistsByCredential(payload.email);
   if (userByEmail) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Email is already registered!');
   }
 
   // Check if the name already exists
-  const userByName = await User.isUserExistsByCustomId(payload.name);
+  const userByName = await User.isUserExistsByCredential(payload.name);
   if (userByName) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Username is already taken!');
   }
@@ -59,7 +59,7 @@ const getAllUser = async () => {
   return result;
 };
 const getSingleUser = async (id: string) => {
-  const result = await User.findById(id)
+  const result = await User.findById(id);
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
@@ -75,7 +75,10 @@ const deleteUser = async (id: string) => {
 const updateUser = async (id: string, payload: Partial<TUser>) => {
   if (payload.password) {
     // Manually hash the new password
-    payload.password = await bcrypt.hash(payload.password, Number(config.bcrypt_salt_round));
+    payload.password = await bcrypt.hash(
+      payload.password,
+      Number(config.bcrypt_salt_round),
+    );
   }
 
   const result = await User.findByIdAndUpdate(id, payload, {
@@ -94,5 +97,5 @@ export const UserServices = {
   getAllUser,
   deleteUser,
   updateUser,
-  getSingleUser
+  getSingleUser,
 };
