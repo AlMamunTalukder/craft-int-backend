@@ -13,7 +13,7 @@ const feeStructureSchema = new Schema(
 
 const classSchema = new Schema<TClass>(
   {
-    className: { type: String, required: true },
+    className: { type: String, required: true, unique: true },
 
     sections: [
       {
