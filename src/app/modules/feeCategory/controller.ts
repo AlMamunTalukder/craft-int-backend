@@ -2,10 +2,18 @@ import httpStatus from 'http-status';
 import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 import { feeCategoryServices } from './service';
+import { AppError } from '../../error/AppError';
 
 const createFeeCategory = catchAsync(async (req, res) => {
   let result;
+
   if (Array.isArray(req.body)) {
+    if (req.body.length === 0) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Please provide at least one fee category',
+      );
+    }
     result = await feeCategoryServices.createFeeCategory(req.body);
   } else {
     result = await feeCategoryServices.createFeeCategory(req.body);
@@ -15,7 +23,9 @@ const createFeeCategory = catchAsync(async (req, res) => {
     statusCode: httpStatus.CREATED,
     success: true,
     message: Array.isArray(req.body)
-      ? 'Fee categories created successfully'
+      ? req.body.length > 1
+        ? `${req.body.length} fee categories created successfully`
+        : 'Fee category created successfully'
       : 'Fee category created successfully',
     data: result,
   });

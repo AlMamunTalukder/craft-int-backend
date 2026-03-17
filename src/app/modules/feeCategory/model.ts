@@ -38,5 +38,5 @@ const feeCategorySchema = new Schema(
   },
   { timestamps: true },
 );
-
+feeCategorySchema.index({ className: 1, categoryName: 1 }, { unique: true });
 export const FeeCategory = model('FeeCategory', feeCategorySchema);

@@ -7,22 +7,19 @@ import { Class } from './class.model';
 import { classSearch } from './class.constant';
 
 const createClass = async (payload: TClass) => {
-  // const { className } = payload;
+  const { className } = payload;
 
-  // const existingClass = await Class.findOne({ className });
-  // if (existingClass) {
-  //   throw new AppError(httpStatus.CONFLICT, 'Class already exists');
-  // }
+  const existingClass = await Class.findOne({ className });
+  if (existingClass) {
+    throw new AppError(httpStatus.CONFLICT, 'Class already exists');
+  }
 
   const result = await Class.create(payload);
   return result;
 };
 
 const getAllClasses = async (query: Record<string, unknown>) => {
-  const classQuery = new QueryBuilder(
-    Class.find().populate('sections'), 
-    query
-  )
+  const classQuery = new QueryBuilder(Class.find().populate('sections'), query)
     .search(classSearch)
     .filter()
     .sort()
@@ -38,10 +35,8 @@ const getAllClasses = async (query: Record<string, unknown>) => {
   };
 };
 
-
 const getSingleClass = async (id: string) => {
-  const result = await Class.findById(id)
-    .populate([{ path: 'sections' }]);
+  const result = await Class.findById(id).populate([{ path: 'sections' }]);
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
@@ -51,7 +46,7 @@ const getSingleClass = async (id: string) => {
 };
 
 const updateClass = async (id: string, payload: Partial<TClass>) => {
-  console.log(payload)
+  console.log(payload);
   const result = await Class.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
