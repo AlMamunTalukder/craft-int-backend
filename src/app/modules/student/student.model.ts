@@ -60,6 +60,27 @@ const studentSchema = new Schema<IStudent>(
       institution: { type: String },
       address: { type: String },
     },
+    familyEnvironment: {
+      halalIncome: { type: String },
+      parentsPrayer: { type: String },
+      addiction: { type: String },
+      tv: { type: String },
+      quranRecitation: { type: String },
+      purdah: { type: String },
+    },
+
+    // Behavior and skills questionnaire
+    behaviorSkills: {
+      mobileUsage: { type: String },
+      generalBehavior: { type: String },
+      obedience: { type: String },
+      elderBehavior: { type: String },
+      youngerBehavior: { type: String },
+      lyingStubbornness: { type: String },
+      studyInterest: { type: String },
+      religiousInterest: { type: String },
+      angerControl: { type: String },
+    },
     sameAsPermanent: { type: Boolean, default: false },
     className: [{ type: Schema.Types.ObjectId, ref: 'Class' }],
     section: [{ type: String }],

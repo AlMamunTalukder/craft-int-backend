@@ -250,7 +250,10 @@ const getStudentDueFees = async (studentId?: string, year?: number) => {
   const dueFees = await Fees.find(query)
     .populate({
       path: 'student',
-      // select: 'nameEnglish nameBangla studentId class',
+      populate: {
+        path: 'className',
+        model: 'Class',
+      },
     })
     .populate({
       path: 'enrollment',

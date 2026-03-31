@@ -77,7 +77,26 @@ export interface IStudent extends Document {
     markSheet?: boolean;
     photographs?: boolean;
   };
+  familyEnvironment?: {
+    halalIncome?: string;
+    parentsPrayer?: string;
+    addiction?: string;
+    tv?: string;
+    quranRecitation?: string;
+    purdah?: string;
+  };
 
+  behaviorSkills?: {
+    mobileUsage?: string;
+    generalBehavior?: string;
+    obedience?: string;
+    elderBehavior?: string;
+    youngerBehavior?: string;
+    lyingStubbornness?: string;
+    studyInterest?: string;
+    religiousInterest?: string;
+    angerControl?: string;
+  };
   previousSchool?: {
     institution?: string;
     address?: string;
