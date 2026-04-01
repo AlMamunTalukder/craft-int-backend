@@ -1229,10 +1229,7 @@ const promoteEnrollment = async (
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
 
-<<<<<<< HEAD
-=======
     // 2. Find the CURRENT ACTIVE enrollment
->>>>>>> b302f7a16c9fd617ad2dde7894fa757982b12aa6
     const currentEnrollment = await Enrollment.findOne({
       student: studentId,
       status: 'active',
