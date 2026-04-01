@@ -75,7 +75,6 @@ const admissionSchema = new Schema<TAdmissionApplication>(
       quranRecitation: String,
       purdah: String,
     },
-
     behaviorSkills: {
       mobileUsage: String,
       generalBehavior: String,

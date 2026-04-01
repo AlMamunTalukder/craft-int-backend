@@ -4,9 +4,7 @@ import { IEnrollment } from './interface';
 const enrollmentSchema = new Schema<IEnrollment>(
   {
     student: { type: Schema.Types.ObjectId, ref: 'Student' },
-    studentPhoto: {
-      type: String,
-    },
+    studentPhoto: { type: String },
     studentId: { type: String },
     mobileNo: { type: String },
     rollNumber: { type: String },
@@ -22,32 +20,43 @@ const enrollmentSchema = new Schema<IEnrollment>(
     roll: { type: String },
     session: { type: String },
     batch: { type: String },
-    studentType: {
-      type: String,
-    },
+    studentType: { type: String },
     fees: [{ type: Schema.Types.ObjectId, ref: 'Fees' }],
     paymentStatus: { type: String, default: 'pending' },
-    fatherName: { type: String },
-    fatherNameBangla: { type: String },
-    fatherMobile: { type: String },
-    fatherNid: { type: String },
-    fatherProfession: { type: String },
-    fatherIncome: { type: Number },
-    motherName: { type: String },
-    motherNameBangla: { type: String },
-    motherMobile: { type: String },
-    motherNid: { type: String },
-    motherProfession: { type: String },
-    motherIncome: { type: Number },
-    studentDepartment: {
-      type: String,
+
+    parentInfo: {
+      father: {
+        nameBangla: { type: String },
+        nameEnglish: { type: String },
+        profession: { type: String },
+        education: { type: String },
+        mobile: { type: String },
+        whatsapp: { type: String },
+        nid: { type: String },
+        income: { type: Number },
+      },
+      mother: {
+        nameBangla: { type: String },
+        nameEnglish: { type: String },
+        profession: { type: String },
+        education: { type: String },
+        mobile: { type: String },
+        whatsapp: { type: String },
+        nid: { type: String },
+        income: { type: Number },
+      },
+      guardian: {
+        nameBangla: { type: String },
+        nameEnglish: { type: String },
+        relation: { type: String },
+        mobile: { type: String },
+        whatsapp: { type: String },
+        profession: { type: String },
+        address: { type: String },
+      },
     },
-    guardianInfo: {
-      name: { type: String },
-      relation: { type: String },
-      mobile: { type: String },
-      address: { type: String },
-    },
+
+    studentDepartment: { type: String },
     presentAddress: {
       village: { type: String },
       postOffice: { type: String },
@@ -62,7 +71,6 @@ const enrollmentSchema = new Schema<IEnrollment>(
       policeStation: { type: String },
       district: { type: String },
     },
-
     documents: {
       birthCertificate: { type: Boolean, default: false },
       transferCertificate: { type: Boolean, default: false },
@@ -70,13 +78,30 @@ const enrollmentSchema = new Schema<IEnrollment>(
       markSheet: { type: Boolean, default: false },
       photographs: { type: Boolean, default: false },
     },
+    familyEnvironment: {
+      halalIncome: { type: String },
+      parentsPrayer: { type: String },
+      addiction: { type: String },
+      tv: { type: String },
+      quranRecitation: { type: String },
+      purdah: { type: String },
+    },
+    behaviorSkills: {
+      mobileUsage: { type: String },
+      generalBehavior: { type: String },
+      obedience: { type: String },
+      elderBehavior: { type: String },
+      youngerBehavior: { type: String },
+      lyingStubbornness: { type: String },
+      studyInterest: { type: String },
+      religiousInterest: { type: String },
+      angerControl: { type: String },
+    },
     previousSchool: {
       institution: { type: String },
       address: { type: String },
     },
-
     termsAccepted: { type: Boolean, default: false },
-
     promotedFrom: { type: Schema.Types.ObjectId, ref: 'Enrollment' },
     promotedTo: { type: Schema.Types.ObjectId, ref: 'Enrollment' },
     admissionType: {
