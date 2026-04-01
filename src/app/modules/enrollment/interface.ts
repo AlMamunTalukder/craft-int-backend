@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 
 export interface IEnrollment {
+  // Core fields
   studentId: string;
   student: Types.ObjectId;
   studentName: string;
@@ -20,27 +21,41 @@ export interface IEnrollment {
   studentType?: string;
   paymentStatus?: 'pending' | 'partial' | 'paid' | string;
 
-  fatherName?: string;
-  fatherNameBangla?: string;
-  fatherMobile?: string;
-  fatherNid?: string;
-  fatherProfession?: string;
-  fatherIncome?: number;
+  // Parent info (structured)
+  parentInfo?: {
+    father?: {
+      nameBangla?: string;
+      nameEnglish?: string;
+      profession?: string;
+      education?: string;
+      mobile?: string;
+      whatsapp?: string;
+      nid?: string;
+      income?: number;
+    };
+    mother?: {
+      nameBangla?: string;
+      nameEnglish?: string;
+      profession?: string;
+      education?: string;
+      mobile?: string;
+      whatsapp?: string;
+      nid?: string;
+      income?: number;
+    };
+    guardian?: {
+      nameBangla?: string;
+      nameEnglish?: string;
+      relation?: string;
+      mobile?: string;
+      whatsapp?: string;
+      profession?: string;
+      address?: string;
+    };
+  };
 
-  motherName?: string;
-  motherNameBangla?: string;
-  motherMobile?: string;
-  motherNid?: string;
-  motherProfession?: string;
-  motherIncome?: number;
   mobileNo?: string;
   rollNumber?: string;
-  guardianInfo?: {
-    name?: string;
-    relation?: string;
-    mobile?: string;
-    address?: string;
-  };
 
   presentAddress?: {
     village?: string;
@@ -49,7 +64,6 @@ export interface IEnrollment {
     policeStation?: string;
     district?: string;
   };
-
   permanentAddress?: {
     village?: string;
     postOffice?: string;
@@ -57,7 +71,6 @@ export interface IEnrollment {
     policeStation?: string;
     district?: string;
   };
-
   documents?: {
     birthCertificate?: boolean;
     transferCertificate?: boolean;
@@ -65,27 +78,43 @@ export interface IEnrollment {
     markSheet?: boolean;
     photographs?: boolean;
   };
-
   previousSchool?: {
     institution?: string;
     address?: string;
   };
-
   termsAccepted?: boolean;
   promotedFrom?: Types.ObjectId;
   promotedTo?: Types.ObjectId;
   fees?: Types.ObjectId[];
   admissionType?: 'admission' | 'promotion';
   status?: 'active' | 'passed' | 'failed' | 'left';
-
-  // --- MISSING FIELDS ADDED HERE ---
   totalAmount?: number;
   paidAmount?: number;
   dueAmount?: number;
   totalDiscount?: number;
   advanceBalance?: number;
   payment?: Types.ObjectId;
-
   createdAt?: Date;
   updatedAt?: Date;
+
+  // ===== NEW FIELDS =====
+  familyEnvironment?: {
+    halalIncome?: string;
+    parentsPrayer?: string;
+    addiction?: string;
+    tv?: string;
+    quranRecitation?: string;
+    purdah?: string;
+  };
+  behaviorSkills?: {
+    mobileUsage?: string;
+    generalBehavior?: string;
+    obedience?: string;
+    elderBehavior?: string;
+    youngerBehavior?: string;
+    lyingStubbornness?: string;
+    studyInterest?: string;
+    religiousInterest?: string;
+    angerControl?: string;
+  };
 }
