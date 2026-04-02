@@ -120,34 +120,165 @@ const getAllEnrollments = async (query: Record<string, any>) => {
   return { meta, data };
 };
 const getSingleEnrollment = async (id: string) => {
-  const enrollment = await Enrollment.findById(id)
-    .populate({
-      path: 'student',
-      populate: {
-        path: 'className',
+  const pipeline: any[] = [
+    { $match: { _id: new mongoose.Types.ObjectId(id) } },
+
+    {
+      $lookup: {
+        from: 'students',
+        localField: 'student',
+        foreignField: '_id',
+        as: 'student',
       },
-    })
-    .populate({
-      path: 'className',
-    })
+    },
+    { $unwind: { path: '$student', preserveNullAndEmptyArrays: true } },
 
-    .populate({
-      path: 'fees',
-    })
-    .populate({
-      path: 'promotedFrom',
-      populate: { path: 'className' },
-    })
-    .populate({
-      path: 'promotedTo',
-      populate: { path: 'className' },
-    });
+    // Populate student's class
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'student.className',
+        foreignField: '_id',
+        as: 'student.className',
+      },
+    },
+    {
+      $unwind: { path: '$student.className', preserveNullAndEmptyArrays: true },
+    },
 
-  if (!enrollment) {
+    // Populate student's fees
+    {
+      $lookup: {
+        from: 'fees',
+        localField: 'student.fees',
+        foreignField: '_id',
+        as: 'student.fees',
+      },
+    },
+
+    // Populate student's payments
+    {
+      $lookup: {
+        from: 'payments',
+        localField: 'student.payments',
+        foreignField: '_id',
+        as: 'student.payments',
+      },
+    },
+
+    // Populate student's receipts
+    {
+      $lookup: {
+        from: 'receipts',
+        localField: 'student.receipts',
+        foreignField: '_id',
+        as: 'student.receipts',
+      },
+    },
+
+    // Populate enrollment's class
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'className',
+        foreignField: '_id',
+        as: 'className',
+      },
+    },
+    { $unwind: { path: '$className', preserveNullAndEmptyArrays: true } },
+
+    // Populate enrollment's fees
+    {
+      $lookup: {
+        from: 'fees',
+        localField: 'fees',
+        foreignField: '_id',
+        as: 'fees',
+      },
+    },
+
+    // Populate promotedFrom with class details
+    {
+      $lookup: {
+        from: 'enrollments',
+        localField: 'promotedFrom',
+        foreignField: '_id',
+        as: 'promotedFrom',
+      },
+    },
+    { $unwind: { path: '$promotedFrom', preserveNullAndEmptyArrays: true } },
+
+    // Populate promotedFrom's class
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'promotedFrom.className',
+        foreignField: '_id',
+        as: 'promotedFrom.className',
+      },
+    },
+    {
+      $unwind: {
+        path: '$promotedFrom.className',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // Populate promotedTo with class details
+    {
+      $lookup: {
+        from: 'enrollments',
+        localField: 'promotedTo',
+        foreignField: '_id',
+        as: 'promotedTo',
+      },
+    },
+    { $unwind: { path: '$promotedTo', preserveNullAndEmptyArrays: true } },
+
+    // Populate promotedTo's class
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'promotedTo.className',
+        foreignField: '_id',
+        as: 'promotedTo.className',
+      },
+    },
+    {
+      $unwind: {
+        path: '$promotedTo.className',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // Populate enrollment's payments
+    {
+      $lookup: {
+        from: 'payments',
+        localField: 'payments',
+        foreignField: '_id',
+        as: 'payments',
+      },
+    },
+
+    // Populate enrollment's receipts
+    {
+      $lookup: {
+        from: 'receipts',
+        localField: 'receipts',
+        foreignField: '_id',
+        as: 'receipts',
+      },
+    },
+  ];
+
+  const enrollments = await Enrollment.aggregate(pipeline);
+
+  if (!enrollments.length) {
     throw new AppError(httpStatus.NOT_FOUND, 'Enrollment not found');
   }
 
-  return enrollment;
+  return enrollments[0];
 };
 
 export const createEnrollment = async (
