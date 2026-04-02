@@ -983,10 +983,13 @@ export const updateEnrollment = async (id: string, payload: any) => {
 
   try {
     console.log('=== updateEnrollment START ===', id);
-    console.log('payload.fees      :', JSON.stringify(payload.fees));
+    console.log('payload.fees      :', JSON.stringify(payload.fees, null, 2));
     console.log('payload.paidAmount:', payload.paidAmount);
 
-    const enrollment = await Enrollment.findById(id).session(session);
+    const enrollment = await Enrollment.findById(id)
+      .populate('student')
+      .session(session);
+
     if (!enrollment) throw new Error('Enrollment not found');
 
     // ── 1. Update scalar fields ───────────────────────────────────────────────
@@ -997,218 +1000,294 @@ export const updateEnrollment = async (id: string, payload: any) => {
       'dueAmount',
       'totalDiscount',
       'paymentStatus',
+      'className',
+      'section',
+      'rollNumber',
+      'session',
+      'studentDepartment',
+      'presentAddress',
+      'permanentAddress',
+      'documents',
+      'parentInfo',
+      'familyEnvironment',
+      'behaviorSkills',
+      'termsAccepted',
     ]);
+
     for (const key of Object.keys(payload)) {
       if (!skipKeys.has(key) && payload[key] !== undefined) {
         (enrollment as any)[key] = payload[key];
       }
     }
+
+    // Update nested objects if present
+    if (payload.presentAddress)
+      enrollment.presentAddress = payload.presentAddress;
+    if (payload.permanentAddress)
+      enrollment.permanentAddress = payload.permanentAddress;
+    if (payload.documents) enrollment.documents = payload.documents;
+    if (payload.parentInfo) enrollment.parentInfo = payload.parentInfo;
+    if (payload.familyEnvironment)
+      enrollment.familyEnvironment = payload.familyEnvironment;
+    if (payload.behaviorSkills)
+      enrollment.behaviorSkills = payload.behaviorSkills;
+    if (payload.termsAccepted !== undefined)
+      enrollment.termsAccepted = payload.termsAccepted;
+
     await enrollment.save({ session });
 
+    // Update student if needed
+    const studentDoc = await Student.findById(enrollment.student).session(
+      session,
+    );
+    if (studentDoc) {
+      if (payload.studentName) studentDoc.name = payload.studentName;
+      if (payload.nameBangla) studentDoc.nameBangla = payload.nameBangla;
+      if (payload.mobileNo) studentDoc.mobile = payload.mobileNo;
+      if (payload.studentDepartment)
+        studentDoc.studentDepartment = payload.studentDepartment;
+      if (payload.presentAddress)
+        studentDoc.presentAddress = payload.presentAddress;
+      if (payload.permanentAddress)
+        studentDoc.permanentAddress = payload.permanentAddress;
+      if (payload.documents) studentDoc.documents = payload.documents;
+      if (payload.parentInfo) studentDoc.parentInfo = payload.parentInfo;
+      if (payload.familyEnvironment)
+        studentDoc.familyEnvironment = payload.familyEnvironment;
+      if (payload.behaviorSkills)
+        studentDoc.behaviorSkills = payload.behaviorSkills;
+      if (payload.termsAccepted !== undefined)
+        studentDoc.termsAccepted = payload.termsAccepted;
+      await studentDoc.save({ session });
+    }
+
     // ── 2. Re-process fees ────────────────────────────────────────────────────
+    const MONTHS = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    const currentMonth = new Date().getMonth();
+    const currentMonthName = MONTHS[currentMonth];
+
+    // Get class name for fee items
+    let primaryClassName = '';
+    const rawClassId = Array.isArray(enrollment.className)
+      ? enrollment.className[0]
+      : enrollment.className;
+
+    if (rawClassId) {
+      try {
+        const classDoc = await Class.findById(rawClassId).session(session);
+        primaryClassName = classDoc?.className || String(rawClassId);
+      } catch {
+        primaryClassName = String(rawClassId);
+      }
+    }
+
+    // Delete existing fees and related data if fees are being updated
     if (Array.isArray(payload.fees) && payload.fees.length > 0) {
-      // Delete old fee docs + linked payments / receipts
-      const oldFees = await Fees.find({ enrollment: enrollment._id }).session(
-        session,
-      );
-      const oldFeeIds = oldFees.map((f: any) => f._id);
+      // Get existing fees
+      const existingFees = await Fees.find({
+        enrollment: enrollment._id,
+      }).session(session);
+      const existingFeeIds = existingFees.map((f: any) => f._id);
 
-      if (oldFeeIds.length > 0) {
-        const oldPayments = await Payment.find({
-          fees: { $in: oldFeeIds },
+      if (existingFeeIds.length > 0) {
+        // Find payments linked to these fees
+        const linkedPayments = await Payment.find({
+          fees: { $in: existingFeeIds },
         }).session(session);
-        const oldPaymentIds = oldPayments.map((p: any) => p._id);
+        const linkedPaymentIds = linkedPayments.map((p: any) => p._id);
 
-        if (oldPaymentIds.length > 0) {
+        // Delete receipts linked to these payments
+        if (linkedPaymentIds.length > 0) {
           await Receipt.deleteMany({
-            paymentId: { $in: oldPaymentIds },
+            paymentId: { $in: linkedPaymentIds },
           }).session(session);
-          await Payment.deleteMany({ _id: { $in: oldPaymentIds } }).session(
+          await Payment.deleteMany({ _id: { $in: linkedPaymentIds } }).session(
             session,
           );
         }
 
-        // Remove references from student
-        const studentCleanup = await Student.findById(
-          enrollment.student,
-        ).session(session);
-        if (studentCleanup) {
-          const oldFeeStrs = oldFeeIds.map(String);
-          const oldPayStrs = oldPaymentIds.map(String);
-          studentCleanup.fees = (studentCleanup.fees || []).filter(
-            (fid: any) => !oldFeeStrs.includes(String(fid)),
+        // Remove fee references from student
+        if (studentDoc) {
+          const existingFeeIdStrings = existingFeeIds.map(String);
+          studentDoc.fees = (studentDoc.fees || []).filter(
+            (fid: any) => !existingFeeIdStrings.includes(String(fid)),
           );
-          studentCleanup.payments = (studentCleanup.payments || []).filter(
-            (pid: any) => !oldPayStrs.includes(String(pid)),
-          );
-          await studentCleanup.save({ session });
+
+          if (linkedPaymentIds.length > 0) {
+            const linkedPaymentIdStrings = linkedPaymentIds.map(String);
+            studentDoc.payments = (studentDoc.payments || []).filter(
+              (pid: any) => !linkedPaymentIdStrings.includes(String(pid)),
+            );
+          }
+          await studentDoc.save({ session });
         }
 
+        // Delete all existing fees
         await Fees.deleteMany({ enrollment: enrollment._id }).session(session);
-        console.log('Deleted', oldFeeIds.length, 'old fee docs');
+        console.log(`Deleted ${existingFeeIds.length} old fee documents`);
       }
 
-      // Resolve class name
-      let primaryClassName = '';
-      const rawClassId = Array.isArray(enrollment.className)
-        ? enrollment.className[0]
-        : enrollment.className;
-
-      if (rawClassId) {
-        try {
-          const classDoc = await Class.findById(rawClassId).session(session);
-          primaryClassName = classDoc?.className || String(rawClassId);
-        } catch {
-          primaryClassName = String(rawClassId);
-        }
-      }
-      console.log('Update primaryClassName:', primaryClassName);
-
-      const MONTHS = [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ];
-
-      // Build fee items list with proper range discount handling
+      // Build new fee items
       const allFeeItems: any[] = [];
-      const totalPaidAmount = Number(payload.paidAmount) || 0;
-      let remainingPayment = totalPaidAmount;
+      let totalAmount = 0;
+      let totalDiscount = 0;
 
       for (const feeCategory of payload.fees) {
-        if (
-          feeCategory.feeItems &&
-          Array.isArray(feeCategory.feeItems) &&
-          feeCategory.feeItems.length > 0
-        ) {
-          for (const feeItem of feeCategory.feeItems) {
-            const feeTypeStr =
-              typeof feeItem.feeType === 'string'
-                ? feeItem.feeType
-                : feeItem.feeType?.value || feeItem.feeType?.label || '';
+        if (!feeCategory.feeItems || !Array.isArray(feeCategory.feeItems))
+          continue;
 
-            if (!feeTypeStr) continue;
+        for (const feeItem of feeCategory.feeItems) {
+          const feeTypeStr =
+            typeof feeItem.feeType === 'string'
+              ? feeItem.feeType
+              : feeItem.feeType?.value || feeItem.feeType?.label || '';
 
-            const className =
-              feeCategory.className && feeCategory.className.length > 0
-                ? feeCategory.className[0]?.label ||
-                  feeCategory.className[0] ||
-                  primaryClassName
-                : primaryClassName;
+          if (!feeTypeStr || feeTypeStr.trim() === '') continue;
 
-            if (feeItem.isMonthly) {
-              const amount = Number(feeItem.amount) || 0;
-              const discountRangeStart = feeItem.discountRangeStart || '';
-              const discountRangeEnd = feeItem.discountRangeEnd || '';
-              const discountRangeAmount =
-                Number(feeItem.discountRangeAmount) || 0;
-              const baseDiscount = Number(feeItem.discount) || 0;
+          const amount = Number(feeItem.amount) || 0;
+          const discount = Number(feeItem.discount) || 0;
+          const isSelected = feeItem.isSelected !== false;
 
-              const startIndex = MONTHS.indexOf(discountRangeStart);
-              const endIndex = MONTHS.indexOf(discountRangeEnd);
+          if (!isSelected || amount <= 0) continue;
 
-              const hasValidRange =
-                discountRangeStart &&
-                discountRangeEnd &&
-                startIndex !== -1 &&
-                endIndex !== -1;
+          const className =
+            feeCategory.className && feeCategory.className.length > 0
+              ? feeCategory.className[0]?.label ||
+                feeCategory.className[0] ||
+                primaryClassName
+              : primaryClassName;
 
-              for (let i = 0; i < 12; i++) {
-                const month = MONTHS[i];
-                const monthLabel = `Monthly Fee - ${month}`;
+          const isMonthly =
+            feeItem.isMonthly === true ||
+            feeTypeStr.toLowerCase().includes('monthly');
 
-                let itemDiscount = baseDiscount;
+          if (isMonthly) {
+            // Get range discount settings
+            const discountRangeStart = feeItem.discountRangeStart || '';
+            const discountRangeEnd = feeItem.discountRangeEnd || '';
+            const discountRangeAmount =
+              Number(feeItem.discountRangeAmount) || 0;
 
-                if (hasValidRange) {
-                  const minIdx = Math.min(startIndex, endIndex);
-                  const maxIdx = Math.max(startIndex, endIndex);
+            const startIdx = MONTHS.indexOf(discountRangeStart);
+            const endIdx = MONTHS.indexOf(discountRangeEnd);
+            const hasValidRange =
+              discountRangeStart &&
+              discountRangeEnd &&
+              startIdx !== -1 &&
+              endIdx !== -1;
 
-                  // Only apply range discount if month is within the range
-                  if (i >= minIdx && i <= maxIdx) {
-                    itemDiscount = discountRangeAmount;
-                  }
-                  // Otherwise keep base discount
+            // Generate fees from current month to December
+            for (let i = currentMonth; i < 12; i++) {
+              const month = MONTHS[i];
+              let itemDiscount = discount;
+
+              // Apply range discount if month is within range
+              if (hasValidRange) {
+                const minIdx = Math.min(startIdx, endIdx);
+                const maxIdx = Math.max(startIdx, endIdx);
+                if (i >= minIdx && i <= maxIdx) {
+                  itemDiscount = discountRangeAmount;
                 }
-
-                allFeeItems.push({
-                  feeType: monthLabel,
-                  amount: amount,
-                  discount: itemDiscount,
-                  month: month,
-                  isMonthly: true,
-                  className: className,
-                  discountRangeStart: hasValidRange ? discountRangeStart : '',
-                  discountRangeEnd: hasValidRange ? discountRangeEnd : '',
-                  discountRangeAmount: hasValidRange ? discountRangeAmount : 0,
-                });
               }
-            } else {
-              const amount = Number(feeItem.amount) || 0;
-              const discount = Number(feeItem.discount) || 0;
+
+              const netAmount = Math.max(0, amount - itemDiscount);
+              totalAmount += amount;
+              totalDiscount += itemDiscount;
 
               allFeeItems.push({
-                feeType: feeTypeStr,
+                feeType: `${feeTypeStr} - ${month}`,
                 amount: amount,
-                discount: discount,
-                month: 'Admission',
-                isMonthly: false,
+                discount: itemDiscount,
+                month: month,
+                isMonthly: true,
                 className: className,
-                discountRangeStart: '',
-                discountRangeEnd: '',
-                discountRangeAmount: 0,
+                discountRangeStart: hasValidRange ? discountRangeStart : '',
+                discountRangeEnd: hasValidRange ? discountRangeEnd : '',
+                discountRangeAmount: hasValidRange ? discountRangeAmount : 0,
+                netAmount: netAmount,
               });
             }
+          } else {
+            // Non-monthly fees (Admission, Registration, etc.)
+            const netAmount = Math.max(0, amount - discount);
+            totalAmount += amount;
+            totalDiscount += discount;
+
+            allFeeItems.push({
+              feeType: feeTypeStr,
+              amount: amount,
+              discount: discount,
+              month: 'Admission',
+              isMonthly: false,
+              className: className,
+              discountRangeStart: '',
+              discountRangeEnd: '',
+              discountRangeAmount: 0,
+              netAmount: netAmount,
+            });
           }
         }
       }
 
       if (allFeeItems.length === 0) {
         throw new Error(
-          'No fee items to update. Ensure fee categories are configured.',
+          'No valid fee items to update. Please check fee amounts.',
         );
       }
 
-      // Sort fee items
-      allFeeItems.sort((a, b) => {
-        if (a.month === 'Admission') return -1;
-        if (b.month === 'Admission') return 1;
-        return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
-      });
-
-      console.log('Fee items to create:', allFeeItems.length);
+      // Calculate total net amount
+      const totalNetAmount = allFeeItems.reduce(
+        (sum, item) => sum + item.netAmount,
+        0,
+      );
+      const totalPaidAmount = Number(payload.paidAmount) || 0;
+      let remainingPayment = Math.min(totalPaidAmount, totalNetAmount);
 
       // Create fee documents with payment distribution
-      const feeDocs: mongoose.Types.ObjectId[] = [];
+      const createdFeeIds: mongoose.Types.ObjectId[] = [];
       const paidFeeIds: mongoose.Types.ObjectId[] = [];
-      let totalTransactionAmount = 0;
-      let calcTotalAmount = 0;
-      let calcTotalDiscount = 0;
-      let calcPaidAmount = 0;
-      let calcDueAmount = 0;
+      let totalPaid = 0;
+      let totalDue = 0;
+
+      // Sort fees: Admission fees first, then monthly fees by month
+      allFeeItems.sort((a, b) => {
+        if (a.month === 'Admission' && b.month !== 'Admission') return -1;
+        if (a.month !== 'Admission' && b.month === 'Admission') return 1;
+        if (a.month !== 'Admission' && b.month !== 'Admission') {
+          return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+        }
+        return 0;
+      });
 
       for (const item of allFeeItems) {
-        const netAmount = item.amount - item.discount;
-        calcTotalAmount += item.amount;
-        calcTotalDiscount += item.discount;
-
         let paidForThisItem = 0;
-        if (remainingPayment > 0) {
-          paidForThisItem = Math.min(remainingPayment, netAmount);
+
+        // Distribute payment: prioritize current month and admission fees
+        const shouldPrioritize =
+          item.month === 'Admission' || item.month === currentMonthName;
+
+        if (remainingPayment > 0 && shouldPrioritize) {
+          paidForThisItem = Math.min(remainingPayment, item.netAmount);
           remainingPayment -= paidForThisItem;
         }
 
-        const dueAmount = Math.max(0, netAmount - paidForThisItem);
-        calcPaidAmount += paidForThisItem;
-        calcDueAmount += dueAmount;
+        const dueAmount = Math.max(0, item.netAmount - paidForThisItem);
+        totalPaid += paidForThisItem;
+        totalDue += dueAmount;
 
         const status =
           dueAmount <= 0 ? 'paid' : paidForThisItem > 0 ? 'partial' : 'unpaid';
@@ -1216,7 +1295,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
         const feeData = {
           enrollment: enrollment._id,
           student: enrollment.student,
-          studentId: (enrollment as any).studentId || '',
+          studentId: enrollment.studentId || '',
           feeType: item.feeType,
           amount: item.amount,
           discount: item.discount,
@@ -1224,9 +1303,13 @@ export const updateEnrollment = async (id: string, payload: any) => {
           dueAmount: dueAmount,
           className: item.className,
           month: item.month,
-          academicYear: payload.session || new Date().getFullYear().toString(),
+          academicYear:
+            payload.session ||
+            enrollment.session ||
+            new Date().getFullYear().toString(),
           paymentMethod: payload.paymentMethod || 'cash',
           status: status,
+          isCurrentMonth: item.month === currentMonthName,
           ...(item.isMonthly && {
             discountRangeStart: item.discountRangeStart || '',
             discountRangeEnd: item.discountRangeEnd || '',
@@ -1235,46 +1318,42 @@ export const updateEnrollment = async (id: string, payload: any) => {
         };
 
         const [createdFee] = await Fees.create([feeData], { session });
-        feeDocs.push(createdFee._id);
+        createdFeeIds.push(createdFee._id);
 
         if (paidForThisItem > 0) {
-          totalTransactionAmount += paidForThisItem;
           paidFeeIds.push(createdFee._id);
         }
       }
 
-      if (feeDocs.length === 0) {
-        throw new Error('No fee items were created - fee creation failed');
+      if (createdFeeIds.length === 0) {
+        throw new Error('No fee documents were created - fee creation failed');
       }
 
       // Update enrollment totals
-      enrollment.fees = feeDocs;
-      enrollment.totalAmount = calcTotalAmount;
-      enrollment.paidAmount = calcPaidAmount;
-      enrollment.dueAmount = calcDueAmount;
-      enrollment.totalDiscount = calcTotalDiscount;
+      enrollment.fees = createdFeeIds;
+      enrollment.totalAmount = totalAmount;
+      enrollment.totalDiscount = totalDiscount;
+      enrollment.paidAmount = totalPaid;
+      enrollment.dueAmount = totalDue;
       enrollment.paymentStatus =
-        calcDueAmount <= 0
-          ? 'paid'
-          : calcPaidAmount > 0
-            ? 'partial'
-            : 'pending';
+        totalDue <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'pending';
       await enrollment.save({ session });
 
-      // Link fees to student
-      const studentDoc = await Student.findById(enrollment.student).session(
-        session,
-      );
+      // Update student fees
       if (studentDoc) {
-        const existing = (studentDoc.fees || []).map(String);
-        const newIds = feeDocs.map(String);
-        const merged = Array.from(new Set([...existing, ...newIds]));
-        studentDoc.fees = merged.map((sid) => new mongoose.Types.ObjectId(sid));
+        const existingFeeIds = (studentDoc.fees || []).map(String);
+        const newFeeIds = createdFeeIds.map(String);
+        const mergedFeeIds = Array.from(
+          new Set([...existingFeeIds, ...newFeeIds]),
+        );
+        studentDoc.fees = mergedFeeIds.map(
+          (id) => new mongoose.Types.ObjectId(id),
+        );
         await studentDoc.save({ session });
       }
 
-      // Payment + receipt if money paid
-      if (totalTransactionAmount > 0 && paidFeeIds.length > 0) {
+      // Create payment and receipt if money was paid
+      if (totalPaid > 0 && paidFeeIds.length > 0) {
         const timestamp = Date.now();
         const random = Math.floor(Math.random() * 10000);
         const receiptNo = `RCP-${timestamp}-${random}`;
@@ -1286,10 +1365,10 @@ export const updateEnrollment = async (id: string, payload: any) => {
               student: enrollment.student,
               enrollment: enrollment._id,
               fees: paidFeeIds,
-              totalAmount: totalTransactionAmount,
+              totalAmount: totalPaid,
               paymentMethod: payload.paymentMethod || 'cash',
-              receiptNo,
-              transactionId,
+              receiptNo: receiptNo,
+              transactionId: transactionId,
               status: 'completed',
               collectedBy: payload.collectedBy || 'Admin',
               paymentDate: new Date(),
@@ -1298,55 +1377,65 @@ export const updateEnrollment = async (id: string, payload: any) => {
           { session },
         );
 
-        const detailedFees = await Fees.find({ _id: { $in: paidFeeIds } })
+        // Get detailed fee info for receipt
+        const paidFees = await Fees.find({ _id: { $in: paidFeeIds } })
           .session(session)
           .lean();
 
-        const receiptFees = detailedFees.map((f: any) => {
-          const netAmount = Math.max(0, f.amount - (f.discount || 0));
-          let month = f.month || 'Admission';
-          if (f.feeType && f.feeType.includes(' - ')) {
-            const parts = f.feeType.split(' - ');
+        const receiptFees = paidFees.map((fee: any) => {
+          const netAmount = Math.max(0, fee.amount - (fee.discount || 0));
+          let month = fee.month || 'Admission';
+          if (fee.feeType && fee.feeType.includes(' - ')) {
+            const parts = fee.feeType.split(' - ');
             const last = parts[parts.length - 1];
             if (MONTHS.includes(last)) month = last;
           }
           return {
-            feeType: f.feeType,
-            month,
-            originalAmount: f.amount,
-            discount: f.discount || 0,
+            feeType: fee.feeType,
+            month: month,
+            originalAmount: fee.amount,
+            discount: fee.discount || 0,
             waiver: 0,
-            netAmount,
-            paidAmount: f.paidAmount,
+            netAmount: netAmount,
+            paidAmount: fee.paidAmount || 0,
           };
         });
 
-        const totalDiscount = receiptFees.reduce((s, i) => s + i.discount, 0);
-        const subtotal = receiptFees.reduce((s, i) => s + i.originalAmount, 0);
-        const totalNet = receiptFees.reduce((s, i) => s + i.netAmount, 0);
+        const receiptTotalDiscount = receiptFees.reduce(
+          (sum, f) => sum + f.discount,
+          0,
+        );
+        const receiptSubtotal = receiptFees.reduce(
+          (sum, f) => sum + f.originalAmount,
+          0,
+        );
+        const receiptTotalNet = receiptFees.reduce(
+          (sum, f) => sum + f.netAmount,
+          0,
+        );
 
         const [receipt] = await Receipt.create(
           [
             {
-              receiptNo,
+              receiptNo: receiptNo,
               student: enrollment.student,
-              studentName: (enrollment as any).studentName || '',
-              studentId: (enrollment as any).studentId || '',
+              studentName: enrollment.studentName || '',
+              studentId: enrollment.studentId || '',
               className: primaryClassName,
               paymentId: payment._id,
-              totalAmount: totalTransactionAmount,
+              totalAmount: totalPaid,
               paymentMethod: payload.paymentMethod || 'cash',
               paymentDate: new Date(),
               collectedBy: payload.collectedBy || 'Admin',
-              transactionId,
+              transactionId: transactionId,
               fees: receiptFees,
               summary: {
                 totalItems: receiptFees.length,
-                subtotal,
-                totalDiscount,
+                subtotal: receiptSubtotal,
+                totalDiscount: receiptTotalDiscount,
                 totalWaiver: 0,
-                totalNetAmount: totalNet,
-                amountPaid: totalTransactionAmount,
+                totalNetAmount: receiptTotalNet,
+                amountPaid: totalPaid,
               },
               status: 'active',
             },
@@ -1354,6 +1443,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
           { session },
         );
 
+        // Update student with payment and receipt
         if (studentDoc) {
           studentDoc.payments = [...(studentDoc.payments || []), payment._id];
           studentDoc.receipts = [...(studentDoc.receipts || []), receipt._id];
@@ -1363,12 +1453,26 @@ export const updateEnrollment = async (id: string, payload: any) => {
         enrollment.payment = payment._id;
         await enrollment.save({ session });
       }
+    } else {
+      // If no fees in payload, update just the totals if provided
+      if (payload.totalAmount !== undefined)
+        enrollment.totalAmount = payload.totalAmount;
+      if (payload.paidAmount !== undefined)
+        enrollment.paidAmount = payload.paidAmount;
+      if (payload.dueAmount !== undefined)
+        enrollment.dueAmount = payload.dueAmount;
+      if (payload.totalDiscount !== undefined)
+        enrollment.totalDiscount = payload.totalDiscount;
+      if (payload.paymentStatus !== undefined)
+        enrollment.paymentStatus = payload.paymentStatus;
+      await enrollment.save({ session });
     }
 
     await session.commitTransaction();
     session.endSession();
     console.log('=== updateEnrollment SUCCESS ===');
 
+    // Fetch updated enrollment with populated data
     const updatedEnrollment = await Enrollment.findById(id)
       .populate({
         path: 'student',
@@ -1376,6 +1480,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
           { path: 'payments' },
           { path: 'receipts' },
           { path: 'fees' },
+          { path: 'user' },
         ],
       })
       .populate('className')
@@ -1393,10 +1498,12 @@ export const updateEnrollment = async (id: string, payload: any) => {
     console.error('=== updateEnrollment ERROR ===');
     console.error('Message :', error.message);
     console.error('Stack   :', error.stack);
+
     return {
       success: false,
       message: error.message || 'Internal Server Error',
       error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      data: null,
     };
   }
 };
