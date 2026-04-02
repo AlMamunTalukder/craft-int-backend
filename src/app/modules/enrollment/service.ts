@@ -16,19 +16,109 @@ import { Receipt } from '../receipt/model';
 import { AdmissionApplication } from '../onlineAdmission/model';
 
 const getAllEnrollments = async (query: Record<string, any>) => {
-  const queryBuilder = new QueryBuilder(Enrollment.find(), query)
-    .filter()
-    .sort()
-    .paginate()
-    .fields()
-    .populate(['student', 'className', 'fees', 'promotedFrom', 'promotedTo']);
+  const page = Number(query?.page) || 1;
+  const limit = Number(query?.limit) || 1000;
+  const skip = (page - 1) * limit;
 
-  const meta = await queryBuilder.countTotal();
-  const data = await queryBuilder.modelQuery;
+  const matchStage: any = {};
+
+  if (query?.searchTerm) {
+    matchStage.$or = [
+      { studentName: { $regex: query.searchTerm, $options: 'i' } },
+      { studentId: { $regex: query.searchTerm, $options: 'i' } },
+    ];
+  }
+
+  const pipeline: any[] = [
+    { $match: matchStage },
+
+    {
+      $lookup: {
+        from: 'students',
+        localField: 'student',
+        foreignField: '_id',
+        as: 'student',
+      },
+    },
+    { $unwind: { path: '$student', preserveNullAndEmptyArrays: true } },
+
+    {
+      $lookup: {
+        from: 'fees',
+        localField: 'student.fees',
+        foreignField: '_id',
+        as: 'student.fees',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'payments',
+        localField: 'student.payments',
+        foreignField: '_id',
+        as: 'student.payments',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'receipts',
+        localField: 'student.receipts',
+        foreignField: '_id',
+        as: 'student.receipts',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'className',
+        foreignField: '_id',
+        as: 'className',
+      },
+    },
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'promotedFrom',
+        foreignField: '_id',
+        as: 'promotedFrom',
+      },
+    },
+
+    {
+      $lookup: {
+        from: 'classes',
+        localField: 'promotedTo',
+        foreignField: '_id',
+        as: 'promotedTo',
+      },
+    },
+
+    {
+      $addFields: {
+        className: { $arrayElemAt: ['$className', 0] },
+        promotedFrom: { $arrayElemAt: ['$promotedFrom', 0] },
+        promotedTo: { $arrayElemAt: ['$promotedTo', 0] },
+      },
+    },
+    { $skip: skip },
+    { $limit: limit },
+  ];
+
+  const data = await Enrollment.aggregate(pipeline);
+
+  const total = await Enrollment.countDocuments(matchStage);
+
+  const meta = {
+    page,
+    limit,
+    total,
+    totalPage: Math.ceil(total / limit),
+  };
 
   return { meta, data };
 };
-
 const getSingleEnrollment = async (id: string) => {
   const enrollment = await Enrollment.findById(id)
     .populate({
@@ -209,17 +299,14 @@ export const createEnrollment = async (
     }
 
     // ----- CORRECTED parentInfo -----
-    // Only include fields that are present in the schema AND sent from frontend.
-    // education and whatsapp are omitted for father/mother only if empty,
-    // but we still map them — the schema accepts them.
     const parentInfo = {
       father: {
         nameBangla: payload.fatherNameBangla || '',
         nameEnglish: payload.fatherName || '',
         profession: payload.fatherProfession || '',
-        education: payload.fatherEducation || '', // ✅ now included
+        education: payload.fatherEducation || '',
         mobile: payload.fatherMobile || '',
-        whatsapp: payload.fatherWhatsapp || '', // ✅ now included
+        whatsapp: payload.fatherWhatsapp || '',
         nid: payload.fatherNid || '',
         income: Number(payload.fatherIncome) || 0,
       },
@@ -227,18 +314,18 @@ export const createEnrollment = async (
         nameBangla: payload.motherNameBangla || '',
         nameEnglish: payload.motherName || '',
         profession: payload.motherProfession || '',
-        education: payload.motherEducation || '', // ✅ now included
+        education: payload.motherEducation || '',
         mobile: payload.motherMobile || '',
-        whatsapp: payload.motherWhatsapp || '', // ✅ now included
+        whatsapp: payload.motherWhatsapp || '',
         nid: payload.motherNid || '',
         income: Number(payload.motherIncome) || 0,
       },
       guardian: {
-        nameBangla: payload.guardianNameBangla || '', // ✅ now included
-        nameEnglish: payload.guardianName || '', // ✅ was guardianNameBangla before — fixed
+        nameBangla: payload.guardianNameBangla || '',
+        nameEnglish: payload.guardianName || '',
         relation: payload.guardianRelation || '',
         mobile: payload.guardianMobile || '',
-        whatsapp: payload.guardianWhatsapp || '', // ✅ now included
+        whatsapp: payload.guardianWhatsapp || '',
         profession: payload.guardianProfession || '',
         address: payload.guardianVillage || '',
       },
@@ -410,7 +497,7 @@ export const createEnrollment = async (
       session,
     });
 
-    // ----- FEE PROCESSING -----
+    // ----- FEE PROCESSING - OPTIONAL -----
     const feeDocs: mongoose.Types.ObjectId[] = [];
     const paidFeeIds: mongoose.Types.ObjectId[] = [];
     let totalTransactionAmount = 0;
@@ -435,162 +522,159 @@ export const createEnrollment = async (
     const totalPaidAmount = Number(payload.paidAmount) || 0;
     let remainingPayment = totalPaidAmount;
 
+    // Check if fees are provided - if not, skip fee creation
     if (
-      !payload.fees ||
-      !Array.isArray(payload.fees) ||
-      payload.fees.length === 0
+      payload.fees &&
+      Array.isArray(payload.fees) &&
+      payload.fees.length > 0
     ) {
-      throw new Error('No fee categories were provided');
-    }
+      const allFeeItems: any[] = [];
 
-    const allFeeItems: any[] = [];
+      for (const feeCategory of payload.fees) {
+        if (
+          !feeCategory.feeItems ||
+          !Array.isArray(feeCategory.feeItems) ||
+          feeCategory.feeItems.length === 0
+        )
+          continue;
 
-    for (const feeCategory of payload.fees) {
-      if (
-        !feeCategory.feeItems ||
-        !Array.isArray(feeCategory.feeItems) ||
-        feeCategory.feeItems.length === 0
-      )
-        continue;
+        for (const feeItem of feeCategory.feeItems) {
+          const feeTypeStr =
+            typeof feeItem.feeType === 'string'
+              ? feeItem.feeType
+              : feeItem.feeType?.value || feeItem.feeType?.label || '';
+          if (!feeTypeStr || feeTypeStr.trim() === '') continue;
 
-      for (const feeItem of feeCategory.feeItems) {
-        const feeTypeStr =
-          typeof feeItem.feeType === 'string'
-            ? feeItem.feeType
-            : feeItem.feeType?.value || feeItem.feeType?.label || '';
-        if (!feeTypeStr || feeTypeStr.trim() === '') continue;
+          const className =
+            feeCategory.className && feeCategory.className.length > 0
+              ? feeCategory.className[0]?.label ||
+                feeCategory.className[0] ||
+                primaryClassName
+              : primaryClassName;
 
-        const className =
-          feeCategory.className && feeCategory.className.length > 0
-            ? feeCategory.className[0]?.label ||
-              feeCategory.className[0] ||
-              primaryClassName
-            : primaryClassName;
+          const isMonthly = feeItem.isMonthly === true;
 
-        const isMonthly = feeItem.isMonthly === true;
+          if (isMonthly) {
+            const amount = Number(feeItem.amount) || 0;
+            const baseDiscount = Number(feeItem.discount) || 0;
+            const discountRangeStart = feeItem.discountRangeStart || '';
+            const discountRangeEnd = feeItem.discountRangeEnd || '';
+            const discountRangeAmount =
+              Number(feeItem.discountRangeAmount) || 0;
 
-        if (isMonthly) {
-          const amount = Number(feeItem.amount) || 0;
-          const baseDiscount = Number(feeItem.discount) || 0;
-          const discountRangeStart = feeItem.discountRangeStart || '';
-          const discountRangeEnd = feeItem.discountRangeEnd || '';
-          const discountRangeAmount = Number(feeItem.discountRangeAmount) || 0;
+            const startIndex = MONTHS.indexOf(discountRangeStart);
+            const endIndex = MONTHS.indexOf(discountRangeEnd);
+            const hasValidRange =
+              discountRangeStart &&
+              discountRangeEnd &&
+              startIndex !== -1 &&
+              endIndex !== -1;
 
-          const startIndex = MONTHS.indexOf(discountRangeStart);
-          const endIndex = MONTHS.indexOf(discountRangeEnd);
-          const hasValidRange =
-            discountRangeStart &&
-            discountRangeEnd &&
-            startIndex !== -1 &&
-            endIndex !== -1;
-
-          for (let i = currentMonthIndex; i < 12; i++) {
-            const month = MONTHS[i];
-            let itemDiscount = baseDiscount;
-            if (hasValidRange) {
-              const minIdx = Math.min(startIndex, endIndex);
-              const maxIdx = Math.max(startIndex, endIndex);
-              if (i >= minIdx && i <= maxIdx)
-                itemDiscount = discountRangeAmount;
+            for (let i = currentMonthIndex; i < 12; i++) {
+              const month = MONTHS[i];
+              let itemDiscount = baseDiscount;
+              if (hasValidRange) {
+                const minIdx = Math.min(startIndex, endIndex);
+                const maxIdx = Math.max(startIndex, endIndex);
+                if (i >= minIdx && i <= maxIdx)
+                  itemDiscount = discountRangeAmount;
+              }
+              allFeeItems.push({
+                feeType: `${feeTypeStr} - ${month}`,
+                amount,
+                discount: itemDiscount,
+                month,
+                isMonthly: true,
+                className,
+                discountRangeStart: hasValidRange ? discountRangeStart : '',
+                discountRangeEnd: hasValidRange ? discountRangeEnd : '',
+                discountRangeAmount: hasValidRange ? discountRangeAmount : 0,
+              });
             }
+          } else {
             allFeeItems.push({
-              feeType: `${feeTypeStr} - ${month}`,
-              amount,
-              discount: itemDiscount,
-              month,
-              isMonthly: true,
+              feeType: feeTypeStr,
+              amount: Number(feeItem.amount) || 0,
+              discount: Number(feeItem.discount) || 0,
+              month: 'Admission',
+              isMonthly: false,
               className,
-              discountRangeStart: hasValidRange ? discountRangeStart : '',
-              discountRangeEnd: hasValidRange ? discountRangeEnd : '',
-              discountRangeAmount: hasValidRange ? discountRangeAmount : 0,
+              discountRangeStart: '',
+              discountRangeEnd: '',
+              discountRangeAmount: 0,
             });
           }
-        } else {
-          allFeeItems.push({
-            feeType: feeTypeStr,
-            amount: Number(feeItem.amount) || 0,
-            discount: Number(feeItem.discount) || 0,
-            month: 'Admission',
-            isMonthly: false,
-            className,
-            discountRangeStart: '',
-            discountRangeEnd: '',
-            discountRangeAmount: 0,
-          });
+        }
+      }
+
+      if (allFeeItems.length > 0) {
+        allFeeItems.sort((a, b) => {
+          if (a.month === 'Admission' && b.month === 'Admission') return 0;
+          if (a.month === 'Admission') return -1;
+          if (b.month === 'Admission') return 1;
+          return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+        });
+
+        for (const item of allFeeItems) {
+          const netAmount = Math.max(0, item.amount - item.discount);
+          let paidForThisItem = 0;
+          const isPayableNow =
+            item.month === 'Admission' || item.month === currentMonthName;
+
+          if (remainingPayment > 0 && isPayableNow) {
+            paidForThisItem = Math.min(remainingPayment, netAmount);
+            remainingPayment -= paidForThisItem;
+          }
+
+          const dueAmount = Math.max(0, netAmount - paidForThisItem);
+
+          const feeData: any = {
+            enrollment: newEnrollment._id,
+            student: studentDoc._id,
+            studentId: generatedStudentId,
+            feeType: item.feeType,
+            amount: item.amount,
+            discount: item.discount,
+            paidAmount: paidForThisItem,
+            dueAmount,
+            className: item.className,
+            month: item.month,
+            academicYear:
+              payload.session || new Date().getFullYear().toString(),
+            paymentMethod: payload.paymentMethod || 'cash',
+            status:
+              paidForThisItem >= netAmount && netAmount > 0
+                ? 'paid'
+                : paidForThisItem > 0
+                  ? 'partial'
+                  : 'unpaid',
+          };
+
+          if (item.isMonthly) {
+            feeData.discountRangeStart = item.discountRangeStart || '';
+            feeData.discountRangeEnd = item.discountRangeEnd || '';
+            feeData.discountRangeAmount = item.discountRangeAmount || 0;
+          }
+
+          const [createdFee] = await Fees.create([feeData], { session });
+          feeDocs.push(createdFee._id);
+          if (paidForThisItem > 0) {
+            totalTransactionAmount += paidForThisItem;
+            paidFeeIds.push(createdFee._id);
+          }
+        }
+
+        if (feeDocs.length > 0) {
+          newEnrollment.fees = feeDocs;
+          await newEnrollment.save({ session });
+
+          studentDoc.fees = [...(studentDoc.fees || []), ...feeDocs];
+          await studentDoc.save({ session });
         }
       }
     }
 
-    if (allFeeItems.length === 0) {
-      throw new Error('No fee items were created - no items found in payload');
-    }
-
-    allFeeItems.sort((a, b) => {
-      if (a.month === 'Admission' && b.month === 'Admission') return 0;
-      if (a.month === 'Admission') return -1;
-      if (b.month === 'Admission') return 1;
-      return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
-    });
-
-    for (const item of allFeeItems) {
-      const netAmount = Math.max(0, item.amount - item.discount);
-      let paidForThisItem = 0;
-      const isPayableNow =
-        item.month === 'Admission' || item.month === currentMonthName;
-
-      if (remainingPayment > 0 && isPayableNow) {
-        paidForThisItem = Math.min(remainingPayment, netAmount);
-        remainingPayment -= paidForThisItem;
-      }
-
-      const dueAmount = Math.max(0, netAmount - paidForThisItem);
-
-      const feeData: any = {
-        enrollment: newEnrollment._id,
-        student: studentDoc._id,
-        studentId: generatedStudentId,
-        feeType: item.feeType,
-        amount: item.amount,
-        discount: item.discount,
-        paidAmount: paidForThisItem,
-        dueAmount,
-        className: item.className,
-        month: item.month,
-        academicYear: payload.session || new Date().getFullYear().toString(),
-        paymentMethod: payload.paymentMethod || 'cash',
-        status:
-          paidForThisItem >= netAmount && netAmount > 0
-            ? 'paid'
-            : paidForThisItem > 0
-              ? 'partial'
-              : 'unpaid',
-      };
-
-      if (item.isMonthly) {
-        feeData.discountRangeStart = item.discountRangeStart || '';
-        feeData.discountRangeEnd = item.discountRangeEnd || '';
-        feeData.discountRangeAmount = item.discountRangeAmount || 0;
-      }
-
-      const [createdFee] = await Fees.create([feeData], { session });
-      feeDocs.push(createdFee._id);
-      if (paidForThisItem > 0) {
-        totalTransactionAmount += paidForThisItem;
-        paidFeeIds.push(createdFee._id);
-      }
-    }
-
-    if (feeDocs.length === 0) {
-      throw new Error('No fee items were created - fee creation failed');
-    }
-
-    newEnrollment.fees = feeDocs;
-    await newEnrollment.save({ session });
-
-    studentDoc.fees = [...(studentDoc.fees || []), ...feeDocs];
-    await studentDoc.save({ session });
-
-    // ----- PAYMENT & RECEIPT -----
+    // ----- PAYMENT & RECEIPT - Only if there are paid fees -----
     let createdPayment: any = null;
     let createdReceipt: any = null;
 
@@ -762,7 +846,6 @@ export const createEnrollment = async (
     };
   }
 };
-
 export const updateEnrollment = async (id: string, payload: any) => {
   const session = await mongoose.startSession();
   session.startTransaction();
