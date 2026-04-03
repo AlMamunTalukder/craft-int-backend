@@ -69,6 +69,7 @@ const loginUser = catchAsync(async (req, res) => {
 // });
 
 // NEW: Refresh token endpoint
+
 const refreshToken = catchAsync(async (req, res) => {
   const result = await AuthServices.refreshToken(req.cookies?.refreshToken);
 
