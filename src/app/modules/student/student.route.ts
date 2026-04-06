@@ -13,15 +13,16 @@ router.post(
 );
 
 router.get('/', studentControllers.getAllStudents);
+// client side data show
+router.get('/by-user/:userId', studentControllers.getStudentByUserId);
 
 router.get('/:id', studentControllers.getSingleStudent);
 
 router.delete('/:id', studentControllers.deleteStudent);
 
-router.patch(
-  '/:id',
+router.patch('/:id', studentControllers.updateStudent);
 
-  studentControllers.updateStudent,
-);
+
+
 
 export const studentRoutes = router;
