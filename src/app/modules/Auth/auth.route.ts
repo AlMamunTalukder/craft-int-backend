@@ -21,7 +21,14 @@ router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logoutUser);
 router.get(
   '/me',
-  auth('admin', 'super_admin', 'teacher', 'student', 'class_teacher'),
+  auth(
+    'admin',
+    'super_admin',
+    'teacher',
+    'student',
+    'class_teacher',
+    'accountant',
+  ),
   AuthController.getMe,
 );
 export const authRoutes = router;
