@@ -10,6 +10,7 @@ router.post(
   validateRequest(userValidations.createUserValidation),
   UserController.createUser,
 );
+
 router.get('/:id', UserController.getSingleUser);
 
 router.patch(
@@ -18,7 +19,9 @@ router.patch(
 
   UserController.updateUser,
 );
-router.delete('/:id', 
+router.delete(
+  '/:id',
   // auth('admin', 'super_admin'),
- UserController.deleteUser);
+  UserController.deleteUser,
+);
 export const userRoutes = router;

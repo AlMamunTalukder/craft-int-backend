@@ -9,13 +9,11 @@ import { AppError } from '../error/AppError';
 import config from '../config';
 import { TUserRole } from '../modules/user/user.interface';
 import { User } from '../modules/user/user.model';
+import mongoose from 'mongoose';
 
 export const auth = (...requiredRoles: TUserRole[]) => {
   return catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-    // Get token from cookie instead of Authorization header
     const token = req.cookies?.accessToken;
-
-    // Also check Authorization header as fallback (for mobile apps or API clients)
     const authHeaderToken = req.headers.authorization?.startsWith('Bearer ')
       ? req.headers.authorization.split(' ')[1]
       : null;
@@ -35,12 +33,24 @@ export const auth = (...requiredRoles: TUserRole[]) => {
         config.jwt_access_secret as string,
       ) as JwtPayload;
 
+      console.log('Decoded token:', decoded);
+
       const { role, userId, iat, email } = decoded;
 
-      // Find user by userId or email
-      const user = await User.findOne({
-        $or: [{ userId: userId }, { email: email }, { _id: userId }],
+      let user = await User.findOne({
+        $or: [{ userId: userId }, { email: email }],
       });
+
+      if (!user && mongoose.Types.ObjectId.isValid(userId)) {
+        user = await User.findById(userId);
+      }
+
+      console.log(
+        'User found:',
+        user
+          ? { email: user.email, role: user.role, userId: user.userId }
+          : 'Not found',
+      );
 
       if (!user) {
         throw new AppError(httpStatus.NOT_FOUND, 'This user is not found');
@@ -72,14 +82,12 @@ export const auth = (...requiredRoles: TUserRole[]) => {
           'You are not authorized user!',
         );
       }
-
-      // Add user info to request
       req.user = {
-        ...decoded,
         userId: user.userId,
         _id: user._id,
         role: user.role,
         email: user.email,
+        name: user.name,
       };
 
       next();

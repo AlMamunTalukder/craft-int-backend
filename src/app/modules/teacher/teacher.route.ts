@@ -31,4 +31,6 @@ router.patch(
   teacherControllers.updateTeacher,
 );
 
+// teacher.route.ts
+router.post('/sync-users', teacherControllers.syncTeacherUsers);
 export const teacherRoutes = router;

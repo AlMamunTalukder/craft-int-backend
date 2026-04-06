@@ -3,6 +3,7 @@ import { teacherServices } from './teacher.service';
 import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 import { Request, Response } from 'express';
+import { syncTeachersWithUsers } from '../../../scripts/syncTeachersWithUsers';
 
 // Create new teacher
 const createTeacher = catchAsync(async (req: Request, res: Response) => {
@@ -68,11 +69,28 @@ const deleteTeacher = catchAsync(async (req: Request, res: Response) => {
     data: deletedTeacher,
   });
 });
+const syncTeacherUsers = catchAsync(async (req: Request, res: Response) => {
+  // ব্যাকগ্রাউন্ডে সিন্ক রান করুন
+  syncTeachersWithUsers()
+    .then(() => {
+      console.log('Teacher sync completed');
+    })
+    .catch((error) => {
+      console.error('Teacher sync failed:', error);
+    });
 
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Teacher sync started in background. Check console for details.',
+    data: null,
+  });
+});
 export const teacherControllers = {
   createTeacher,
   getAllTeachers,
   getSingleTeacher,
   updateTeacher,
   deleteTeacher,
+  syncTeacherUsers,
 };
