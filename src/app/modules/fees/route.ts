@@ -9,6 +9,7 @@ router.post(
   validateRequest(createFeeSchema),
   feesControllers.createSingleFee,
 );
+router.get('/class-summary', feesControllers.getClassWiseFeeSummary);
 router.get('/due', feesControllers.getStudentDueFees);
 router.post('/create-monthly', feesControllers.createMonthlyFees);
 router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);

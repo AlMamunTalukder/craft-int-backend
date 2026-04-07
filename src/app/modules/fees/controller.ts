@@ -210,6 +210,21 @@ const createSingleFee = catchAsync(async (req, res) => {
   });
 });
 
+const getClassWiseFeeSummary = catchAsync(async (req, res) => {
+  const { academicYear, class: className, month } = req.query;
+  const result = await feesServices.getClassWiseFeeSummary({
+    academicYear: academicYear as string,
+    class: className as string,
+    month: month as string,
+  });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Class-wise fee summary retrieved successfully',
+    data: result,
+  });
+});
+
 export const feesControllers = {
   createMonthlyFees,
   createBulkMonthlyFees,
@@ -223,4 +238,5 @@ export const feesControllers = {
   deleteFee,
   getAllDueFees,
   createSingleFee,
+  getClassWiseFeeSummary,
 };

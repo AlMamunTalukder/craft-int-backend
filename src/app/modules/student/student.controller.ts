@@ -30,30 +30,30 @@ const getAllStudents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-//client side user data show 
+//client side user data show
 const getStudentByUserId = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params;
-  
+
   // First find the user
   const user = await User.findOne({ userId: userId });
-  
+
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
-  
+
   // Then find the student linked to this user
-  const student = await Student.findOne({ 
-    user: user._id 
+  const student = await Student.findOne({
+    user: user._id,
   })
-  .populate('className')
-  .populate('fees')
-  .populate('payments')
-  .populate('receipts');
-  
+    .populate('className')
+    .populate('fees')
+    .populate('payments')
+    .populate('receipts');
+
   if (!student) {
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found for this user');
   }
-  
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -104,5 +104,5 @@ export const studentControllers = {
   getSingleStudent,
   updateStudent,
   deleteStudent,
-  getStudentByUserId
+  getStudentByUserId,
 };

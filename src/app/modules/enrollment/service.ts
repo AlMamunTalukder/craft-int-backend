@@ -287,6 +287,7 @@ const getSingleEnrollment = async (id: string) => {
 // ) => {
 //   const session = await mongoose.startSession();
 //   session.startTransaction();
+//   console.log('payload', payload);
 
 //   try {
 //     let classIds: any[] = [];
@@ -499,30 +500,88 @@ const getSingleEnrollment = async (id: string) => {
 //       behaviorSkills: payload.behaviorSkills,
 //     };
 
-//     // ----- STUDENT HANDLING -----
+//     // ==================== 🚀 IMPORTANT: IMPROVED STUDENT LOOKUP LOGIC ====================
 //     let studentDoc: any = null;
 //     let userDoc: any = null;
 //     let generatedStudentId = '';
 
-//     if (payload.studentId && payload.studentId.trim() !== '') {
-//       studentDoc = await Student.findOne({
-//         studentId: payload.studentId,
-//       }).session(session);
-//     }
-//     if (!studentDoc && payload.mobileNo) {
-//       studentDoc = await Student.findOne({ mobile: payload.mobileNo }).session(
-//         session,
-//       );
-//     }
+//     /**
+//      * Function to find existing student with multiple unique criteria
+//      * This prevents duplicate student creation for same family members
+//      */
+//     const findExistingStudent = async (): Promise<any> => {
+//       // STRATEGY 1: Check by explicit studentId (most reliable)
+//       if (payload.studentId && payload.studentId.trim() !== '') {
+//         const student = await Student.findOne({
+//           studentId: payload.studentId,
+//         }).session(session);
+//         if (student) return student;
+//       }
 
+//       // STRATEGY 2: Check by student's own mobile number (if provided separately)
+//       if (payload.studentOwnMobile && payload.studentOwnMobile.trim() !== '') {
+//         const student = await Student.findOne({
+//           mobile: payload.studentOwnMobile,
+//         }).session(session);
+//         if (student) return student;
+//       }
+
+//       // STRATEGY 3: Check by combination of Name + BirthDate + Father's Mobile
+//       // This is the key for same family members - each student has unique name & birthdate
+//       if (payload.studentName && payload.birthDate && payload.fatherMobile) {
+//         const student = await Student.findOne({
+//           name: payload.studentName,
+//           birthDate: payload.birthDate,
+//           'parentInfo.father.mobile': payload.fatherMobile,
+//         }).session(session);
+//         if (student) return student;
+//       }
+
+//       // STRATEGY 4: Check by Name + BirthRegistrationNo (if available)
+//       if (payload.studentName && payload.birthRegistrationNo) {
+//         const student = await Student.findOne({
+//           name: payload.studentName,
+//           birthRegistrationNo: payload.birthRegistrationNo,
+//         }).session(session);
+//         if (student) return student;
+//       }
+
+//       // STRATEGY 5: Check by Email (if provided)
+//       if (payload.email && payload.email.trim() !== '') {
+//         const student = await Student.findOne({
+//           email: payload.email,
+//         }).session(session);
+//         if (student) return student;
+//       }
+
+//       // STRATEGY 6: Check by mobileNo (legacy - but keep as fallback)
+//       // Note: This is the reason for the bug, but keeping as last resort
+//       if (payload.mobileNo && payload.mobileNo.trim() !== '') {
+//         const student = await Student.findOne({
+//           mobile: payload.mobileNo,
+//         }).session(session);
+//         if (student) return student;
+//       }
+
+//       return null;
+//     };
+
+//     // Use the improved lookup function
+//     studentDoc = await findExistingStudent();
+
+//     // ==================== STUDENT CREATION OR UPDATE ====================
 //     if (!studentDoc) {
+//       // ----- CREATE NEW STUDENT -----
 //       generatedStudentId = await generateStudentId(
 //         classNameForId || primaryClassName,
 //       );
+
+//       // Generate email for new student
 //       const email =
 //         payload.email ||
-//         `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}@student.craft.edu` ||
+//         `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}${Date.now().toString().slice(-4)}@student.craft.edu` ||
 //         `student${Date.now().toString().slice(-6)}@craft.edu`;
+
 //       const defaultPassword = 'CIIStudent123';
 //       const existingUser = await User.findOne({ email }).session(session);
 
@@ -543,12 +602,19 @@ const getSingleEnrollment = async (id: string) => {
 //         userDoc = existingUser;
 //       }
 
+//       // Use student's own mobile if provided, otherwise use father's mobile as fallback
+//       const studentMobile =
+//         payload.studentOwnMobile ||
+//         payload.mobileNo ||
+//         payload.fatherMobile ||
+//         '';
+
 //       const studentData: any = {
 //         studentId: generatedStudentId,
 //         name: payload.studentName,
 //         nameBangla: payload.nameBangla,
 //         email,
-//         mobile: payload.mobileNo,
+//         mobile: studentMobile,
 //         className: validClassIds.map((id) => new mongoose.Types.ObjectId(id)),
 //         studentDepartment: payload.studentDepartment,
 //         advanceBalance: payload.advanceBalance || 0,
@@ -585,20 +651,77 @@ const getSingleEnrollment = async (id: string) => {
 //       enrollmentData.studentId = generatedStudentId;
 //       enrollmentData.student = studentDoc._id;
 //     } else {
-//       generatedStudentId = studentDoc.studentId;
-//       enrollmentData.studentId = studentDoc.studentId;
+//       // ----- EXISTING STUDENT - Create new enrollment for same student? -----
+//       // Wait! If student already exists, we need to decide:
+//       // For same family members, each student should have their OWN student document
+//       // So if we found a student by father's mobile + name + birthdate, that's a DIFFERENT student
+//       // But if we found by studentId or email, that's the SAME student
 
-//       if (!studentDoc.user || studentDoc.user.length === 0) {
+//       // Check if we found by studentId or email (same student)
+//       const foundByStudentId =
+//         payload.studentId &&
+//         payload.studentId.trim() !== '' &&
+//         studentDoc.studentId === payload.studentId;
+//       const foundByEmail =
+//         payload.email &&
+//         payload.email.trim() !== '' &&
+//         studentDoc.email === payload.email;
+
+//       if (foundByStudentId || foundByEmail) {
+//         // Same student - just add enrollment
+//         generatedStudentId = studentDoc.studentId;
+//         enrollmentData.studentId = studentDoc.studentId;
+
+//         if (!studentDoc.user || studentDoc.user.length === 0) {
+//           const email =
+//             payload.email ||
+//             `${studentDoc.name?.toLowerCase().replace(/\s+/g, '.')}@student.craft.edu` ||
+//             `student${Date.now().toString().slice(-6)}@craft.edu`;
+//           const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+//           const existingUser = await User.findOne({ email }).session(session);
+//           if (!existingUser) {
+//             const userData = {
+//               email,
+//               name: studentDoc.name || 'Student',
+//               password: defaultPassword,
+//               userId: generatedStudentId,
+//               needPasswordChange: true,
+//               role: 'student',
+//               status: 'active',
+//               isDeleted: false,
+//             };
+//             const [newUser] = await User.create([userData], { session });
+//             userDoc = newUser;
+//             studentDoc.user = [userDoc._id];
+//             await studentDoc.save({ session });
+//           } else {
+//             userDoc = existingUser;
+//             studentDoc.user = [userDoc._id];
+//             await studentDoc.save({ session });
+//           }
+//         } else {
+//           userDoc = await User.findById(studentDoc.user[0]).session(session);
+//         }
+//         enrollmentData.student = studentDoc._id;
+//       } else {
+//         // This is a DIFFERENT student from the same family
+//         // Create a NEW student document for this family member
+//         generatedStudentId = await generateStudentId(
+//           classNameForId || primaryClassName,
+//         );
+
 //         const email =
 //           payload.email ||
-//           `${studentDoc.name?.toLowerCase().replace(/\s+/g, '.')}@student.craft.edu` ||
+//           `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}${Date.now().toString().slice(-4)}@student.craft.edu` ||
 //           `student${Date.now().toString().slice(-6)}@craft.edu`;
-//         const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
+
+//         const defaultPassword = 'CIIStudent123';
 //         const existingUser = await User.findOne({ email }).session(session);
+
 //         if (!existingUser) {
 //           const userData = {
 //             email,
-//             name: studentDoc.name || 'Student',
+//             name: payload.studentName || 'Student',
 //             password: defaultPassword,
 //             userId: generatedStudentId,
 //             needPasswordChange: true,
@@ -608,17 +731,58 @@ const getSingleEnrollment = async (id: string) => {
 //           };
 //           const [newUser] = await User.create([userData], { session });
 //           userDoc = newUser;
-//           studentDoc.user = [userDoc._id];
-//           await studentDoc.save({ session });
 //         } else {
 //           userDoc = existingUser;
-//           studentDoc.user = [userDoc._id];
-//           await studentDoc.save({ session });
 //         }
-//       } else {
-//         userDoc = await User.findById(studentDoc.user[0]).session(session);
+
+//         const studentMobile =
+//           payload.studentOwnMobile ||
+//           payload.mobileNo ||
+//           payload.fatherMobile ||
+//           '';
+
+//         const studentData: any = {
+//           studentId: generatedStudentId,
+//           name: payload.studentName,
+//           nameBangla: payload.nameBangla,
+//           email,
+//           mobile: studentMobile,
+//           className: validClassIds.map((id) => new mongoose.Types.ObjectId(id)),
+//           studentDepartment: payload.studentDepartment,
+//           advanceBalance: payload.advanceBalance || 0,
+//           payments: [],
+//           receipts: [],
+//           fees: [],
+//           presentAddress: payload.presentAddress,
+//           permanentAddress: payload.permanentAddress,
+//           user: userDoc ? [userDoc._id] : [],
+//           birthDate: payload.birthDate,
+//           birthRegistrationNo: payload.birthRegistrationNo,
+//           bloodGroup: payload.bloodGroup,
+//           gender: payload.gender,
+//           previousSchool: payload.previousSchool,
+//           documents: payload.documents,
+//           parentInfo,
+//           applicationId,
+//           academicYear: payload.session,
+//           age: payload.age,
+//           department: payload.department,
+//           class: payload.class,
+//           session: payload.session,
+//           nidBirth: payload.nidBirth,
+//           nationality: payload.nationality,
+//           academicInfo: payload.academicInfo,
+//           familyEnvironment: payload.familyEnvironment,
+//           behaviorSkills: payload.behaviorSkills,
+//           termsAccepted: payload.termsAccepted,
+//           admissionStatus: 'enrolled',
+//         };
+
+//         const [newStudent] = await Student.create([studentData], { session });
+//         studentDoc = newStudent;
+//         enrollmentData.studentId = generatedStudentId;
+//         enrollmentData.student = studentDoc._id;
 //       }
-//       enrollmentData.student = studentDoc._id;
 //     }
 
 //     if (!userDoc) throw new Error('Failed to create or find user for student');
@@ -1196,17 +1360,12 @@ export const createEnrollment = async (
       behaviorSkills: payload.behaviorSkills,
     };
 
-    // ==================== 🚀 IMPORTANT: IMPROVED STUDENT LOOKUP LOGIC ====================
+    // ==================== IMPROVED STUDENT LOOKUP LOGIC ====================
     let studentDoc: any = null;
     let userDoc: any = null;
     let generatedStudentId = '';
 
-    /**
-     * Function to find existing student with multiple unique criteria
-     * This prevents duplicate student creation for same family members
-     */
     const findExistingStudent = async (): Promise<any> => {
-      // STRATEGY 1: Check by explicit studentId (most reliable)
       if (payload.studentId && payload.studentId.trim() !== '') {
         const student = await Student.findOne({
           studentId: payload.studentId,
@@ -1214,7 +1373,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      // STRATEGY 2: Check by student's own mobile number (if provided separately)
       if (payload.studentOwnMobile && payload.studentOwnMobile.trim() !== '') {
         const student = await Student.findOne({
           mobile: payload.studentOwnMobile,
@@ -1222,8 +1380,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      // STRATEGY 3: Check by combination of Name + BirthDate + Father's Mobile
-      // This is the key for same family members - each student has unique name & birthdate
       if (payload.studentName && payload.birthDate && payload.fatherMobile) {
         const student = await Student.findOne({
           name: payload.studentName,
@@ -1233,7 +1389,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      // STRATEGY 4: Check by Name + BirthRegistrationNo (if available)
       if (payload.studentName && payload.birthRegistrationNo) {
         const student = await Student.findOne({
           name: payload.studentName,
@@ -1242,7 +1397,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      // STRATEGY 5: Check by Email (if provided)
       if (payload.email && payload.email.trim() !== '') {
         const student = await Student.findOne({
           email: payload.email,
@@ -1250,8 +1404,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      // STRATEGY 6: Check by mobileNo (legacy - but keep as fallback)
-      // Note: This is the reason for the bug, but keeping as last resort
       if (payload.mobileNo && payload.mobileNo.trim() !== '') {
         const student = await Student.findOne({
           mobile: payload.mobileNo,
@@ -1262,17 +1414,14 @@ export const createEnrollment = async (
       return null;
     };
 
-    // Use the improved lookup function
     studentDoc = await findExistingStudent();
 
     // ==================== STUDENT CREATION OR UPDATE ====================
     if (!studentDoc) {
-      // ----- CREATE NEW STUDENT -----
       generatedStudentId = await generateStudentId(
         classNameForId || primaryClassName,
       );
 
-      // Generate email for new student
       const email =
         payload.email ||
         `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}${Date.now().toString().slice(-4)}@student.craft.edu` ||
@@ -1298,7 +1447,6 @@ export const createEnrollment = async (
         userDoc = existingUser;
       }
 
-      // Use student's own mobile if provided, otherwise use father's mobile as fallback
       const studentMobile =
         payload.studentOwnMobile ||
         payload.mobileNo ||
@@ -1347,13 +1495,6 @@ export const createEnrollment = async (
       enrollmentData.studentId = generatedStudentId;
       enrollmentData.student = studentDoc._id;
     } else {
-      // ----- EXISTING STUDENT - Create new enrollment for same student? -----
-      // Wait! If student already exists, we need to decide:
-      // For same family members, each student should have their OWN student document
-      // So if we found a student by father's mobile + name + birthdate, that's a DIFFERENT student
-      // But if we found by studentId or email, that's the SAME student
-
-      // Check if we found by studentId or email (same student)
       const foundByStudentId =
         payload.studentId &&
         payload.studentId.trim() !== '' &&
@@ -1364,7 +1505,6 @@ export const createEnrollment = async (
         studentDoc.email === payload.email;
 
       if (foundByStudentId || foundByEmail) {
-        // Same student - just add enrollment
         generatedStudentId = studentDoc.studentId;
         enrollmentData.studentId = studentDoc.studentId;
 
@@ -1400,8 +1540,6 @@ export const createEnrollment = async (
         }
         enrollmentData.student = studentDoc._id;
       } else {
-        // This is a DIFFERENT student from the same family
-        // Create a NEW student document for this family member
         generatedStudentId = await generateStudentId(
           classNameForId || primaryClassName,
         );
@@ -1488,7 +1626,7 @@ export const createEnrollment = async (
       session,
     });
 
-    // ----- FEE PROCESSING - OPTIONAL -----
+    // ==================== FEE PROCESSING WITH FIX ====================
     const feeDocs: mongoose.Types.ObjectId[] = [];
     const paidFeeIds: mongoose.Types.ObjectId[] = [];
     let totalTransactionAmount = 0;
@@ -1513,7 +1651,22 @@ export const createEnrollment = async (
     const totalPaidAmount = Number(payload.paidAmount) || 0;
     let remainingPayment = totalPaidAmount;
 
-    // Check if fees are provided - if not, skip fee creation
+    // Get the class name for fees (required field)
+    let feeClassName = primaryClassName;
+
+    // If primaryClassName is an ObjectId, get the actual class name
+    if (feeClassName && mongoose.Types.ObjectId.isValid(feeClassName)) {
+      const classDoc = await Class.findById(feeClassName).session(session);
+      feeClassName = classDoc?.className || feeClassName;
+    }
+
+    // Final fallback
+    if (!feeClassName || feeClassName === '') {
+      feeClassName =
+        payload.studentDepartment === 'hifz' ? 'Hifz' : 'Class One';
+    }
+
+    // Check if fees are provided
     if (
       payload.fees &&
       Array.isArray(payload.fees) &&
@@ -1536,7 +1689,7 @@ export const createEnrollment = async (
               : feeItem.feeType?.value || feeItem.feeType?.label || '';
           if (!feeTypeStr || feeTypeStr.trim() === '') continue;
 
-          const className =
+          const classNameForRef =
             feeCategory.className && feeCategory.className.length > 0
               ? feeCategory.className[0]?.label ||
                 feeCategory.className[0] ||
@@ -1576,7 +1729,7 @@ export const createEnrollment = async (
                 discount: itemDiscount,
                 month,
                 isMonthly: true,
-                className,
+                className: classNameForRef,
                 discountRangeStart: hasValidRange ? discountRangeStart : '',
                 discountRangeEnd: hasValidRange ? discountRangeEnd : '',
                 discountRangeAmount: hasValidRange ? discountRangeAmount : 0,
@@ -1589,7 +1742,7 @@ export const createEnrollment = async (
               discount: Number(feeItem.discount) || 0,
               month: 'Admission',
               isMonthly: false,
-              className,
+              className: classNameForRef,
               discountRangeStart: '',
               discountRangeEnd: '',
               discountRangeAmount: 0,
@@ -1619,26 +1772,29 @@ export const createEnrollment = async (
 
           const dueAmount = Math.max(0, netAmount - paidForThisItem);
 
+          // FIX: Added the required 'class' field
           const feeData: any = {
             enrollment: newEnrollment._id,
             student: studentDoc._id,
-            studentId: generatedStudentId,
-            feeType: item.feeType,
-            amount: item.amount,
-            discount: item.discount,
-            paidAmount: paidForThisItem,
-            dueAmount,
-            className: item.className,
+            class: feeClassName, // REQUIRED FIELD - FIXED
             month: item.month,
-            academicYear:
-              payload.session || new Date().getFullYear().toString(),
-            paymentMethod: payload.paymentMethod || 'cash',
+            amount: item.amount,
+            paidAmount: paidForThisItem,
+            dueAmount: dueAmount,
+            discount: item.discount,
+            waiver: 0,
+            advanceUsed: 0,
+            feeType: item.feeType,
             status:
               paidForThisItem >= netAmount && netAmount > 0
                 ? 'paid'
                 : paidForThisItem > 0
                   ? 'partial'
                   : 'unpaid',
+            paymentMethod: payload.paymentMethod || 'cash',
+            academicYear:
+              payload.session || new Date().getFullYear().toString(),
+            isCurrentMonth: item.month === currentMonthName,
           };
 
           if (item.isMonthly) {
@@ -1837,6 +1993,7 @@ export const createEnrollment = async (
     };
   }
 };
+
 export const updateEnrollment = async (id: string, payload: any) => {
   const session = await mongoose.startSession();
   session.startTransaction();
