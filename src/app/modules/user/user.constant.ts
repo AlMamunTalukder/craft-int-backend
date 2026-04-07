@@ -1,14 +1,11 @@
-
-
 export const USER_ROLE = {
-    super_admin:'super_admin',
-    admin:'admin',
-    user:'user',
-    teacher:'teacher',
-    student:'student',
-    class_teacher:'class_teacher'
-} as const
-
+  super_admin: 'super_admin',
+  admin: 'admin',
+  user: 'user',
+  teacher: 'teacher',
+  student: 'student',
+  class_teacher: 'class_teacher',
+  accountant: 'accountant',
+} as const;
 
 export const UserStatus = ['active', 'inactive'];
-  

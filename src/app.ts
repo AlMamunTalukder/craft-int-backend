@@ -178,6 +178,7 @@ app.get('/api/v1/backup-logs', (req: Request, res: Response) => {
 
 // Application Routes
 app.use('/api/v1', router);
+// createAccountant();
 
 // Error Handlers
 app.use(globalErrorHandler);

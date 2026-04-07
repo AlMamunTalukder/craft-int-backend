@@ -20,6 +20,7 @@ const getAllMetaFromDB = async () => {
     totalNonResidentialStudents,
     totalResidentialStudents,
     totalDayCareStudents,
+    classWiseStudentCount,
   ] = await Promise.all([
     Teacher.countDocuments(),
     Student.countDocuments(),
@@ -30,11 +31,12 @@ const getAllMetaFromDB = async () => {
     Student.countDocuments({ studentType: 'Non-residential' }),
     Student.countDocuments({ studentType: 'Day-care' }),
     Student.countDocuments({ studentType: 'Residential' }),
+    getClassWiseStudentCount(),
   ]);
 
   const income = await Income.find();
   const totalIncomeAmount = income.reduce(
-    (sum, item) => sum + item.totalAmount,
+    (sum, item) => sum + (item.totalAmount || 0),
     0,
   );
   const totalIncomeAmountBD = totalIncomeAmount.toLocaleString('bn-BD');
@@ -50,72 +52,71 @@ const getAllMetaFromDB = async () => {
     totalResidentialStudents,
     totalDayCareStudents,
     totalIncomeAmount: totalIncomeAmountBD,
+    classWiseStudentCount,
   };
 };
 
-// const getAccountingReport = async () => {
-//   const [investments, expenses, incomes, salaries, loans, admissions] = await Promise.all([
-//     Investment.find(),
-//     Expense.find(),
-//     Income.find(),
-//     Salary.find(),
-//     Loan.find(),
-//     Admission.find(),
-//   ]);
+// Get class-wise student count
+const getClassWiseStudentCount = async () => {
+  try {
+    // First, get all students with populated class names
+    const students = await Student.find({
+      className: { $exists: true, $ne: [] },
+    }).populate('className', 'name className');
 
-//   // Income & Expense
-//   const totalIncome = incomes.reduce((sum, inc) => sum + (inc.totalAmount || 0), 0);
-//   const totalExpense = expenses.reduce((sum, exp) => sum + (exp.totalAmount || 0), 0);
-//   const totalSalary = salaries.reduce((sum, sal) => sum + (sal.netSalary || 0), 0);
-//   const totalAdmissionFee = admissions.reduce((sum, adm) => sum + (adm.admissionFee || 0), 0);
+    // Create a map to count students per class
+    const classCountMap = new Map();
 
-//   // Loans
-//   const totalTakenLoan = loans
-//     .filter(l => l.loan_type === "taken")
-//     .reduce((sum, l) => sum + (l.loan_amount || 0), 0);
+    students.forEach((student) => {
+      if (student.className && student.className.length > 0) {
+        // Get the first class (since className is an array)
+        const classItem = student.className[0];
 
-//   const totalGivenLoan = loans
-//     .filter(l => l.loan_type === "given")
-//     .reduce((sum, l) => sum + (l.loan_amount || 0), 0);
+        // Handle both populated and unpopulated data
+        let className = '';
+        if (classItem && typeof classItem === 'object') {
+          className = classItem.name || classItem.className || 'Unknown Class';
+        } else if (typeof classItem === 'string') {
+          className = classItem;
+        }
 
-//   // Investment
-//   const totalInvestment = investments.reduce((sum, inv) => sum + (inv.investmentAmount || 0), 0);
+        if (className) {
+          classCountMap.set(className, (classCountMap.get(className) || 0) + 1);
+        }
+      }
+    });
 
-//   // Net Profit (আয় - ব্যয় - বেতন + ভর্তি ফি)
-//   const netProfit = totalIncome + totalAdmissionFee - totalExpense - totalSalary;
+    // Convert map to array of objects
+    const result = Array.from(classCountMap.entries()).map(
+      ([className, studentCount]) => ({
+        className,
+        studentCount,
+      }),
+    );
 
-//   // Accounting Equation
-//   const assets = totalInvestment + totalGivenLoan + (netProfit > 0 ? netProfit : 0);
-//   const liabilities = totalTakenLoan;
-//   const equity = totalInvestment + netProfit;
+    // Sort by class name
+    result.sort((a, b) => a.className.localeCompare(b.className));
 
-//   return {
-//     summary: {
-//       assets,        // সম্পদ
-//       liabilities,   // দেনা
-//       equity,        // মূলধন
-//       income: totalIncome + totalAdmissionFee,
-//       expense: totalExpense + totalSalary,
-//     },
-//     breakdown: {
-//       totalIncome,
-//       totalAdmissionFee,
-//       totalExpense,
-//       totalSalary,
-//       totalInvestment,
-//       totalTakenLoan,
-//       totalGivenLoan,
-//       netProfit,
-//     },
-//     formulaCheck: {
-//       "Assets (সম্পদ)": assets,
-//       "Liabilities (দেনা)": liabilities,
-//       "Equity (মূলধন)": equity,
-//       "Equation": `${assets} = ${liabilities} + ${equity}`,
-//       "Valid?": assets === liabilities + equity,
-//     },
-//   };
-// };
+    return result;
+  } catch (error) {
+    console.error('Error in getClassWiseStudentCount:', error);
+    return [];
+  }
+};
+
+// Get class-wise student count in object format: { "Class One": 40, "Class Two": 50 }
+const getClassWiseStudentCountOnly = async () => {
+  const classWiseCount = await getClassWiseStudentCount();
+
+  const formattedResult: Record<string, number> = {};
+  classWiseCount.forEach((item) => {
+    if (item.className) {
+      formattedResult[item.className] = item.studentCount;
+    }
+  });
+
+  return formattedResult;
+};
 
 const getAccountingReport = async () => {
   const [investments, expenses, incomes, salaries, loans, admissions] =
@@ -128,7 +129,7 @@ const getAccountingReport = async () => {
       Admission.find(),
     ]);
 
-  // ✅ Income & Expense
+  // Income & Expense
   const totalIncome = incomes.reduce(
     (sum, inc) => sum + (inc.totalAmount || 0),
     0,
@@ -146,9 +147,9 @@ const getAccountingReport = async () => {
     0,
   );
 
-  // ✅ Loans
-  const takenLoans = loans.filter((l) => l.loan_type === "taken");
-  const givenLoans = loans.filter((l) => l.loan_type === "given");
+  // Loans
+  const takenLoans = loans.filter((l) => l.loan_type === 'taken');
+  const givenLoans = loans.filter((l) => l.loan_type === 'given');
 
   const totalTakenLoan = takenLoans.reduce(
     (sum, l) => sum + (l.loan_amount || 0),
@@ -159,7 +160,7 @@ const getAccountingReport = async () => {
     0,
   );
 
-  // ✅ Outstanding loans calculation
+  // Outstanding loans calculation
   const outstandingTakenLoans = takenLoans.reduce(
     (sum, l) => sum + (l.remainingBalance ?? l.loan_amount),
     0,
@@ -169,12 +170,12 @@ const getAccountingReport = async () => {
     0,
   );
 
-  // ✅ Investments
+  // Investments
   const outgoingInvestments = investments.filter(
-    (inv) => inv.investmentCategory === "outgoing",
+    (inv) => inv.investmentCategory === 'outgoing',
   );
   const incomingInvestments = investments.filter(
-    (inv) => inv.investmentCategory === "incoming",
+    (inv) => inv.investmentCategory === 'incoming',
   );
 
   const totalOutgoingInvestment = outgoingInvestments.reduce(
@@ -186,11 +187,11 @@ const getAccountingReport = async () => {
     0,
   );
 
-  // ✅ Net Profit
+  // Net Profit
   const netProfit =
     totalIncome + totalAdmissionFee - (totalExpense + totalSalary);
 
-  // ✅ Cash Balance
+  // Cash Balance
   const cashBalance =
     totalIncome +
     totalAdmissionFee +
@@ -198,15 +199,15 @@ const getAccountingReport = async () => {
     totalIncomingInvestment -
     (totalExpense + totalSalary + totalOutgoingInvestment + totalGivenLoan);
 
-  // ✅ Assets
+  // Assets
   const assets = {
     cash: Math.max(0, cashBalance),
-    accountsReceivable: outstandingGivenLoans, // given loan (asset)
+    accountsReceivable: outstandingGivenLoans,
     investments: outgoingInvestments.reduce(
       (sum, inv) => sum + (inv.currentValue || inv.investmentAmount),
       0,
     ),
-    fixedAssets: 0, // future: building, furniture etc
+    fixedAssets: 0,
     total: function () {
       return (
         this.cash +
@@ -217,31 +218,31 @@ const getAccountingReport = async () => {
     },
   };
 
-  // ✅ Liabilities (⚠️ fixed: no double counting)
+  // Liabilities
   const liabilities = {
-    loans: outstandingTakenLoans, // শুধু নেওয়া loan রাখলাম
-    accountsPayable: 0, // vendor payable থাকলে এখানে যোগ করবেন
+    loans: outstandingTakenLoans,
+    accountsPayable: 0,
     otherLiabilities: 0,
     total: function () {
       return this.loans + this.accountsPayable + this.otherLiabilities;
     },
   };
 
-  // ✅ Equity
+  // Equity
   const equity = {
-    capital: totalIncomingInvestment, // যদি মালিক/শেয়ারহোল্ডারের টাকা হয়
+    capital: totalIncomingInvestment,
     retainedEarnings: netProfit,
     total: function () {
       return this.capital + this.retainedEarnings;
     },
   };
 
-  // ✅ Equation Check
+  // Equation Check
   const isBalanced = assets.total() === liabilities.total() + equity.total();
 
   return {
     success: true,
-    message: "Accounting report fetched successfully.",
+    message: 'Accounting report fetched successfully.',
     data: {
       summary: {
         assets: assets.total(),
@@ -269,13 +270,12 @@ const getAccountingReport = async () => {
         equity,
       },
       formulaCheck: {
-        "Assets (সম্পদ)": assets.total(),
-        "Liabilities (দেনা)": liabilities.total(),
-        "Equity (মূলধন)": equity.total(),
+        'Assets (সম্পদ)': assets.total(),
+        'Liabilities (দেনা)': liabilities.total(),
+        'Equity (মূলধন)': equity.total(),
         Equation: `Assets (${assets.total()}) = Liabilities (${liabilities.total()}) + Equity (${equity.total()})`,
-        "Valid?": isBalanced,
-        Difference:
-          assets.total() - (liabilities.total() + equity.total()),
+        'Valid?': isBalanced,
+        Difference: assets.total() - (liabilities.total() + equity.total()),
       },
     },
   };
@@ -284,4 +284,5 @@ const getAccountingReport = async () => {
 export const metaServices = {
   getAllMetaFromDB,
   getAccountingReport,
+  getClassWiseStudentCountOnly,
 };

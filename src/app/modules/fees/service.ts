@@ -234,10 +234,7 @@ const payFeeWithAdvance = async (
     session.endSession();
   }
 };
-
 const getStudentDueFees = async (studentId?: string, year?: number) => {
-  const currentYear = year || new Date().getFullYear();
-
   const query: any = {
     status: { $in: ['unpaid', 'partial'] },
     isLateFeeRecord: false,
@@ -282,7 +279,6 @@ const getStudentDueFees = async (studentId?: string, year?: number) => {
     totalFees,
   };
 };
-
 const getMonthlyFeeStatus = async (
   studentId: string,
   month: string,
@@ -533,13 +529,11 @@ const createSingleFee = async (
   session.startTransaction();
 
   try {
-    // ✅ Check student
     const student = await Student.findById(studentId).session(session);
     if (!student) {
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
 
-    // ✅ Calculate discount
     let actualDiscount = payload.discount || 0;
     let actualWaiver = payload.waiver || 0;
 
@@ -557,7 +551,6 @@ const createSingleFee = async (
 
     const netAmount = payload.amount - actualDiscount - actualWaiver;
 
-    // ✅ Prevent duplicate fee (same month + class + year)
     const existingFee = await Fees.findOne({
       student: studentId,
       class: payload.class,
@@ -573,7 +566,6 @@ const createSingleFee = async (
       );
     }
 
-    // ✅ Create fee
     const feeData = {
       student: new Types.ObjectId(studentId),
       class: payload.class,

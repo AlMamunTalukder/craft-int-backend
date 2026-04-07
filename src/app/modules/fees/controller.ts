@@ -199,10 +199,7 @@ const getAllDueFees = catchAsync(async (req, res) => {
 
 const createSingleFee = catchAsync(async (req, res) => {
   const studentId = req.params.studentId || req.body.student;
-
   const payload = req.body;
-  console.log('payload check this ', payload);
-
   const result = await feesServices.createSingleFee(studentId, payload);
 
   sendResponse(res, {
