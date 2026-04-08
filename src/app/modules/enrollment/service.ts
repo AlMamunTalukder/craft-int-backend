@@ -4,7 +4,6 @@
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { Enrollment } from './model';
-import QueryBuilder from '../../builder/QueryBuilder';
 import mongoose, { Types } from 'mongoose';
 import { Student } from '../student/student.model';
 import { Fees } from '../fees/model';
@@ -14,6 +13,7 @@ import { Payment } from '../payment/model';
 import { Class } from '../class/class.model';
 import { Receipt } from '../receipt/model';
 import { AdmissionApplication } from '../onlineAdmission/model';
+import { getCurrentAcademicYear } from '../../../utils/getCurrentAcademicYear';
 
 const getAllEnrollments = async (query: Record<string, any>) => {
   const page = Number(query?.page) || 1;
@@ -1476,7 +1476,7 @@ export const createEnrollment = async (
         documents: payload.documents,
         parentInfo,
         applicationId,
-        academicYear: payload.session,
+        academicYear: getCurrentAcademicYear(),
         age: payload.age,
         department: payload.department,
         class: payload.class,
@@ -1598,7 +1598,7 @@ export const createEnrollment = async (
           documents: payload.documents,
           parentInfo,
           applicationId,
-          academicYear: payload.session,
+          academicYear: getCurrentAcademicYear(),
           age: payload.age,
           department: payload.department,
           class: payload.class,
@@ -1692,8 +1692,8 @@ export const createEnrollment = async (
           const classNameForRef =
             feeCategory.className && feeCategory.className.length > 0
               ? feeCategory.className[0]?.label ||
-                feeCategory.className[0] ||
-                primaryClassName
+              feeCategory.className[0] ||
+              primaryClassName
               : primaryClassName;
 
           const isMonthly = feeItem.isMonthly === true;
@@ -1792,8 +1792,7 @@ export const createEnrollment = async (
                   ? 'partial'
                   : 'unpaid',
             paymentMethod: payload.paymentMethod || 'cash',
-            academicYear:
-              payload.session || new Date().getFullYear().toString(),
+            academicYear: new Date().getFullYear().toString(),
             isCurrentMonth: item.month === currentMonthName,
           };
 
@@ -1972,11 +1971,11 @@ export const createEnrollment = async (
         receipt: populatedReceipt,
         userCredentials: userDoc
           ? {
-              email: userDoc.email,
-              userId: userDoc.userId || generatedStudentId,
-              password: `Craft@${Date.now().toString().slice(-6)}`,
-              role: userDoc.role,
-            }
+            email: userDoc.email,
+            userId: userDoc.userId || generatedStudentId,
+            password: `Craft@${Date.now().toString().slice(-6)}`,
+            role: userDoc.role,
+          }
           : null,
         applicationUpdated: !!applicationId,
       },
@@ -2425,10 +2424,10 @@ export const updateEnrollment = async (id: string, payload: any) => {
       let remainingNewPayment =
         payload.paidAmount !== undefined
           ? Math.max(
-              0,
-              Number(payload.paidAmount) -
-                paidFees.reduce((s, f) => s + (f.paidAmount || 0), 0),
-            )
+            0,
+            Number(payload.paidAmount) -
+            paidFees.reduce((s, f) => s + (f.paidAmount || 0), 0),
+          )
           : 0;
 
       for (const item of allNewFeeItems) {
@@ -2466,8 +2465,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
           dueAmount,
           className: item.className,
           month: item.month,
-          academicYear:
-            payload.session || existingEnrollment.session || currentYear,
+          academicYear: currentYear,
           paymentMethod: payload.paymentMethod || 'cash',
           status,
           isCurrentMonth: item.month === currentMonthName,

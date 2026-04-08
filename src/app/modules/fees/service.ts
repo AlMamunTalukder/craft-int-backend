@@ -343,7 +343,16 @@ const generateBulkMonthlyFees = async (
 
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
-    Fees.find().populate('enrollment student'),
+    Fees.find()
+      .populate({
+        path: 'enrollment',
+        populate: {
+          path: 'className',
+          model: 'Class', // Make sure this matches your Class model name
+          select: 'name className', // Select the fields you need from the Class model
+        },
+      })
+      .populate('student'),
     query,
   )
     .search(['class', 'month', 'status'])
@@ -665,6 +674,8 @@ export const getClassWiseFeeSummary = async (query: {
     query.academicYear || new Date().getFullYear().toString();
 
   const matchStage: Record<string, any> = { academicYear };
+
+  // Only add month filter if month is provided
   if (query.month) {
     matchStage.month = { $regex: `^${query.month}-`, $options: 'i' };
   }
@@ -672,76 +683,22 @@ export const getClassWiseFeeSummary = async (query: {
   const pipeline: any[] = [
     { $match: matchStage },
 
-    // Lookup enrollment to get className
-    {
-      $lookup: {
-        from: 'enrollments',
-        localField: 'enrollment',
-        foreignField: '_id',
-        as: 'enrollDoc',
-      },
-    },
-    {
-      $unwind: {
-        path: '$enrollDoc',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    // Lookup class name from className ObjectId
-    {
-      $lookup: {
-        from: 'classes',
-        localField: 'enrollDoc.className',
-        foreignField: '_id',
-        as: 'classDoc',
-      },
-    },
-    {
-      $unwind: {
-        path: '$classDoc',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    // Resolve class name with proper fallback logic
+    // Add computed fields
     {
       $addFields: {
+        // Use the direct class field from fees document
         resolvedClass: {
           $cond: {
-            // First priority: direct class field on fees document
             if: {
               $and: [
                 { $ifNull: ['$class', false] },
                 { $ne: ['$class', ''] },
-                { $ne: ['$class', null] },
-              ],
+                { $ne: ['$class', null] }
+              ]
             },
             then: '$class',
-            // Second priority: class name from enrollment's class lookup
-            else: {
-              $cond: {
-                if: { $ifNull: ['$classDoc.name', false] },
-                then: '$classDoc.name',
-                // Third priority: try to get from enrollment's direct className field
-                else: {
-                  $cond: {
-                    if: { $ifNull: ['$enrollDoc.className', false] },
-                    then: {
-                      $cond: {
-                        if: {
-                          $eq: [{ $type: '$enrollDoc.className' }, 'objectId'],
-                        },
-                        then: 'Unknown Class',
-                        else: '$enrollDoc.className',
-                      },
-                    },
-                    else: 'Unassigned',
-                  },
-                },
-              },
-            },
-          },
+            else: 'Unassigned'
+          }
         },
         computedDue: {
           $max: [
@@ -754,26 +711,46 @@ export const getClassWiseFeeSummary = async (query: {
                     { $ifNull: ['$paidAmount', 0] },
                     { $ifNull: ['$discount', 0] },
                     { $ifNull: ['$waiver', 0] },
-                    { $ifNull: ['$advanceUsed', 0] },
-                  ],
-                },
-              ],
-            },
-          ],
+                    { $ifNull: ['$advanceUsed', 0] }
+                  ]
+                }
+              ]
+            }
+          ]
         },
         monthName: {
-          $arrayElemAt: [{ $split: ['$month', '-'] }, 0],
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 0]
+            }
+          }
         },
-      },
+        // Extract year from month if exists
+        monthYear: {
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 1]
+            }
+          }
+        }
+      }
     },
 
     // Optional class filter (after resolution)
     ...(query.class ? [{ $match: { resolvedClass: query.class } }] : []),
 
-    // Group by resolvedClass + month
+    // Group by resolvedClass + monthName
     {
       $group: {
-        _id: { class: '$resolvedClass', month: '$monthName' },
+        _id: {
+          class: '$resolvedClass',
+          month: '$monthName',
+          monthYear: '$monthYear'
+        },
         totalAmount: { $sum: '$amount' },
         totalPaid: { $sum: { $ifNull: ['$paidAmount', 0] } },
         totalDue: { $sum: '$computedDue' },
@@ -781,8 +758,8 @@ export const getClassWiseFeeSummary = async (query: {
         totalWaiver: { $sum: { $ifNull: ['$waiver', 0] } },
         totalAdvance: { $sum: { $ifNull: ['$advanceUsed', 0] } },
         studentCount: { $addToSet: '$student' },
-        feeCount: { $sum: 1 },
-      },
+        feeCount: { $sum: 1 }
+      }
     },
 
     {
@@ -802,13 +779,14 @@ export const getClassWiseFeeSummary = async (query: {
               'September',
               'October',
               'November',
-              'December',
+              'December'
             ],
-            '$_id.month',
-          ],
-        },
-      },
+            '$_id.month'
+          ]
+        }
+      }
     },
+
     { $sort: { '_id.class': 1, monthOrder: 1 } },
 
     // Group by class → yearly rollup
@@ -825,16 +803,16 @@ export const getClassWiseFeeSummary = async (query: {
             totalWaiver: '$totalWaiver',
             totalAdvance: '$totalAdvance',
             feeCount: '$feeCount',
-            studentCount: { $size: '$studentCount' },
-          },
+            studentCount: { $size: '$studentCount' }
+          }
         },
         yearlyAmount: { $sum: '$totalAmount' },
         yearlyPaid: { $sum: '$totalPaid' },
         yearlyDue: { $sum: '$totalDue' },
         yearlyDiscount: { $sum: '$totalDiscount' },
         yearlyWaiver: { $sum: '$totalWaiver' },
-        yearlyAdvance: { $sum: '$totalAdvance' },
-      },
+        yearlyAdvance: { $sum: '$totalAdvance' }
+      }
     },
 
     {
@@ -848,15 +826,17 @@ export const getClassWiseFeeSummary = async (query: {
           totalDue: '$yearlyDue',
           totalDiscount: '$yearlyDiscount',
           totalWaiver: '$yearlyWaiver',
-          totalAdvance: '$yearlyAdvance',
-        },
-      },
+          totalAdvance: '$yearlyAdvance'
+        }
+      }
     },
-    { $sort: { class: 1 } },
+
+    { $sort: { class: 1 } }
   ];
 
   const classes = await Fees.aggregate(pipeline).allowDiskUse(true);
 
+  // Calculate grand total
   const grandTotal = classes.reduce(
     (acc, c) => {
       acc.totalAmount += c.yearly.totalAmount;
@@ -873,12 +853,14 @@ export const getClassWiseFeeSummary = async (query: {
       totalDue: 0,
       totalDiscount: 0,
       totalWaiver: 0,
-      totalAdvance: 0,
-    },
+      totalAdvance: 0
+    }
   );
 
   return { academicYear, classes, grandTotal };
 };
+
+
 export const feesServices = {
   generateMonthlyFees,
   generateBulkMonthlyFees,
