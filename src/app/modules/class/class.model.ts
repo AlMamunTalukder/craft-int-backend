@@ -22,6 +22,9 @@ const classSchema = new Schema<TClass>(
       },
     ],
 
+    department: {
+      type: String
+    },
     feeStructure: {
       type: [feeStructureSchema],
       default: [],
