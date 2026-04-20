@@ -7,9 +7,53 @@ import { IFeeCategory } from './interface';
 
 const createFeeCategory = async (payload: IFeeCategory | IFeeCategory[]) => {
   if (Array.isArray(payload)) {
+    // ✅ Check for duplicates within the incoming array itself
+    const seen = new Set<string>();
+    for (const item of payload) {
+      const key = `${item.className}-${item.categoryName || ''}`;
+      if (seen.has(key)) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          `Duplicate entry in request: className "${item.className}" with category "${item.categoryName}" appears more than once`,
+        );
+      }
+      seen.add(key);
+    }
+
+    // ✅ Check against existing DB records
+    const existingDocs = await FeeCategory.find({
+      $or: payload.map((item) => ({
+        className: item.className,
+        categoryName: item.categoryName || '',
+      })),
+    });
+
+    if (existingDocs.length > 0) {
+      const conflictList = existingDocs
+        .map((doc) => `"${doc.className} - ${doc.categoryName}"`)
+        .join(', ');
+      throw new AppError(
+        httpStatus.CONFLICT,
+        `Fee category already exists for: ${conflictList}`,
+      );
+    }
+
     const result = await FeeCategory.insertMany(payload);
     return result;
   } else {
+    // ✅ Check single entry against DB
+    const existing = await FeeCategory.findOne({
+      className: payload.className,
+      categoryName: payload.categoryName || '',
+    });
+
+    if (existing) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        `Fee category already exists for class "${payload.className}" with category "${payload.categoryName}"`,
+      );
+    }
+
     const result = await FeeCategory.create(payload);
     return result;
   }

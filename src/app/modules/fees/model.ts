@@ -8,10 +8,9 @@ const FeesSchema = new Schema<IFees>(
       type: Schema.Types.ObjectId,
       ref: 'Enrollment',
     },
-
-    class: { type: String },
+    class: { type: String, required: true },
     month: { type: String },
-    amount: { type: Number },
+    amount: { type: Number, required: true },
     paidAmount: { type: Number, default: 0 },
     advanceUsed: { type: Number, default: 0 },
     dueAmount: { type: Number },
@@ -23,16 +22,53 @@ const FeesSchema = new Schema<IFees>(
       enum: ['paid', 'partial', 'unpaid'],
       default: 'unpaid',
     },
+
     paymentMethod: { type: String, enum: ['cash', 'bkash', 'bank', 'online'] },
     transactionId: { type: String },
     receiptNo: { type: String },
     paymentDate: { type: Date },
-    academicYear: { type: String },
+    academicYear: { type: String, required: true },
     isCurrentMonth: { type: Boolean, default: false },
+
+    dueDate: { type: Date },
+
+    lateFeePerDay: { type: Number, default: 100 },
+    lateFeeCalculated: { type: Number, default: 0 },
+    lateFeeDays: { type: Number, default: 0 },
+
+    lateFeeAmount: { type: Number, default: 0 },
+    lateFeeApplied: { type: Boolean, default: false },
+    lateFeeAppliedDate: { type: Date },
+    lastLateFeeCalculation: { type: Date },
+    totalLateFeePaid: { type: Number, default: 0 },
+
+    lateFeeCustomized: { type: Boolean, default: false },
+    lateFeeCustomizations: [
+      {
+        previousAmount: { type: Number, required: true },
+        newAmount: { type: Number, required: true },
+        reason: { type: String, required: true },
+        customizedBy: { type: String, required: true },
+        customizedAt: { type: Date, default: Date.now },
+        notes: { type: String },
+      },
+    ],
+
+    isLateFeeRecord: { type: Boolean, default: false },
+    originalFeeId: { type: Schema.Types.ObjectId, ref: 'Fees' },
+    monthsOverdue: { type: Number, default: 0 },
+    daysOverdue: { type: Number, default: 0 },
+    lastPaymentDate: { type: Date },
+    lastPaymentAmount: { type: Number },
   },
   { timestamps: true },
 );
 
+// Indexes
 FeesSchema.index({ student: 1, month: 1, academicYear: 1 });
+FeesSchema.index({ dueDate: 1 });
+FeesSchema.index({ status: 1 });
+FeesSchema.index({ isLateFeeRecord: 1 });
+FeesSchema.index({ originalFeeId: 1 });
 
 export const Fees = model<IFees>('Fees', FeesSchema);

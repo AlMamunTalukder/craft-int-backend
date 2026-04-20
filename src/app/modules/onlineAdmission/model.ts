@@ -1,5 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { TAdmissionApplication } from './interface';
+import { getCurrentAcademicYear } from '../../../utils/getCurrentAcademicYear';
 
 const admissionSchema = new Schema<TAdmissionApplication>(
   {
@@ -12,8 +13,8 @@ const admissionSchema = new Schema<TAdmissionApplication>(
     academicYear: {
       type: String,
       required: true,
+      default: () => getCurrentAcademicYear(),
     },
-
     studentInfo: {
       nameBangla: { type: String, required: true },
       nameEnglish: { type: String, required: true },
@@ -74,7 +75,6 @@ const admissionSchema = new Schema<TAdmissionApplication>(
       quranRecitation: String,
       purdah: String,
     },
-
     behaviorSkills: {
       mobileUsage: String,
       generalBehavior: String,
@@ -119,7 +119,7 @@ const admissionSchema = new Schema<TAdmissionApplication>(
 
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['pending', 'approved', 'rejected', 'enrolled'],
       default: 'pending',
     },
   },

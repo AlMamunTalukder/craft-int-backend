@@ -8,7 +8,6 @@ const userSchema = new Schema<TUser, UserModel>(
     email: {
       type: String,
       required: [true, 'Email is required'],
-
     },
     name: {
       type: String,
@@ -16,7 +15,10 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     password: {
       type: String,
-
+    },
+    userId: {
+      type: String,
+      // required: true,
     },
     passwordChangeAt: {
       type: Date,
@@ -28,7 +30,16 @@ const userSchema = new Schema<TUser, UserModel>(
     },
     role: {
       type: String,
-      enum: ['super_admin', 'user', 'admin', 'student', 'teacher', 'super_visor', 'class_teacher', 'accountant'],
+      enum: [
+        'super_admin',
+        'user',
+        'admin',
+        'student',
+        'teacher',
+        'super_visor',
+        'class_teacher',
+        'accountant',
+      ],
       default: 'user',
     },
     status: {
@@ -41,13 +52,14 @@ const userSchema = new Schema<TUser, UserModel>(
       default: false,
     },
   },
+
   {
     timestamps: true,
   },
 );
 
 userSchema.pre('save', async function (next) {
-  const user = this; 
+  const user = this;
   user.password = await bcrypt.hash(user.password, Number(config.default_pass));
   next();
 });
@@ -79,4 +91,13 @@ userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
   return passwordChangedTime > jwtIssuedTimestamp;
 };
 
+userSchema.statics.isUserExistsByCredential = async function (
+  credential: string,
+) {
+  const isUserExists = await User.findOne({
+    $or: [{ email: credential }, { userId: credential }],
+  }).select('+password');
+
+  return isUserExists;
+};
 export const User = model<TUser, UserModel>('User', userSchema);

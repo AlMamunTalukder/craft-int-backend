@@ -3,20 +3,28 @@ import { z } from 'zod';
 const createUserValidation = z.object({
   body: z.object({
     name: z.string().optional(),
+    userId: z.string({ required_error: 'user id is required' }),
     email: z.string({ required_error: 'Email is required' }).optional(),
     password: z
       .string({
         required_error: 'Password is required',
-      }).optional(),
-    role: z.enum(['admin', 'user', 'super_visor','teacher', 'super_admin', 'accountant']).default('user'),
+      })
+      .optional(),
+    role: z
+      .enum([
+        'admin',
+        'user',
+        'super_visor',
+        'teacher',
+        'super_admin',
+        'accountant',
+      ])
+      .default('user'),
     status: z.enum(['active', 'inactive']).default('active'),
     isDeleted: z.boolean().default(false),
   }),
 });
 
-
-
 export const userValidations = {
   createUserValidation,
-  
 };

@@ -6,14 +6,17 @@ import { TAdmissionApplication } from './interface';
 import { generateApplicationId } from './utils';
 
 const createAdmissionApplication = async (payload: TAdmissionApplication) => {
-  const applicationId = await generateApplicationId();
-
-  const result = await AdmissionApplication.create({
-    ...payload,
-    applicationId,
-  });
-
-  return result;
+  try {
+    const applicationId = await generateApplicationId();
+    const result = await AdmissionApplication.create({
+      ...payload,
+      applicationId,
+    });
+    return result;
+  } catch (error) {
+    console.error(' createAdmissionApplication error:', error);
+    throw error;
+  }
 };
 
 const getAllAdmissionApplications = async (query: Record<string, unknown>) => {

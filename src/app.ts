@@ -18,6 +18,9 @@ import { backupMongoDB, restoreMongoDB } from './utils/backupService';
 const app: Application = express();
 app.use(helmet());
 import './queue/classReport.worker';
+import { lateFeeService } from './app/modules/fees/lateFeeService';
+import { startLateFeeCron } from './jobs/lateFee.job';
+import { updateFeesClassField } from './scripts/updateFeesClassField';
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
 const ARCHIVE_PATH = path.join(rootDir, 'public', 'craftmanagement.gzip');
@@ -29,39 +32,54 @@ if (config.NODE_ENV === 'development') {
 app.set('view engine', 'ejs');
 app.use(express.static(path.join('public')));
 
+app.set('trust proxy', 1);
 // Rate limiting middleware
 app.use(
   rateLimit({
     max: 2000,
-    windowMs: 60 * 60 * 1000, 
+    windowMs: 60 * 60 * 1000,
     message: 'Too many requests sent by this IP, please try again in an hour!',
   }),
 );
 // Parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-
-
 const allowedOrigins = [
-  config.CROSS_ORIGIN_CLIENT,
-  config.LOCALHOST_CLIENT, 
+  'https://craftinternationalinstitute.com',
+  'https://www.craftinternationalinstitute.com',
+  'https://admin.craftinternationalinstitute.com',
+  'https://server.craftinternationalinstitute.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
 ];
-
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) return callback(null, true);
+
+      console.log('Incoming Origin:', origin);
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        console.error('Blocked by CORS:', origin);
+        callback(null, false);
       }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
+
+app.options('*', cors());
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {
@@ -83,6 +101,16 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+lateFeeService.initialize({
+  enabled: true,
+  dueDayOfMonth: 10,
+  defaultLateFeePerDay: 100,
+  maxLateFeePercentage: 100,
+  gracePeriodDays: 0,
+});
+
+startLateFeeCron();
+
 app.get('/api/v1/logs', async (req: Request, res: Response) => {
   try {
     const result = await getAllLogsService(req);
@@ -97,13 +125,11 @@ app.post('/api/v1/backup', async (req: Request, res: Response) => {
     await backupMongoDB();
     res.json({ status: 'success', message: 'Backup completed successfully' });
   } catch (error: any) {
-    res
-      .status(500)
-      .json({
-        status: 'error',
-        message: 'Backup failed',
-        error: error.message,
-      });
+    res.status(500).json({
+      status: 'error',
+      message: 'Backup failed',
+      error: error.message,
+    });
   }
 });
 
@@ -122,13 +148,11 @@ app.post('/api/v1/restore', async (req: Request, res: Response) => {
     await restoreMongoDB();
     res.json({ status: 'success', message: 'Restore completed successfully' });
   } catch (error: any) {
-    res
-      .status(500)
-      .json({
-        status: 'error',
-        message: 'Restore failed',
-        error: error.message,
-      });
+    res.status(500).json({
+      status: 'error',
+      message: 'Restore failed',
+      error: error.message,
+    });
   }
 });
 app.get('/api/v1/download-backup', (req: Request, res: Response) => {
@@ -155,7 +179,8 @@ app.get('/api/v1/backup-logs', (req: Request, res: Response) => {
 
 // Application Routes
 app.use('/api/v1', router);
-
+// createAccountant();
+// updateFeesClassField();
 // Error Handlers
 app.use(globalErrorHandler);
 app.use(notFound);

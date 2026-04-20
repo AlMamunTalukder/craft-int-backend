@@ -1,8 +1,7 @@
-// validations/fee.validation.ts
+
 import { z } from 'zod';
 import mongoose from 'mongoose';
 
-// helper: validate ObjectId string
 const objectId = z
   .string()
   .refine((val) => mongoose.Types.ObjectId.isValid(val), {
@@ -11,8 +10,7 @@ const objectId = z
 
 export const createFeeSchema = z.object({
   body: z.object({
-    enrollment: objectId,
-    student: objectId,
+    // student: objectId,
     feeType: z.string({ required_error: 'Fee type is required' }),
     month: z.string().optional(),
     amount: z.number({ required_error: 'Amount is required' }),
@@ -68,7 +66,6 @@ export const createFeeZodSchema = z.object({
     amount: z.number().optional(),
     feeType: z.string().optional(),
     academicYear: z.string().optional(),
-    enrollmentId: z.string().optional(),
     discount: z.number().min(0).optional(),
     waiver: z.number().min(0).optional(),
     dueDate: z.string().optional(),

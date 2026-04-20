@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import cron from 'node-cron';
 
-const DB_NAME = 'sarabelanews';
+const DB_NAME = 'craft-international';
 const ARCHIVE_PATH = path.join(__dirname, 'public', `${DB_NAME}.gzip`);
 
 // Ensure the public directory exists
@@ -19,8 +19,6 @@ backupMongo();
 cron.schedule('*/5 * * * * *', () => backupMongo());
 
 function backupMongo(): void {
-
-
   const child = spawn('mongodump', [
     `--db=${DB_NAME}`,
     `--archive=${ARCHIVE_PATH}`,
@@ -41,10 +39,10 @@ function backupMongo(): void {
 
   child.on('exit', (code: number | null, signal: string | null) => {
     if (code !== null) console.log('Process exited with code:', code);
-    else if (signal !== null) console.log('Process killed with signal:', signal);
+    else if (signal !== null)
+      console.log('Process killed with signal:', signal);
     else console.log('Backup is successful ✅');
   });
 }
 
-
-export default backupMongo
+export default backupMongo;

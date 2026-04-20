@@ -14,4 +14,5 @@ export type TClass = {
   sections: ObjectId[];
   updatedAt: Date;
   feeStructure: IFeeStructure[];
+  department: string;
 };

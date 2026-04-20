@@ -198,15 +198,29 @@ const getAllDueFees = catchAsync(async (req, res) => {
 });
 
 const createSingleFee = catchAsync(async (req, res) => {
-  const { studentId } = req.params;
+  const studentId = req.params.studentId || req.body.student;
   const payload = req.body;
-
   const result = await feesServices.createSingleFee(studentId, payload);
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
     message: 'Fee created successfully',
+    data: result,
+  });
+});
+
+const getClassWiseFeeSummary = catchAsync(async (req, res) => {
+  const { academicYear, class: className, month } = req.query;
+  const result = await feesServices.getClassWiseFeeSummary({
+    academicYear: academicYear as string,
+    class: className as string,
+    month: month as string,
+  });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Class-wise fee summary retrieved successfully',
     data: result,
   });
 });
@@ -224,4 +238,5 @@ export const feesControllers = {
   deleteFee,
   getAllDueFees,
   createSingleFee,
+  getClassWiseFeeSummary,
 };

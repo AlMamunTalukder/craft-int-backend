@@ -26,7 +26,7 @@ router.get('/:id', enrollmentControllers.getSingleEnrollment);
 
 router.patch(
   '/:id',
-  validateRequest(enrollmentValidationSchema),
+  // validateRequest(enrollmentValidationSchema),
   enrollmentControllers.updateEnrollment,
 );
 

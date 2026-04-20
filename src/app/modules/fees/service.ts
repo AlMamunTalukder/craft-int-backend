@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
@@ -233,30 +234,51 @@ const payFeeWithAdvance = async (
     session.endSession();
   }
 };
+const getStudentDueFees = async (studentId?: string, year?: number) => {
+  const query: any = {
+    status: { $in: ['unpaid', 'partial'] },
+    isLateFeeRecord: false,
+  };
 
-const getStudentDueFees = async (studentId: string, year?: number) => {
-  const currentYear = year || new Date().getFullYear();
+  if (studentId) {
+    query.student = new Types.ObjectId(studentId);
+  }
 
-  const dueFees = await Fees.find({
-    student: new Types.ObjectId(studentId),
-    dueAmount: { $gt: 0 },
-    academicYear: currentYear.toString(),
-  }).sort({ month: 1 });
-  const totalDue = dueFees.reduce((sum, fee) => sum + fee.dueAmount, 0);
-  const paidFees = await Fees.find({
-    student: new Types.ObjectId(studentId),
-    dueAmount: 0,
-    academicYear: currentYear.toString(),
-  }).sort({ month: 1 });
+  const dueFees = await Fees.find(query)
+    .populate({
+      path: 'student',
+      populate: {
+        path: 'className',
+        model: 'Class',
+      },
+    })
+    .populate({
+      path: 'enrollment',
+      // select: 'roll class section academicYear',
+    })
+    .populate({
+      path: 'originalFeeId',
+      select: 'month amount',
+    })
+    .sort({ createdAt: -1 });
+
+  let totalDue = 0;
+  let totalPaid = 0;
+
+  dueFees.forEach((fee) => {
+    totalDue += fee.dueAmount || 0;
+    totalPaid += fee.paidAmount || 0;
+  });
+
+  const totalFees = dueFees.reduce((sum, fee) => sum + fee.amount, 0);
 
   return {
     dueFees,
-    paidFees,
     totalDue,
-    totalPaid: paidFees.reduce((sum, fee) => sum + fee.paidAmount, 0),
+    totalPaid,
+    totalFees,
   };
 };
-
 const getMonthlyFeeStatus = async (
   studentId: string,
   month: string,
@@ -321,7 +343,16 @@ const generateBulkMonthlyFees = async (
 
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
-    Fees.find().populate('enrollment student'),
+    Fees.find()
+      .populate({
+        path: 'enrollment',
+        populate: {
+          path: 'className',
+          model: 'Class', // Make sure this matches your Class model name
+          select: 'name className', // Select the fields you need from the Class model
+        },
+      })
+      .populate('student'),
     query,
   )
     .search(['class', 'month', 'status'])
@@ -492,7 +523,6 @@ const createSingleFee = async (
     amount: number;
     feeType?: string;
     academicYear: string;
-    enrollmentId?: string;
     discount?: number;
     discountType?: 'flat' | 'percentage';
     waiver?: number;
@@ -508,13 +538,11 @@ const createSingleFee = async (
   session.startTransaction();
 
   try {
-    // Check if student exists
     const student = await Student.findById(studentId).session(session);
     if (!student) {
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
 
-    // Calculate actual discount and waiver
     let actualDiscount = payload.discount || 0;
     let actualWaiver = payload.waiver || 0;
 
@@ -526,14 +554,12 @@ const createSingleFee = async (
       actualWaiver = (payload.amount * actualWaiver) / 100;
     }
 
-    // Ensure adjustments don't exceed amount
+    // Prevent overflow
     actualDiscount = Math.min(actualDiscount, payload.amount);
     actualWaiver = Math.min(actualWaiver, payload.amount - actualDiscount);
 
-    // Calculate net amount
     const netAmount = payload.amount - actualDiscount - actualWaiver;
 
-    // Check if fee already exists for this month and class
     const existingFee = await Fees.findOne({
       student: studentId,
       class: payload.class,
@@ -549,12 +575,8 @@ const createSingleFee = async (
       );
     }
 
-    // Create new fee
     const feeData = {
       student: new Types.ObjectId(studentId),
-      enrollment: payload.enrollmentId
-        ? new Types.ObjectId(payload.enrollmentId)
-        : undefined,
       class: payload.class,
       month: payload.month,
       amount: payload.amount,
@@ -571,62 +593,57 @@ const createSingleFee = async (
 
     const [newFee] = await Fees.create([feeData], { session });
 
-    // Update student's fees array
+    // ✅ Push fee into student
     await Student.findByIdAndUpdate(
       studentId,
       { $push: { fees: newFee._id } },
       { session },
     );
 
-    // Update enrollment if provided
-    if (payload.enrollmentId) {
-      await Enrollment.findByIdAndUpdate(
-        payload.enrollmentId,
-        { $push: { fees: newFee._id } },
+    if (actualDiscount > 0) {
+      await FeeAdjustment.create(
+        [
+          {
+            student: studentId,
+            fee: newFee._id,
+            type: 'discount',
+            adjustmentType: payload.discountType || 'flat',
+            value: actualDiscount,
+            reason: payload.reason || 'Manual discount',
+            approvedBy: null,
+            startMonth: payload.month,
+            endMonth: payload.month,
+            academicYear: payload.academicYear,
+            isActive: true,
+            isRecurring: payload.isRecurring || false,
+          },
+        ],
         { session },
       );
     }
 
-    // Create fee adjustment records for discount and waiver
-    if (actualDiscount > 0) {
-      const discountAdjustment = {
-        student: studentId,
-        fee: newFee._id,
-        enrollment: payload.enrollmentId,
-        type: 'discount' as const,
-        adjustmentType: payload.discountType || 'flat',
-        value: actualDiscount,
-        reason: payload.reason || 'Manual discount',
-        approvedBy: null,
-        startMonth: payload.month,
-        endMonth: payload.month,
-        academicYear: payload.academicYear,
-        isActive: true,
-        isRecurring: payload.isRecurring || false,
-      };
-      await FeeAdjustment.create([discountAdjustment], { session });
-    }
-
     if (actualWaiver > 0) {
-      const waiverAdjustment = {
-        student: studentId,
-        fee: newFee._id,
-        enrollment: payload.enrollmentId,
-        type: 'waiver' as const,
-        adjustmentType: payload.waiverType || 'flat',
-        value: actualWaiver,
-        reason: payload.reason || 'Manual waiver',
-        approvedBy: null,
-        startMonth: payload.month,
-        endMonth: payload.month,
-        academicYear: payload.academicYear,
-        isActive: true,
-        isRecurring: payload.isRecurring || false,
-      };
-      await FeeAdjustment.create([waiverAdjustment], { session });
+      await FeeAdjustment.create(
+        [
+          {
+            student: studentId,
+            fee: newFee._id,
+            type: 'waiver',
+            adjustmentType: payload.waiverType || 'flat',
+            value: actualWaiver,
+            reason: payload.reason || 'Manual waiver',
+            approvedBy: null,
+            startMonth: payload.month,
+            endMonth: payload.month,
+            academicYear: payload.academicYear,
+            isActive: true,
+            isRecurring: payload.isRecurring || false,
+          },
+        ],
+        { session },
+      );
     }
 
-    // Apply auto adjustments if any
     await feeAdjustmentServices.applyAutoAdjustments(
       newFee._id.toString(),
       studentId,
@@ -635,10 +652,9 @@ const createSingleFee = async (
 
     await session.commitTransaction();
 
-    // Re-fetch the fee with adjustments applied
     const updatedFee = await Fees.findById(newFee._id)
       .populate('student')
-      .populate('enrollment');
+      .session(session);
 
     return updatedFee;
   } catch (error) {
@@ -648,6 +664,202 @@ const createSingleFee = async (
     session.endSession();
   }
 };
+
+export const getClassWiseFeeSummary = async (query: {
+  academicYear?: string;
+  class?: string;
+  month?: string;
+}) => {
+  const academicYear =
+    query.academicYear || new Date().getFullYear().toString();
+
+  const matchStage: Record<string, any> = { academicYear };
+
+  // Only add month filter if month is provided
+  if (query.month) {
+    matchStage.month = { $regex: `^${query.month}-`, $options: 'i' };
+  }
+
+  const pipeline: any[] = [
+    { $match: matchStage },
+
+    // Add computed fields
+    {
+      $addFields: {
+        // Use the direct class field from fees document
+        resolvedClass: {
+          $cond: {
+            if: {
+              $and: [
+                { $ifNull: ['$class', false] },
+                { $ne: ['$class', ''] },
+                { $ne: ['$class', null] }
+              ]
+            },
+            then: '$class',
+            else: 'Unassigned'
+          }
+        },
+        computedDue: {
+          $max: [
+            0,
+            {
+              $subtract: [
+                '$amount',
+                {
+                  $add: [
+                    { $ifNull: ['$paidAmount', 0] },
+                    { $ifNull: ['$discount', 0] },
+                    { $ifNull: ['$waiver', 0] },
+                    { $ifNull: ['$advanceUsed', 0] }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        monthName: {
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 0]
+            }
+          }
+        },
+        // Extract year from month if exists
+        monthYear: {
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 1]
+            }
+          }
+        }
+      }
+    },
+
+    // Optional class filter (after resolution)
+    ...(query.class ? [{ $match: { resolvedClass: query.class } }] : []),
+
+    // Group by resolvedClass + monthName
+    {
+      $group: {
+        _id: {
+          class: '$resolvedClass',
+          month: '$monthName',
+          monthYear: '$monthYear'
+        },
+        totalAmount: { $sum: '$amount' },
+        totalPaid: { $sum: { $ifNull: ['$paidAmount', 0] } },
+        totalDue: { $sum: '$computedDue' },
+        totalDiscount: { $sum: { $ifNull: ['$discount', 0] } },
+        totalWaiver: { $sum: { $ifNull: ['$waiver', 0] } },
+        totalAdvance: { $sum: { $ifNull: ['$advanceUsed', 0] } },
+        studentCount: { $addToSet: '$student' },
+        feeCount: { $sum: 1 }
+      }
+    },
+
+    {
+      $addFields: {
+        monthOrder: {
+          $indexOfArray: [
+            [
+              'Admission',
+              'January',
+              'February',
+              'March',
+              'April',
+              'May',
+              'June',
+              'July',
+              'August',
+              'September',
+              'October',
+              'November',
+              'December'
+            ],
+            '$_id.month'
+          ]
+        }
+      }
+    },
+
+    { $sort: { '_id.class': 1, monthOrder: 1 } },
+
+    // Group by class → yearly rollup
+    {
+      $group: {
+        _id: '$_id.class',
+        monthly: {
+          $push: {
+            month: '$_id.month',
+            totalAmount: '$totalAmount',
+            totalPaid: '$totalPaid',
+            totalDue: '$totalDue',
+            totalDiscount: '$totalDiscount',
+            totalWaiver: '$totalWaiver',
+            totalAdvance: '$totalAdvance',
+            feeCount: '$feeCount',
+            studentCount: { $size: '$studentCount' }
+          }
+        },
+        yearlyAmount: { $sum: '$totalAmount' },
+        yearlyPaid: { $sum: '$totalPaid' },
+        yearlyDue: { $sum: '$totalDue' },
+        yearlyDiscount: { $sum: '$totalDiscount' },
+        yearlyWaiver: { $sum: '$totalWaiver' },
+        yearlyAdvance: { $sum: '$totalAdvance' }
+      }
+    },
+
+    {
+      $project: {
+        _id: 0,
+        class: { $ifNull: ['$_id', 'Unassigned'] },
+        monthly: 1,
+        yearly: {
+          totalAmount: '$yearlyAmount',
+          totalPaid: '$yearlyPaid',
+          totalDue: '$yearlyDue',
+          totalDiscount: '$yearlyDiscount',
+          totalWaiver: '$yearlyWaiver',
+          totalAdvance: '$yearlyAdvance'
+        }
+      }
+    },
+
+    { $sort: { class: 1 } }
+  ];
+
+  const classes = await Fees.aggregate(pipeline).allowDiskUse(true);
+
+  // Calculate grand total
+  const grandTotal = classes.reduce(
+    (acc, c) => {
+      acc.totalAmount += c.yearly.totalAmount;
+      acc.totalPaid += c.yearly.totalPaid;
+      acc.totalDue += c.yearly.totalDue;
+      acc.totalDiscount += c.yearly.totalDiscount;
+      acc.totalWaiver += c.yearly.totalWaiver;
+      acc.totalAdvance += c.yearly.totalAdvance;
+      return acc;
+    },
+    {
+      totalAmount: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      totalDiscount: 0,
+      totalWaiver: 0,
+      totalAdvance: 0
+    }
+  );
+
+  return { academicYear, classes, grandTotal };
+};
+
 
 export const feesServices = {
   generateMonthlyFees,
@@ -662,4 +874,5 @@ export const feesServices = {
   deleteFee,
   getAllDueFees,
   createSingleFee,
+  getClassWiseFeeSummary,
 };

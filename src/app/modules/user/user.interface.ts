@@ -3,9 +3,10 @@ import { USER_ROLE } from './user.constant';
 
 export interface TUser {
   _id: ObjectId;
-  name:string,
+  name: string;
   email: string;
   password: string;
+  userId: string;
   needPasswordChange: boolean;
   role: 'admin' | 'user' | 'super_admin' | 'teacher' | 'student' | 'accountant';
   isDeleted: boolean;
@@ -14,11 +15,13 @@ export interface TUser {
 }
 
 export interface UserModel extends Model<TUser> {
-  isUserExistsByCustomId(email: string): Promise<TUser>;
+  isUserExistsByCredential(credential: string): Promise<TUser | null>;
+
   isPasswordMatched(
-    plaingTextPassword: string,
+    plainTextPassword: string,
     hashedPassword: string,
   ): Promise<boolean>;
+
   isJWTIssuedBeforePasswordChanged(
     passwordChangedTimestamp: Date,
     jwtIssuedTimestamp: number,

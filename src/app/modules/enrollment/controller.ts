@@ -513,7 +513,13 @@ import { enrollmentServices } from './service';
 // };
 
 const createEnrollment = catchAsync(async (req, res) => {
-  const result = await enrollmentServices.createEnrollment(req.body);
+  const applicationId = req.query.applicationId as string;
+
+  const result = await enrollmentServices.createEnrollment(
+    req.body,
+    applicationId,
+  );
+  console.log('applicationId check this', applicationId);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -547,11 +553,23 @@ const updateEnrollment = catchAsync(async (req, res) => {
     req.params.id,
     req.body,
   );
+  console.log('pyaload check ', req.body);
+  console.log('id check', req.params.id);
+
+  // Service returns { success, message, data } — surface errors properly
+  if (!result.success) {
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: result.message || 'Failed to update enrollment',
+      errorSources: [{ path: '', message: result.message }],
+    });
+  }
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Enrollment updated successfully',
-    data: result,
+    message: result.message || 'Enrollment updated successfully',
+    data: result.data,
   });
 });
 
