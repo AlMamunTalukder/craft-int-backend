@@ -20,6 +20,7 @@ app.use(helmet());
 import './queue/classReport.worker';
 import { lateFeeService } from './app/modules/fees/lateFeeService';
 import { startLateFeeCron } from './jobs/lateFee.job';
+import { updateFeesClassField } from './scripts/updateFeesClassField';
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
 const ARCHIVE_PATH = path.join(rootDir, 'public', 'craftmanagement.gzip');
@@ -179,7 +180,7 @@ app.get('/api/v1/backup-logs', (req: Request, res: Response) => {
 // Application Routes
 app.use('/api/v1', router);
 // createAccountant();
-
+// updateFeesClassField();
 // Error Handlers
 app.use(globalErrorHandler);
 app.use(notFound);

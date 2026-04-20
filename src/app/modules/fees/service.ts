@@ -343,7 +343,16 @@ const generateBulkMonthlyFees = async (
 
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
-    Fees.find().populate('enrollment student'),
+    Fees.find()
+      .populate({
+        path: 'enrollment',
+        populate: {
+          path: 'className',
+          model: 'Class', // Make sure this matches your Class model name
+          select: 'name className', // Select the fields you need from the Class model
+        },
+      })
+      .populate('student'),
     query,
   )
     .search(['class', 'month', 'status'])
@@ -656,6 +665,202 @@ const createSingleFee = async (
   }
 };
 
+export const getClassWiseFeeSummary = async (query: {
+  academicYear?: string;
+  class?: string;
+  month?: string;
+}) => {
+  const academicYear =
+    query.academicYear || new Date().getFullYear().toString();
+
+  const matchStage: Record<string, any> = { academicYear };
+
+  // Only add month filter if month is provided
+  if (query.month) {
+    matchStage.month = { $regex: `^${query.month}-`, $options: 'i' };
+  }
+
+  const pipeline: any[] = [
+    { $match: matchStage },
+
+    // Add computed fields
+    {
+      $addFields: {
+        // Use the direct class field from fees document
+        resolvedClass: {
+          $cond: {
+            if: {
+              $and: [
+                { $ifNull: ['$class', false] },
+                { $ne: ['$class', ''] },
+                { $ne: ['$class', null] }
+              ]
+            },
+            then: '$class',
+            else: 'Unassigned'
+          }
+        },
+        computedDue: {
+          $max: [
+            0,
+            {
+              $subtract: [
+                '$amount',
+                {
+                  $add: [
+                    { $ifNull: ['$paidAmount', 0] },
+                    { $ifNull: ['$discount', 0] },
+                    { $ifNull: ['$waiver', 0] },
+                    { $ifNull: ['$advanceUsed', 0] }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        monthName: {
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 0]
+            }
+          }
+        },
+        // Extract year from month if exists
+        monthYear: {
+          $cond: {
+            if: { $eq: ['$month', 'Admission'] },
+            then: 'Admission',
+            else: {
+              $arrayElemAt: [{ $split: ['$month', '-'] }, 1]
+            }
+          }
+        }
+      }
+    },
+
+    // Optional class filter (after resolution)
+    ...(query.class ? [{ $match: { resolvedClass: query.class } }] : []),
+
+    // Group by resolvedClass + monthName
+    {
+      $group: {
+        _id: {
+          class: '$resolvedClass',
+          month: '$monthName',
+          monthYear: '$monthYear'
+        },
+        totalAmount: { $sum: '$amount' },
+        totalPaid: { $sum: { $ifNull: ['$paidAmount', 0] } },
+        totalDue: { $sum: '$computedDue' },
+        totalDiscount: { $sum: { $ifNull: ['$discount', 0] } },
+        totalWaiver: { $sum: { $ifNull: ['$waiver', 0] } },
+        totalAdvance: { $sum: { $ifNull: ['$advanceUsed', 0] } },
+        studentCount: { $addToSet: '$student' },
+        feeCount: { $sum: 1 }
+      }
+    },
+
+    {
+      $addFields: {
+        monthOrder: {
+          $indexOfArray: [
+            [
+              'Admission',
+              'January',
+              'February',
+              'March',
+              'April',
+              'May',
+              'June',
+              'July',
+              'August',
+              'September',
+              'October',
+              'November',
+              'December'
+            ],
+            '$_id.month'
+          ]
+        }
+      }
+    },
+
+    { $sort: { '_id.class': 1, monthOrder: 1 } },
+
+    // Group by class → yearly rollup
+    {
+      $group: {
+        _id: '$_id.class',
+        monthly: {
+          $push: {
+            month: '$_id.month',
+            totalAmount: '$totalAmount',
+            totalPaid: '$totalPaid',
+            totalDue: '$totalDue',
+            totalDiscount: '$totalDiscount',
+            totalWaiver: '$totalWaiver',
+            totalAdvance: '$totalAdvance',
+            feeCount: '$feeCount',
+            studentCount: { $size: '$studentCount' }
+          }
+        },
+        yearlyAmount: { $sum: '$totalAmount' },
+        yearlyPaid: { $sum: '$totalPaid' },
+        yearlyDue: { $sum: '$totalDue' },
+        yearlyDiscount: { $sum: '$totalDiscount' },
+        yearlyWaiver: { $sum: '$totalWaiver' },
+        yearlyAdvance: { $sum: '$totalAdvance' }
+      }
+    },
+
+    {
+      $project: {
+        _id: 0,
+        class: { $ifNull: ['$_id', 'Unassigned'] },
+        monthly: 1,
+        yearly: {
+          totalAmount: '$yearlyAmount',
+          totalPaid: '$yearlyPaid',
+          totalDue: '$yearlyDue',
+          totalDiscount: '$yearlyDiscount',
+          totalWaiver: '$yearlyWaiver',
+          totalAdvance: '$yearlyAdvance'
+        }
+      }
+    },
+
+    { $sort: { class: 1 } }
+  ];
+
+  const classes = await Fees.aggregate(pipeline).allowDiskUse(true);
+
+  // Calculate grand total
+  const grandTotal = classes.reduce(
+    (acc, c) => {
+      acc.totalAmount += c.yearly.totalAmount;
+      acc.totalPaid += c.yearly.totalPaid;
+      acc.totalDue += c.yearly.totalDue;
+      acc.totalDiscount += c.yearly.totalDiscount;
+      acc.totalWaiver += c.yearly.totalWaiver;
+      acc.totalAdvance += c.yearly.totalAdvance;
+      return acc;
+    },
+    {
+      totalAmount: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      totalDiscount: 0,
+      totalWaiver: 0,
+      totalAdvance: 0
+    }
+  );
+
+  return { academicYear, classes, grandTotal };
+};
+
+
 export const feesServices = {
   generateMonthlyFees,
   generateBulkMonthlyFees,
@@ -669,4 +874,5 @@ export const feesServices = {
   deleteFee,
   getAllDueFees,
   createSingleFee,
+  getClassWiseFeeSummary,
 };

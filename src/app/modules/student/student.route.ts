@@ -22,7 +22,4 @@ router.delete('/:id', studentControllers.deleteStudent);
 
 router.patch('/:id', studentControllers.updateStudent);
 
-
-
-
 export const studentRoutes = router;
