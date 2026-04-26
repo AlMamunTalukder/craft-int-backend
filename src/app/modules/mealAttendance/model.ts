@@ -68,7 +68,7 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
   { timestamps: true }
 );
 
-// Compound index for unique attendance per day per student
+
 mealAttendanceSchema.index(
   { student: 1, date: 1, academicYear: 1 },
   { unique: true }
@@ -76,7 +76,6 @@ mealAttendanceSchema.index(
 mealAttendanceSchema.index({ month: 1, academicYear: 1 });
 mealAttendanceSchema.index({ student: 1, month: 1 });
 
-// Pre-save middleware to calculate totalMeals and mealCost
 mealAttendanceSchema.pre('save', function (next) {
   this.totalMeals = [this.breakfast, this.lunch, this.dinner].filter(Boolean).length;
   this.mealCost = this.totalMeals * this.mealRate;

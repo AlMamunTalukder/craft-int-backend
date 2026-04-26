@@ -233,7 +233,7 @@ const moduleRoutes = [
     route: admissionApplicationRoutes,
   },
   {
-    path: '/meal',
+    path: '/meal-attendance',
     route: mealAttendanceRoutes,
   },
   {

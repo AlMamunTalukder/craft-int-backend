@@ -56,6 +56,7 @@ export interface IStudent extends Document {
   // Financial
   advanceBalance: number;
   fees?: Types.ObjectId[];
+  mealAttendances: Types.ObjectId[];
   payments?: Types.ObjectId[];
   receipts: Types.ObjectId[];
 
