@@ -21,6 +21,7 @@ import './queue/classReport.worker';
 import { lateFeeService } from './app/modules/fees/lateFeeService';
 import { startLateFeeCron } from './jobs/lateFee.job';
 import { updateFeesClassField } from './scripts/updateFeesClassField';
+import { startMealCron } from './jobs/meal';
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
 const ARCHIVE_PATH = path.join(rootDir, 'public', 'craftmanagement.gzip');
@@ -142,6 +143,8 @@ cron.schedule('0 0 * * *', async () => {
     console.error('Automatic backup failed ❌', error.message);
   }
 });
+
+startMealCron();
 
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {

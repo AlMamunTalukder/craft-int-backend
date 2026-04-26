@@ -47,6 +47,7 @@ import { paymentRoutes } from '../modules/payment/route';
 import { receiptRoutes } from '../modules/receipt/route';
 import { admissionApplicationRoutes } from '../modules/onlineAdmission/route';
 import { lateFeeRoutes } from '../modules/fees/lateFeeRoute';
+import { mealAttendanceRoutes } from '../modules/mealAttendance/route';
 const router = Router();
 
 const moduleRoutes = [
@@ -230,6 +231,10 @@ const moduleRoutes = [
   {
     path: '/admission-application',
     route: admissionApplicationRoutes,
+  },
+  {
+    path: '/meal',
+    route: mealAttendanceRoutes,
   },
   {
     path: '/meta',
