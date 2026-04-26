@@ -1,11 +1,11 @@
-// mealAttendance/validation.ts
+
 import { z } from 'zod';
 
 const createAttendanceValidation = z.object({
   body: z.object({
     student: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid student ID format'),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-    academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits'),
+    academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits (e.g., 2026)'),
     breakfast: z.boolean().optional().default(false),
     lunch: z.boolean().optional().default(false),
     dinner: z.boolean().optional().default(false),
@@ -25,7 +25,7 @@ const bulkAttendanceValidation = z.object({
       lunch: z.boolean().optional().default(false),
       dinner: z.boolean().optional().default(false),
     })).min(1, 'At least one attendance record is required'),
-    academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits'),
+    academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits (e.g., 2026)'),
   }),
 });
 

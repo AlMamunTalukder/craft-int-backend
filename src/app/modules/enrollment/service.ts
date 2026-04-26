@@ -1820,7 +1820,6 @@ export const createEnrollment = async (
       }
     }
 
-    // ----- PAYMENT & RECEIPT - Only if there are paid fees -----
     let createdPayment: any = null;
     let createdReceipt: any = null;
 
@@ -2000,7 +1999,6 @@ export const updateEnrollment = async (id: string, payload: any) => {
   try {
     console.log('=== updateEnrollment START ===', id);
 
-    // ── Get existing enrollment ───────────────────────────────────────────────
     const existingEnrollment = await Enrollment.findById(id)
       .populate('student')
       .session(session);
@@ -2011,7 +2009,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
       session,
     );
 
-    // ── 1. Update basic enrollment fields ─────────────────────────────────────
+
     const basicFields = [
       'studentName',
       'nameBangla',
@@ -2064,7 +2062,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
 
     await existingEnrollment.save({ session });
 
-    // ── 2. Update Student document ────────────────────────────────────────────
+
     if (studentDoc) {
       const studentUpdateFields = [
         'name',
