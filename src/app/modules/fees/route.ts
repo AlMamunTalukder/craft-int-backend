@@ -2,6 +2,7 @@ import express from 'express';
 import { feesControllers } from './controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { createFeeSchema } from './validation';
+import { getFeeGenerationStatus, triggerFeeGeneration } from './feeGeneration.controller';
 
 const router = express.Router();
 router.post(
@@ -24,5 +25,6 @@ router.get('/', feesControllers.getAllFees);
 router.get('/:id', feesControllers.getSingleFee);
 router.patch('/:id', feesControllers.updateFee);
 router.delete('/:id', feesControllers.deleteFee);
-
+router.post('/generate', triggerFeeGeneration);
+router.get('/fees/generation-status', getFeeGenerationStatus);
 export const feesRoutes = router;

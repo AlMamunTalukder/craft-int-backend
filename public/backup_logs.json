@@ -7,5 +7,14 @@
     "backupStartTime": "2026-04-25T18:00:00.612Z",
     "backupEndTime": "2026-04-25T18:00:00.688Z",
     "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
+  },
+  {
+    "status": "successful",
+    "error": null,
+    "code": null,
+    "signal": null,
+    "backupStartTime": "2026-04-27T18:00:00.693Z",
+    "backupEndTime": "2026-04-27T18:00:00.766Z",
+    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
   }
 ]

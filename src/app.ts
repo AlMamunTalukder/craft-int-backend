@@ -22,6 +22,8 @@ import { lateFeeService } from './app/modules/fees/lateFeeService';
 import { startLateFeeCron } from './jobs/lateFee.job';
 import { updateFeesClassField } from './scripts/updateFeesClassField';
 import { startMealCron } from './jobs/meal';
+import { startFeeGenerationCron } from './jobs/feeGenerate';
+
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
 const ARCHIVE_PATH = path.join(rootDir, 'public', 'craftmanagement.gzip');
@@ -145,6 +147,9 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 startMealCron();
+
+// 🔥 START FEE GENERATION CRON JOB - This will run automatically
+startFeeGenerationCron();
 
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {

@@ -13,7 +13,7 @@ import { Payment } from '../payment/model';
 import { Class } from '../class/class.model';
 import { Receipt } from '../receipt/model';
 import { AdmissionApplication } from '../onlineAdmission/model';
-import { getCurrentAcademicYear } from '../../../utils/getCurrentAcademicYear';
+
 
 const getAllEnrollments = async (query: Record<string, any>) => {
   const page = Number(query?.page) || 1;
@@ -282,7 +282,10 @@ const getSingleEnrollment = async (id: string) => {
 };
 
 
-// src/modules/enrollment/enrollment.service.ts
+const getCurrentAcademicYear = (): string => {
+  const currentYear = new Date().getFullYear();
+  return `${currentYear}-${currentYear + 1}`;
+};
 
 export const createEnrollment = async (
   payload: any,
@@ -308,11 +311,7 @@ export const createEnrollment = async (
             return cls._id?.toString() || cls.value?.toString() || '';
           }
           const strVal = typeof cls === 'string' ? cls.trim() : '';
-          if (
-            strVal &&
-            !mongoose.Types.ObjectId.isValid(strVal) &&
-            !primaryClassName
-          ) {
+          if (strVal && !primaryClassName) {
             primaryClassName = strVal;
           }
           return strVal;
@@ -374,65 +373,12 @@ export const createEnrollment = async (
       classNameForId = classDoc?.className || '';
     }
 
-    const normalizedClassName = classNameForId.toLowerCase();
-    let classCode = '00';
-    if (
-      normalizedClassName.includes('one') ||
-      normalizedClassName.includes('1')
-    )
-      classCode = '01';
-    else if (
-      normalizedClassName.includes('two') ||
-      normalizedClassName.includes('2')
-    )
-      classCode = '02';
-    else if (
-      normalizedClassName.includes('three') ||
-      normalizedClassName.includes('3')
-    )
-      classCode = '03';
-    else if (
-      normalizedClassName.includes('four') ||
-      normalizedClassName.includes('4')
-    )
-      classCode = '04';
-    else if (
-      normalizedClassName.includes('five') ||
-      normalizedClassName.includes('5')
-    )
-      classCode = '05';
-    else if (
-      normalizedClassName.includes('six') ||
-      normalizedClassName.includes('6')
-    )
-      classCode = '06';
-    else if (
-      normalizedClassName.includes('seven') ||
-      normalizedClassName.includes('7')
-    )
-      classCode = '07';
-    else if (
-      normalizedClassName.includes('eight') ||
-      normalizedClassName.includes('8')
-    )
-      classCode = '08';
-    else if (
-      normalizedClassName.includes('nine') ||
-      normalizedClassName.includes('9')
-    )
-      classCode = '09';
-    else if (
-      normalizedClassName.includes('ten') ||
-      normalizedClassName.includes('10')
-    )
-      classCode = '10';
-
     if (!primaryClassName) {
       primaryClassName =
         payload.studentDepartment === 'hifz' ? 'Hifz' : 'Class One';
     }
 
-    // ----- CORRECTED parentInfo -----
+    // ----- PARENT INFO (Fixed: Added nid and income) -----
     const parentInfo = {
       father: {
         nameBangla: payload.fatherNameBangla || '',
@@ -465,44 +411,7 @@ export const createEnrollment = async (
       },
     };
 
-    // ----- ENROLLMENT DATA -----
-    const enrollmentData: any = {
-      studentId: payload.studentId || '',
-      studentName: payload.studentName || '',
-      nameBangla: payload.nameBangla || '',
-      studentPhoto: payload.studentPhoto || '',
-      mobileNo: payload.mobileNo || '',
-      rollNumber: payload.rollNumber || '',
-      className: validClassIds,
-      section: payload.section || '',
-      session: payload.session || new Date().getFullYear().toString(),
-      batch: payload.group || '',
-      studentType: payload.studentType || payload.category || 'Residential',
-      studentDepartment: payload.studentDepartment || 'hifz',
-      presentAddress: payload.presentAddress || {},
-      permanentAddress: payload.permanentAddress || {},
-      documents: payload.documents || {},
-      termsAccepted: payload.termsAccepted || false,
-      totalAmount: payload.totalAmount || 0,
-      paidAmount: payload.paidAmount || 0,
-      dueAmount: payload.dueAmount || 0,
-      paymentMethod: payload.paymentMethod || 'cash',
-      totalDiscount: payload.totalDiscount || 0,
-      paymentStatus: payload.paymentStatus || 'pending',
-      birthDate: payload.birthDate,
-      birthRegistrationNo: payload.birthRegistrationNo,
-      bloodGroup: payload.bloodGroup,
-      nationality: payload.nationality,
-      roll: payload.roll || payload.rollNumber,
-      previousSchool: payload.previousSchool || {},
-      admissionType: 'admission',
-      status: 'active',
-      parentInfo,
-      familyEnvironment: payload.familyEnvironment,
-      behaviorSkills: payload.behaviorSkills,
-    };
-
-    // ==================== IMPROVED STUDENT LOOKUP LOGIC ====================
+    // ==================== STUDENT LOOKUP LOGIC ====================
     let studentDoc: any = null;
     let userDoc: any = null;
     let generatedStudentId = '';
@@ -515,9 +424,9 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      if (payload.studentOwnMobile && payload.studentOwnMobile.trim() !== '') {
+      if (payload.mobileNo && payload.mobileNo.trim() !== '') {
         const student = await Student.findOne({
-          mobile: payload.studentOwnMobile,
+          mobile: payload.mobileNo,
         }).session(session);
         if (student) return student;
       }
@@ -546,13 +455,6 @@ export const createEnrollment = async (
         if (student) return student;
       }
 
-      if (payload.mobileNo && payload.mobileNo.trim() !== '') {
-        const student = await Student.findOne({
-          mobile: payload.mobileNo,
-        }).session(session);
-        if (student) return student;
-      }
-
       return null;
     };
 
@@ -560,12 +462,10 @@ export const createEnrollment = async (
 
     // ==================== STUDENT CREATION OR UPDATE ====================
     if (!studentDoc) {
-      generatedStudentId = await generateStudentId(
-        classNameForId || primaryClassName,
-      );
+      // Generate new student ID
+      generatedStudentId = await generateStudentId(classNameForId || primaryClassName);
 
-      const email =
-        payload.email ||
+      const email = payload.email ||
         `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}${Date.now().toString().slice(-4)}@student.craft.edu` ||
         `student${Date.now().toString().slice(-6)}@craft.edu`;
 
@@ -589,12 +489,9 @@ export const createEnrollment = async (
         userDoc = existingUser;
       }
 
-      const studentMobile =
-        payload.studentOwnMobile ||
-        payload.mobileNo ||
-        payload.fatherMobile ||
-        '';
+      const studentMobile = payload.mobileNo || payload.fatherMobile || '';
 
+      // Fixed: Properly structured student data with category field
       const studentData: any = {
         studentId: generatedStudentId,
         name: payload.studentName,
@@ -603,435 +500,93 @@ export const createEnrollment = async (
         mobile: studentMobile,
         className: validClassIds.map((id) => new mongoose.Types.ObjectId(id)),
         studentDepartment: payload.studentDepartment,
-        advanceBalance: payload.advanceBalance || 0,
-        payments: [],
-        receipts: [],
-        fees: [],
-        presentAddress: payload.presentAddress,
-        permanentAddress: payload.permanentAddress,
+        category: payload.category || 'Residential', // Fixed: category is properly set
+        studentType: payload.category || 'Residential',
+        advanceBalance: 0,
+        presentAddress: payload.presentAddress || {},
+        permanentAddress: payload.permanentAddress || {},
         user: userDoc ? [userDoc._id] : [],
         birthDate: payload.birthDate,
         birthRegistrationNo: payload.birthRegistrationNo,
         bloodGroup: payload.bloodGroup,
         gender: payload.gender,
-        previousSchool: payload.previousSchool,
-        documents: payload.documents,
+        previousSchool: payload.previousSchool || {},
+        documents: payload.documents || {},
         parentInfo,
         applicationId,
         academicYear: getCurrentAcademicYear(),
         age: payload.age,
         department: payload.department,
-        class: payload.class,
+        class: primaryClassName,
         session: payload.session,
         nidBirth: payload.nidBirth,
-        nationality: payload.nationality,
-        academicInfo: payload.academicInfo,
-        familyEnvironment: payload.familyEnvironment,
-        behaviorSkills: payload.behaviorSkills,
-        termsAccepted: payload.termsAccepted,
+        nationality: payload.nationality || 'Bangladeshi',
+        academicInfo: payload.academicInfo || {},
+        familyEnvironment: payload.familyEnvironment || {},
+        behaviorSkills: payload.behaviorSkills || {},
+        termsAccepted: payload.termsAccepted || false,
         admissionStatus: 'enrolled',
+        status: 'active',
       };
 
       const [newStudent] = await Student.create([studentData], { session });
       studentDoc = newStudent;
-      enrollmentData.studentId = generatedStudentId;
-      enrollmentData.student = studentDoc._id;
-    } else {
-      const foundByStudentId =
-        payload.studentId &&
-        payload.studentId.trim() !== '' &&
-        studentDoc.studentId === payload.studentId;
-      const foundByEmail =
-        payload.email &&
-        payload.email.trim() !== '' &&
-        studentDoc.email === payload.email;
-
-      if (foundByStudentId || foundByEmail) {
-        generatedStudentId = studentDoc.studentId;
-        enrollmentData.studentId = studentDoc.studentId;
-
-        if (!studentDoc.user || studentDoc.user.length === 0) {
-          const email =
-            payload.email ||
-            `${studentDoc.name?.toLowerCase().replace(/\s+/g, '.')}@student.craft.edu` ||
-            `student${Date.now().toString().slice(-6)}@craft.edu`;
-          const defaultPassword = `Craft@${Date.now().toString().slice(-6)}`;
-          const existingUser = await User.findOne({ email }).session(session);
-          if (!existingUser) {
-            const userData = {
-              email,
-              name: studentDoc.name || 'Student',
-              password: defaultPassword,
-              userId: generatedStudentId,
-              needPasswordChange: true,
-              role: 'student',
-              status: 'active',
-              isDeleted: false,
-            };
-            const [newUser] = await User.create([userData], { session });
-            userDoc = newUser;
-            studentDoc.user = [userDoc._id];
-            await studentDoc.save({ session });
-          } else {
-            userDoc = existingUser;
-            studentDoc.user = [userDoc._id];
-            await studentDoc.save({ session });
-          }
-        } else {
-          userDoc = await User.findById(studentDoc.user[0]).session(session);
-        }
-        enrollmentData.student = studentDoc._id;
-      } else {
-        generatedStudentId = await generateStudentId(
-          classNameForId || primaryClassName,
-        );
-
-        const email =
-          payload.email ||
-          `${payload.studentName?.toLowerCase().replace(/\s+/g, '.')}${Date.now().toString().slice(-4)}@student.craft.edu` ||
-          `student${Date.now().toString().slice(-6)}@craft.edu`;
-
-        const defaultPassword = 'CIIStudent123';
-        const existingUser = await User.findOne({ email }).session(session);
-
-        if (!existingUser) {
-          const userData = {
-            email,
-            name: payload.studentName || 'Student',
-            password: defaultPassword,
-            userId: generatedStudentId,
-            needPasswordChange: true,
-            role: 'student',
-            status: 'active',
-            isDeleted: false,
-          };
-          const [newUser] = await User.create([userData], { session });
-          userDoc = newUser;
-        } else {
-          userDoc = existingUser;
-        }
-
-        const studentMobile =
-          payload.studentOwnMobile ||
-          payload.mobileNo ||
-          payload.fatherMobile ||
-          '';
-
-        const studentData: any = {
-          studentId: generatedStudentId,
-          name: payload.studentName,
-          nameBangla: payload.nameBangla,
-          email,
-          mobile: studentMobile,
-          className: validClassIds.map((id) => new mongoose.Types.ObjectId(id)),
-          studentDepartment: payload.studentDepartment,
-          advanceBalance: payload.advanceBalance || 0,
-          payments: [],
-          receipts: [],
-          fees: [],
-          presentAddress: payload.presentAddress,
-          permanentAddress: payload.permanentAddress,
-          user: userDoc ? [userDoc._id] : [],
-          birthDate: payload.birthDate,
-          birthRegistrationNo: payload.birthRegistrationNo,
-          bloodGroup: payload.bloodGroup,
-          gender: payload.gender,
-          previousSchool: payload.previousSchool,
-          documents: payload.documents,
-          parentInfo,
-          applicationId,
-          academicYear: getCurrentAcademicYear(),
-          age: payload.age,
-          department: payload.department,
-          class: payload.class,
-          session: payload.session,
-          nidBirth: payload.nidBirth,
-          nationality: payload.nationality,
-          academicInfo: payload.academicInfo,
-          familyEnvironment: payload.familyEnvironment,
-          behaviorSkills: payload.behaviorSkills,
-          termsAccepted: payload.termsAccepted,
-          admissionStatus: 'enrolled',
-        };
-
-        const [newStudent] = await Student.create([studentData], { session });
-        studentDoc = newStudent;
-        enrollmentData.studentId = generatedStudentId;
-        enrollmentData.student = studentDoc._id;
-      }
     }
 
-    if (!userDoc) throw new Error('Failed to create or find user for student');
+    if (!userDoc && studentDoc.user && studentDoc.user.length > 0) {
+      userDoc = await User.findById(studentDoc.user[0]).session(session);
+    }
+
+    if (!userDoc) {
+      throw new Error('Failed to create or find user for student');
+    }
+
+    // ----- ENROLLMENT DATA (Without fees & payment) -----
+    const enrollmentData: any = {
+      studentId: studentDoc.studentId,
+      studentName: payload.studentName || '',
+      nameBangla: payload.nameBangla || '',
+      studentPhoto: payload.studentPhoto || '',
+      mobileNo: payload.mobileNo || studentDoc.mobile || '',
+      rollNumber: payload.rollNumber || '',
+      className: validClassIds,
+      section: payload.section || '',
+      session: payload.session || new Date().getFullYear().toString(),
+      batch: payload.group || '',
+      studentType: payload.category || 'Residential',
+      studentDepartment: payload.studentDepartment || 'hifz',
+      presentAddress: payload.presentAddress || {},
+      permanentAddress: payload.permanentAddress || {},
+      documents: payload.documents || {},
+      termsAccepted: payload.termsAccepted || false,
+      birthDate: payload.birthDate,
+      birthRegistrationNo: payload.birthRegistrationNo,
+      bloodGroup: payload.bloodGroup,
+      nationality: payload.nationality || 'Bangladeshi',
+      roll: payload.rollNumber,
+      previousSchool: payload.previousSchool || {},
+      admissionType: 'admission',
+      status: 'active',
+      parentInfo,
+      familyEnvironment: payload.familyEnvironment,
+      behaviorSkills: payload.behaviorSkills,
+      gender: payload.gender,
+      student: studentDoc._id,
+    };
 
     // ----- CREATE ENROLLMENT -----
     const [newEnrollment] = await Enrollment.create([enrollmentData], {
       session,
     });
 
-    // ==================== FEE PROCESSING - ONLY SELECTED OR CURRENT MONTH ====================
-    const feeDocs: mongoose.Types.ObjectId[] = [];
-    const paidFeeIds: mongoose.Types.ObjectId[] = [];
-    let totalTransactionAmount = 0;
-
-    const MONTHS = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    const currentMonthIndex = new Date().getMonth();
-    const currentMonthName = MONTHS[currentMonthIndex];
-
-    const totalPaidAmount = Number(payload.paidAmount) || 0;
-    let remainingPayment = totalPaidAmount;
-
-    // Get selected month from payload or use current month
-    const selectedMonth = payload.selectedMonth || currentMonthName;
-    const isSelectedMonthValid = MONTHS.includes(selectedMonth);
-    const targetMonth = isSelectedMonthValid ? selectedMonth : currentMonthName;
-
-    // Get the class name for fees (required field)
-    let feeClassName = primaryClassName;
-
-    if (feeClassName && mongoose.Types.ObjectId.isValid(feeClassName)) {
-      const classDoc = await Class.findById(feeClassName).session(session);
-      feeClassName = classDoc?.className || feeClassName;
+    // Update student with enrollment reference
+    if (!studentDoc.enrollments) {
+      studentDoc.enrollments = [];
     }
+    studentDoc.enrollments.push(newEnrollment._id);
+    await studentDoc.save({ session });
 
-    if (!feeClassName || feeClassName === '') {
-      feeClassName = payload.studentDepartment === 'hifz' ? 'Hifz' : 'Class One';
-    }
-
-    // Check if fees are provided
-    if (payload.fees && Array.isArray(payload.fees) && payload.fees.length > 0) {
-      const allFeeItems: any[] = [];
-
-      for (const feeCategory of payload.fees) {
-        if (!feeCategory.feeItems || !Array.isArray(feeCategory.feeItems) || feeCategory.feeItems.length === 0)
-          continue;
-
-        for (const feeItem of feeCategory.feeItems) {
-          const feeTypeStr = typeof feeItem.feeType === 'string'
-            ? feeItem.feeType
-            : feeItem.feeType?.value || feeItem.feeType?.label || '';
-
-          if (!feeTypeStr || feeTypeStr.trim() === '') continue;
-
-          const classNameForRef = feeCategory.className && feeCategory.className.length > 0
-            ? feeCategory.className[0]?.label || feeCategory.className[0] || primaryClassName
-            : primaryClassName;
-
-          const isMonthly = feeItem.isMonthly === true;
-
-          if (isMonthly) {
-            const monthToCharge = targetMonth;
-
-            let itemDiscount = Number(feeItem.discount) || 0;
-            const discountRangeStart = feeItem.discountRangeStart || '';
-            const discountRangeEnd = feeItem.discountRangeEnd || '';
-            const discountRangeAmount = Number(feeItem.discountRangeAmount) || 0;
-
-            if (discountRangeStart && discountRangeEnd && discountRangeAmount) {
-              const startIndex = MONTHS.indexOf(discountRangeStart);
-              const endIndex = MONTHS.indexOf(discountRangeEnd);
-              const currentIndex = MONTHS.indexOf(monthToCharge);
-
-              if (startIndex !== -1 && endIndex !== -1 && currentIndex !== -1) {
-                const minIdx = Math.min(startIndex, endIndex);
-                const maxIdx = Math.max(startIndex, endIndex);
-                if (currentIndex >= minIdx && currentIndex <= maxIdx) {
-                  itemDiscount = discountRangeAmount;
-                }
-              }
-            }
-
-            allFeeItems.push({
-              feeType: `${feeTypeStr} - ${monthToCharge}`,
-              amount: Number(feeItem.amount) || 0,
-              discount: itemDiscount,
-              month: monthToCharge,
-              isMonthly: true,
-              className: classNameForRef,
-              discountRangeStart: discountRangeStart || '',
-              discountRangeEnd: discountRangeEnd || '',
-              discountRangeAmount: discountRangeAmount || 0,
-            });
-          } else {
-            allFeeItems.push({
-              feeType: feeTypeStr,
-              amount: Number(feeItem.amount) || 0,
-              discount: Number(feeItem.discount) || 0,
-              month: 'Admission',
-              isMonthly: false,
-              className: classNameForRef,
-              discountRangeStart: '',
-              discountRangeEnd: '',
-              discountRangeAmount: 0,
-            });
-          }
-        }
-      }
-
-      if (allFeeItems.length > 0) {
-        allFeeItems.sort((a, b) => {
-          if (a.month === 'Admission' && b.month === 'Admission') return 0;
-          if (a.month === 'Admission') return -1;
-          if (b.month === 'Admission') return 1;
-          return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
-        });
-
-        for (const item of allFeeItems) {
-          const netAmount = Math.max(0, item.amount - item.discount);
-          let paidForThisItem = 0;
-
-          const isPayableNow = item.month === 'Admission' || item.month === targetMonth;
-
-          if (remainingPayment > 0 && isPayableNow) {
-            paidForThisItem = Math.min(remainingPayment, netAmount);
-            remainingPayment -= paidForThisItem;
-          }
-
-          const dueAmount = Math.max(0, netAmount - paidForThisItem);
-
-          const feeData: any = {
-            enrollment: newEnrollment._id,
-            student: studentDoc._id,
-            class: feeClassName,
-            month: item.month,
-            amount: item.amount,
-            paidAmount: paidForThisItem,
-            dueAmount: dueAmount,
-            discount: item.discount,
-            waiver: 0,
-            advanceUsed: 0,
-            feeType: item.feeType,
-            status: paidForThisItem >= netAmount && netAmount > 0
-              ? 'paid'
-              : paidForThisItem > 0
-                ? 'partial'
-                : 'unpaid',
-            paymentMethod: payload.paymentMethod || 'cash',
-            academicYear: new Date().getFullYear().toString(),
-            isCurrentMonth: item.month === targetMonth,
-          };
-
-          if (item.isMonthly) {
-            feeData.discountRangeStart = item.discountRangeStart || '';
-            feeData.discountRangeEnd = item.discountRangeEnd || '';
-            feeData.discountRangeAmount = item.discountRangeAmount || 0;
-          }
-
-          const [createdFee] = await Fees.create([feeData], { session });
-          feeDocs.push(createdFee._id);
-
-          if (paidForThisItem > 0) {
-            totalTransactionAmount += paidForThisItem;
-            paidFeeIds.push(createdFee._id);
-          }
-        }
-
-        if (feeDocs.length > 0) {
-          newEnrollment.fees = feeDocs;
-          await newEnrollment.save({ session });
-
-          studentDoc.fees = [...(studentDoc.fees || []), ...feeDocs];
-          await studentDoc.save({ session });
-        }
-      }
-    }
-
-    let createdPayment: any = null;
-    let createdReceipt: any = null;
-
-    if (totalTransactionAmount > 0 && paidFeeIds.length > 0) {
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 10000);
-      const receiptNo = `RCP-${timestamp}-${random}`;
-      const transactionId = `TXN-${timestamp}`;
-
-      const paymentData = {
-        student: studentDoc._id,
-        enrollment: newEnrollment._id,
-        fees: paidFeeIds,
-        totalAmount: totalTransactionAmount,
-        paymentMethod: payload.paymentMethod || 'cash',
-        receiptNo,
-        transactionId,
-        status: 'completed',
-        collectedBy: payload.collectedBy || 'Admin',
-        paymentDate: new Date(),
-      };
-      const [payment] = await Payment.create([paymentData], { session });
-      createdPayment = payment;
-
-      const detailedReceiptFees = await Fees.find({ _id: { $in: paidFeeIds } })
-        .session(session)
-        .lean();
-
-      const receiptFeesStructure = detailedReceiptFees.map((f: any) => {
-        const netAmount = Math.max(0, f.amount - (f.discount || 0));
-        const month = f.month || 'Admission';
-        return {
-          feeType: f.feeType,
-          month,
-          originalAmount: f.amount,
-          discount: f.discount || 0,
-          waiver: 0,
-          netAmount,
-          paidAmount: f.paidAmount,
-        };
-      });
-
-      const totalReceiptDiscount = receiptFeesStructure.reduce(
-        (sum, item) => sum + (item.discount || 0),
-        0,
-      );
-
-      const receiptData = {
-        receiptNo,
-        student: studentDoc._id,
-        studentName: payload.studentName,
-        studentId: generatedStudentId,
-        className: primaryClassName,
-        paymentId: createdPayment._id,
-        totalAmount: totalTransactionAmount,
-        paymentMethod: payload.paymentMethod || 'cash',
-        paymentDate: new Date(),
-        collectedBy: payload.collectedBy || 'Admin',
-        transactionId,
-        fees: receiptFeesStructure,
-        summary: {
-          totalItems: receiptFeesStructure.length,
-          subtotal: receiptFeesStructure.reduce(
-            (sum, item) => sum + item.originalAmount,
-            0,
-          ),
-          totalDiscount: totalReceiptDiscount,
-          totalWaiver: 0,
-          totalNetAmount: receiptFeesStructure.reduce(
-            (sum, item) => sum + item.netAmount,
-            0,
-          ),
-          amountPaid: totalTransactionAmount,
-        },
-        status: 'active',
-      };
-      const [receipt] = await Receipt.create([receiptData], { session });
-      createdReceipt = receipt;
-
-      studentDoc.payments = [
-        ...(studentDoc.payments || []),
-        createdPayment._id,
-      ];
-      studentDoc.receipts = [
-        ...(studentDoc.receipts || []),
-        createdReceipt._id,
-      ];
-      await studentDoc.save({ session });
-
-      newEnrollment.payment = createdPayment._id;
-      await newEnrollment.save({ session });
-    }
-
-    // ----- UPDATE ADMISSION APPLICATION -----
+    // ----- UPDATE ADMISSION APPLICATION IF EXISTS -----
     if (applicationId) {
       await AdmissionApplication.findOneAndUpdate(
         { applicationId },
@@ -1047,45 +602,21 @@ export const createEnrollment = async (
     const populatedEnrollment = await Enrollment.findById(newEnrollment._id)
       .populate({
         path: 'student',
-        populate: [
-          { path: 'payments' },
-          { path: 'receipts' },
-          { path: 'fees' },
-          { path: 'user' },
-        ],
+        populate: [{ path: 'user' }],
       })
       .populate('className')
-      .populate('fees')
       .lean();
 
     const populatedStudent = await Student.findById(studentDoc._id)
-      .populate('payments')
-      .populate('receipts')
-      .populate('fees')
       .populate('user')
       .lean();
-
-    let populatedPayment = null;
-    let populatedReceipt = null;
-    if (createdPayment) {
-      populatedPayment = await Payment.findById(createdPayment._id)
-        .populate('fees')
-        .lean();
-    }
-    if (createdReceipt) {
-      populatedReceipt = await Receipt.findById(createdReceipt._id)
-        .populate('student')
-        .lean();
-    }
 
     return {
       success: true,
       message: 'Enrollment created successfully',
       data: {
-        ...populatedEnrollment,
+        enrollment: populatedEnrollment,
         student: populatedStudent,
-        payment: populatedPayment,
-        receipt: populatedReceipt,
         userCredentials: userDoc
           ? {
             email: userDoc.email,
@@ -1117,6 +648,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
   try {
     console.log('=== updateEnrollment START ===', id);
 
+    // ── Get existing enrollment ───────────────────────────────────────────────
     const existingEnrollment = await Enrollment.findById(id)
       .populate('student')
       .session(session);
@@ -1180,7 +712,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
 
     await existingEnrollment.save({ session });
 
-
+    // ── 2. Update Student document ────────────────────────────────────────────
     if (studentDoc) {
       const studentUpdateFields = [
         'name',
