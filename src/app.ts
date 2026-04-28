@@ -23,6 +23,7 @@ import { startLateFeeCron } from './jobs/lateFee.job';
 import { updateFeesClassField } from './scripts/updateFeesClassField';
 import { startMealCron } from './jobs/meal';
 import { startFeeGenerationCron } from './jobs/feeGenerate';
+import { startMealBalanceCron } from './jobs/mealBalance.job';
 
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
@@ -146,10 +147,19 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-startMealCron();
+// নিচের মত করে রাখুন:
+lateFeeService.initialize({
+  enabled: true,
+  dueDayOfMonth: 10,
+  defaultLateFeePerDay: 100,
+  maxLateFeePercentage: 100,
+  gracePeriodDays: 0,
+});
 
-// 🔥 START FEE GENERATION CRON JOB - This will run automatically
+startLateFeeCron(); // শুধু একবার
+startMealCron();
 startFeeGenerationCron();
+startMealBalanceCron(); // এইটা যোগ করুন
 
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {

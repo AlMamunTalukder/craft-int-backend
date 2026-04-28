@@ -3,6 +3,7 @@ import express from 'express';
 import { mealAttendanceControllers } from './controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { bulkAttendanceValidation, createAttendanceValidation } from './validation';
+import { manualMealBalanceCalculation } from './mealBalance.controller';
 
 const router = express.Router();
 
@@ -17,5 +18,9 @@ router.get('/sheet', mealAttendanceControllers.getMonthlyAttendanceSheet);
 router.get('/summary', mealAttendanceControllers.getMonthlySummary);
 router.get('/date-range', mealAttendanceControllers.getAttendanceByDateRange);
 router.get('/date-range/all', mealAttendanceControllers.getAttendanceByDateRangeForAllStudents);
+
+
+router.post('/meal-balance/calculate', manualMealBalanceCalculation);
+// router.get('/meal-balance/student/:studentId', getStudentMealBalance);
 
 export const mealAttendanceRoutes = router;

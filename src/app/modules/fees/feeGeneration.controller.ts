@@ -1,8 +1,9 @@
 // app/controllers/feeGeneration.controller.ts
-import { Request, Response } from 'express'; import { feeGenerationService } from '../../services/feeGenerate';
+import { Request, Response } from 'express';
+// import { feeGenerationService } from '../../services/feeGeneration.service'; // পাথ ঠিক করুন
 import { Student } from '../student/student.model';
 import { Fees } from './model';
-;
+import { feeGenerationService } from '../../services/feeGenerate';
 
 export const triggerFeeGeneration = async (req: Request, res: Response) => {
     try {
@@ -10,15 +11,16 @@ export const triggerFeeGeneration = async (req: Request, res: Response) => {
         let result;
 
         if (month && year) {
-            // নির্দিষ্ট মাস এবং বছরের জন্য ফি জেনারেট করুন
+            console.log(`📅 নির্দিষ্ট মাসের ফি জেনারেট করা হচ্ছে: ${month}/${year}`);
             result = await feeGenerationService.generateMonthlyFees(month, year);
         } else {
-            // বর্তমান মাসের ফি জেনারেট করুন
+            console.log(`📅 বর্তমান মাসের ফি জেনারেট করা হচ্ছে`);
             result = await feeGenerationService.generateCurrentMonthFees();
         }
 
         res.status(200).json(result);
     } catch (error: any) {
+        console.error('❌ ফি জেনারেশন এ ত্রুটি:', error);
         res.status(500).json({
             success: false,
             message: error.message,
@@ -33,7 +35,6 @@ export const getFeeGenerationStatus = async (req: Request, res: Response) => {
         const monthName = currentDate.toLocaleString('default', { month: 'long' });
         const year = currentDate.getFullYear();
 
-        // বর্তমান মাসের ফি জেনারেট হয়েছে কিনা চেক করুন
         const currentMonthFees = await Fees.countDocuments({
             month: monthName,
             academicYear: year.toString(),
@@ -45,7 +46,6 @@ export const getFeeGenerationStatus = async (req: Request, res: Response) => {
             admissionStatus: 'enrolled',
         });
 
-        // ফি জেনারেশন ডিটেইলস
         const mealFeesGenerated = await Fees.countDocuments({
             month: monthName,
             academicYear: year.toString(),
@@ -81,8 +81,7 @@ export const getFeeGenerationStatus = async (req: Request, res: Response) => {
             isLateFeeRecord: { $ne: true },
         });
 
-        // মোট ফি জেনারেট হওয়ার হার
-        const expectedFeesPerStudent = 5; // Admission, Monthly, Tuition, Meal, Seat Rent
+        const expectedFeesPerStudent = 5;
         const totalExpectedFees = totalStudents * expectedFeesPerStudent;
         const totalGeneratedFees = currentMonthFees;
 
@@ -156,7 +155,6 @@ export const getStudentFeeStatus = async (req: Request, res: Response) => {
         const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
         const currentYear = currentDate.getFullYear();
 
-        // স্টুডেন্টের বর্তমান মাসের ফি গুলো পাওয়া
         const studentFees = await Fees.find({
             student: studentId,
             month: currentMonth,
@@ -173,7 +171,6 @@ export const getStudentFeeStatus = async (req: Request, res: Response) => {
             });
         }
 
-        // ফি সামারি তৈরি করুন
         const feeSummary = {
             totalAmount: studentFees.reduce((sum, fee) => sum + fee.amount, 0),
             totalPaid: studentFees.reduce((sum, fee) => sum + fee.paidAmount, 0),
@@ -190,7 +187,6 @@ export const getStudentFeeStatus = async (req: Request, res: Response) => {
             })),
         };
 
-        // বিশেষ করে মিল ফির অ্যাডজাস্টমেন্ট তথ্য
         const mealFee = studentFees.find(fee => fee.feeType === 'Meal Fee');
         let mealAdjustmentInfo = null;
 
@@ -216,7 +212,6 @@ export const getStudentFeeStatus = async (req: Request, res: Response) => {
                 advanceBalance: student.advanceBalance || 0,
                 feeSummary,
                 mealAdjustmentInfo,
-                // enrollmentDate: student.createdAt,
                 admissionStatus: student.admissionStatus,
             },
         });
