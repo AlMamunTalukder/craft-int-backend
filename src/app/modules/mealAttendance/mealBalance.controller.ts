@@ -1,4 +1,4 @@
-// app/controllers/mealBalance.controller.ts
+
 import { Request, Response } from 'express';
 import { mealFeeBalanceService } from '../../services/mealFeeBalance.service';
 import { Student } from '../student/student.model';
