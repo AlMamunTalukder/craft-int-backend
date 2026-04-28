@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 // import { feeGenerationService } from '../../services/feeGeneration.service'; // পাথ ঠিক করুন
 import { Student } from '../student/student.model';
 import { Fees } from './model';
-import { feeGenerationService } from '../../services/feeGenerate';
+import { feeGenerationService } from '../../services/feeGenerate.service';
 
 export const triggerFeeGeneration = async (req: Request, res: Response) => {
     try {

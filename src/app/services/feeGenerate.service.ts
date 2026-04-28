@@ -1,4 +1,4 @@
-
+// app/services/feeGeneration.service.ts (সম্পূর্ণ)
 import mongoose from "mongoose";
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
@@ -127,16 +127,16 @@ export class FeeGenerationService {
 
                     // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স চেক করুন (মিল ফির জন্য)
                     const studentWithBalance = await Student.findById(student._id).session(session);
-                    const advanceBalance = studentWithBalance?.advanceBalance || 0;
+                    let advanceBalance = studentWithBalance?.advanceBalance || 0;
+
+                    console.log(`💰 ${student.name} এর অ্যাডভান্স ব্যালেন্স: ৳${advanceBalance}`);
 
                     for (const feeItem of feeCategory.feeItems) {
-                        // Admission Fee চেক
                         if (feeItem.feeType === 'Admission Fee') {
                             const shouldGenerate = await this.shouldGenerateAdmissionFee(student, month, year);
                             if (!shouldGenerate) continue;
                         }
 
-                        // ইতিমধ্যে ফি আছে কিনা চেক করুন
                         const existingFee = await Fees.findOne({
                             student: student._id,
                             month: monthName,
@@ -168,19 +168,17 @@ export class FeeGenerationService {
                                 console.log(`   - কাটা হয়েছে: ৳${advanceToUse}`);
                                 console.log(`   - দিতে হবে: ৳${finalAmount - advanceToUse}`);
 
-                                // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স আপডেট করুন
                                 await Student.updateOne(
                                     { _id: student._id },
                                     { $inc: { advanceBalance: -advanceToUse } }
                                 ).session(session);
+
+                                advanceBalance -= advanceToUse;
                             }
                         }
 
                         const dueAmount = finalAmount - paidAmount;
-
-                        if (dueAmount <= 0) {
-                            status = 'paid';
-                        }
+                        if (dueAmount <= 0) status = 'paid';
 
                         const feeRecord = new Fees({
                             student: student._id,
@@ -212,7 +210,7 @@ export class FeeGenerationService {
                         if (advanceUsed > 0) {
                             console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} (অ্যাডভান্স থেকে ৳${advanceUsed} কাটা হয়েছে, বাকি ৳${dueAmount})`);
                         } else {
-                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} জেনারেট হয়েছে`);
+                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} জেনারেট হয়েছে (দিতে হবে ৳${dueAmount})`);
                         }
                     }
 
@@ -312,157 +310,6 @@ export class FeeGenerationService {
         const month = now.getMonth() + 1;
         const year = now.getFullYear();
         return await this.generateMonthlyFees(month, year);
-    }
-
-    // নির্দিষ্ট স্টুডেন্টের জন্য ফি জেনারেট করুন
-    async generateFeesForSpecificStudent(studentId: string, month?: number, year?: number) {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        try {
-            const targetMonth = month || new Date().getMonth() + 1;
-            const targetYear = year || new Date().getFullYear();
-            const monthName = this.getMonthName(targetMonth);
-            const academicYear = targetYear.toString();
-
-            const student = await Student.findById(studentId).lean();
-            if (!student) {
-                throw new Error('Student not found');
-            }
-
-            const studentClassName = await this.getStudentClassInfo(student);
-            if (!studentClassName) {
-                throw new Error('No class assigned to student');
-            }
-
-            const studentCategory = student.category || student.studentType || 'Residential';
-
-            let feeCategory = await FeeCategory.findOne({
-                categoryName: studentCategory,
-                className: studentClassName,
-            }).session(session);
-
-            if (!feeCategory) {
-                feeCategory = await FeeCategory.findOne({
-                    categoryName: { $regex: new RegExp(`^${studentCategory}$`, 'i') },
-                    className: { $regex: new RegExp(`^${studentClassName}$`, 'i') },
-                }).session(session);
-            }
-
-            if (!feeCategory) {
-                throw new Error(`No fee category found for ${studentCategory} - ${studentClassName}`);
-            }
-
-            const dueDate = this.calculateDueDate(targetMonth, targetYear);
-            const generatedFees = [];
-
-            // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স চেক করুন
-            const studentWithBalance = await Student.findById(studentId).session(session);
-            const advanceBalance = studentWithBalance?.advanceBalance || 0;
-
-            for (const feeItem of feeCategory.feeItems) {
-                // Admission Fee চেক
-                if (feeItem.feeType === 'Admission Fee') {
-                    const shouldGenerate = await this.shouldGenerateAdmissionFee(student, targetMonth, targetYear);
-                    if (!shouldGenerate) continue;
-                }
-
-                const existingFee = await Fees.findOne({
-                    student: student._id,
-                    month: monthName,
-                    academicYear: academicYear,
-                    feeType: feeItem.feeType,
-                    isLateFeeRecord: { $ne: true },
-                }).session(session);
-
-                if (existingFee) continue;
-
-                let finalAmount = feeItem.amount;
-                let advanceUsed = 0;
-                let paidAmount = 0;
-                let status = 'unpaid';
-
-                // শুধুমাত্র মিল ফির জন্য অ্যাডভান্স অ্যাডজাস্টমেন্ট
-                if (feeItem.feeType === 'Meal Fee' && advanceBalance > 0) {
-                    const advanceToUse = Math.min(advanceBalance, finalAmount);
-                    if (advanceToUse > 0) {
-                        advanceUsed = advanceToUse;
-                        paidAmount = advanceToUse;
-
-                        await Student.updateOne(
-                            { _id: student._id },
-                            { $inc: { advanceBalance: -advanceToUse } }
-                        ).session(session);
-                    }
-                }
-
-                const dueAmount = finalAmount - paidAmount;
-                if (dueAmount <= 0) status = 'paid';
-
-                const feeRecord = new Fees({
-                    student: student._id,
-                    class: studentClassName,
-                    month: monthName,
-                    amount: finalAmount,
-                    paidAmount: paidAmount,
-                    advanceUsed: advanceUsed,
-                    dueAmount: dueAmount,
-                    discount: 0,
-                    waiver: 0,
-                    feeType: feeItem.feeType,
-                    status: status,
-                    academicYear: academicYear,
-                    isCurrentMonth: targetMonth === new Date().getMonth() + 1 && targetYear === new Date().getFullYear(),
-                    dueDate: dueDate,
-                    lateFeePerDay: 100,
-                    lateFeeCalculated: 0,
-                    lateFeeDays: 0,
-                    lateFeeAmount: 0,
-                    lateFeeApplied: false,
-                    isLateFeeRecord: false,
-                });
-
-                await feeRecord.save({ session });
-                generatedFees.push(feeRecord);
-            }
-
-            if (generatedFees.length > 0) {
-                const feeIds = generatedFees.map(fee => fee._id);
-                await Student.updateOne(
-                    { _id: student._id },
-                    { $push: { fees: { $each: feeIds } } }
-                ).session(session);
-            }
-
-            await session.commitTransaction();
-            session.endSession();
-
-            return {
-                success: true,
-                message: `${generatedFees.length} টি ফি জেনারেট হয়েছে ${student.name} এর জন্য`,
-                data: {
-                    studentId: student._id,
-                    studentName: student.name,
-                    className: studentClassName,
-                    fees: generatedFees.map(fee => ({
-                        feeType: fee.feeType,
-                        amount: fee.amount,
-                        paidAmount: fee.paidAmount,
-                        advanceUsed: fee.advanceUsed,
-                        dueAmount: fee.dueAmount,
-                        status: fee.status,
-                        feeId: fee._id,
-                    })),
-                    totalAmount: generatedFees.reduce((sum, fee) => sum + fee.amount, 0),
-                    totalPaid: generatedFees.reduce((sum, fee) => sum + fee.paidAmount, 0),
-                    totalDue: generatedFees.reduce((sum, fee) => sum + fee.dueAmount, 0),
-                },
-            };
-        } catch (error: any) {
-            await session.abortTransaction();
-            session.endSession();
-            throw error;
-        }
     }
 }
 

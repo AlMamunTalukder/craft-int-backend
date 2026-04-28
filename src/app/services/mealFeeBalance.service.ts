@@ -29,7 +29,6 @@ export class MealFeeBalanceService {
         try {
             const monthName = this.getMonthName(month);
 
-            // 1. বর্তমান মাসের মিল ফি রেকর্ড পাওয়া
             const currentMealFee = await Fees.findOne({
                 student: studentId,
                 month: monthName,
@@ -42,7 +41,6 @@ export class MealFeeBalanceService {
                 return { success: false, message: 'Meal fee not found for this month' };
             }
 
-            // 2. স্টুডেন্টের এই মাসের মিল অ্যাটেনডেন্স পাওয়া
             const student = await Student.findById(studentId)
                 .populate('mealAttendances')
                 .session(session);
@@ -51,7 +49,6 @@ export class MealFeeBalanceService {
                 return { success: false, message: 'Student not found' };
             }
 
-            // 3. এই মাসের মিল অ্যাটেনডেন্স ফিল্টার করে মোট খরচ বের করা
             const monthlyMeals = (student.mealAttendances || []).filter((attendance: any) => {
                 if (!attendance.date) return false;
                 const attendanceDate = new Date(attendance.date);
@@ -61,18 +58,16 @@ export class MealFeeBalanceService {
             });
 
             const actualMealCost = monthlyMeals.reduce((sum: number, meal: any) => sum + (meal.mealCost || 0), 0);
-
-            // 4. বর্তমান ফি রেকর্ডের তথ্য
             const chargedAmount = currentMealFee.amount;
+            const alreadyPaid = currentMealFee.paidAmount || 0;
             const alreadyAdvanceUsed = currentMealFee.advanceUsed || 0;
-
-            // 5. নেট চার্জ এবং ব্যালেন্স ক্যালকুলেশন
             const netCharged = chargedAmount - alreadyAdvanceUsed;
             const balance = actualMealCost - netCharged;
 
             console.log(`\n📊 ${student.name} এর ${monthName} ${year} মাসের মিল ব্যালেন্স:`);
             console.log(`   - আসল মিল খরচ: ৳${actualMealCost}`);
             console.log(`   - মিল ফি চার্জ: ৳${chargedAmount}`);
+            console.log(`   - ইতিমধ্যে পরিশোধিত: ৳${alreadyPaid}`);
             console.log(`   - ইতিমধ্যে অ্যাডভান্স ইউজড: ৳${alreadyAdvanceUsed}`);
             console.log(`   - নেট চার্জ: ৳${netCharged}`);
             console.log(`   - ব্যালেন্স: ৳${balance}`);
@@ -84,24 +79,23 @@ export class MealFeeBalanceService {
             }
 
             if (balance < 0) {
-                // Negative balance = Advance (স্টুডেন্ট বেশি পেমেন্ট করেছে)
                 const advanceAmount = Math.abs(balance);
+                const newAdvanceUsed = alreadyAdvanceUsed + advanceAmount;
+                const newPaidAmount = alreadyPaid + advanceAmount;
+                const newDueAmount = chargedAmount - newPaidAmount - (currentMealFee.discount || 0);
 
-                // বর্তমান ফি রেকর্ড আপডেট করুন
-                currentMealFee.advanceUsed = alreadyAdvanceUsed + advanceAmount;
-                currentMealFee.paidAmount = alreadyAdvanceUsed + advanceAmount;
-                currentMealFee.dueAmount = chargedAmount - (alreadyAdvanceUsed + advanceAmount);
+                currentMealFee.advanceUsed = newAdvanceUsed;
+                currentMealFee.paidAmount = newPaidAmount;
+                currentMealFee.dueAmount = newDueAmount > 0 ? newDueAmount : 0;
 
                 if (currentMealFee.dueAmount <= 0) {
                     currentMealFee.status = 'paid';
-                    currentMealFee.dueAmount = 0;
-                } else {
+                } else if (currentMealFee.dueAmount < chargedAmount) {
                     currentMealFee.status = 'partial';
                 }
 
                 await currentMealFee.save({ session });
 
-                // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স আপডেট
                 await Student.updateOne(
                     { _id: studentId },
                     { $inc: { advanceBalance: advanceAmount } }
@@ -123,17 +117,15 @@ export class MealFeeBalanceService {
                 };
 
             } else {
-                // Positive balance = Due (স্টুডেন্ট কম পেমেন্ট করেছে)
                 const dueAmount = balance;
-
-                // বর্তমান ফি রেকর্ড আপডেট করুন
-                currentMealFee.dueAmount = currentMealFee.dueAmount + dueAmount;
+                const newDueAmount = (currentMealFee.dueAmount || 0) + dueAmount;
+                currentMealFee.dueAmount = newDueAmount;
                 currentMealFee.status = 'partial';
 
                 await currentMealFee.save({ session });
 
                 console.log(`⚠️ ${student.name}: ৳${dueAmount} ডিউ যোগ করা হয়েছে`);
-                console.log(`   - নতুন ডিউ অ্যামাউন্ট: ৳${currentMealFee.dueAmount}`);
+                console.log(`   - নতুন ডিউ অ্যামাউন্ট: ৳${newDueAmount}`);
 
                 await session.commitTransaction();
                 session.endSession();
@@ -198,6 +190,93 @@ export class MealFeeBalanceService {
                 adjustments: results
             }
         };
+    }
+
+    // এপ্রিল মাসের ভুল ফি ঠিক করার জন্য (একবার চালান)
+    async fixAprilMealFeeForStudent(studentId: mongoose.Types.ObjectId) {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const aprilMealFee = await Fees.findOne({
+                student: studentId,
+                month: 'April',
+                academicYear: '2026',
+                feeType: 'Meal Fee',
+                isLateFeeRecord: { $ne: true }
+            }).session(session);
+
+            if (!aprilMealFee) {
+                return { success: false, message: 'April meal fee not found' };
+            }
+
+            const student = await Student.findById(studentId)
+                .populate('mealAttendances')
+                .session(session);
+
+            if (!student) {
+                return { success: false, message: 'Student not found' };
+            }
+
+            const aprilMeals = (student.mealAttendances || []).filter((attendance: any) => {
+                if (!attendance.date) return false;
+                const date = new Date(attendance.date);
+                return date.getMonth() + 1 === 4 && date.getFullYear() === 2026;
+            });
+
+            const actualMealCost = aprilMeals.reduce((sum: number, meal: any) => sum + (meal.mealCost || 0), 0);
+            const chargedAmount = aprilMealFee.amount;
+            const advanceAmount = chargedAmount - actualMealCost;
+
+            if (advanceAmount > 0) {
+                aprilMealFee.advanceUsed = advanceAmount;
+                aprilMealFee.paidAmount = advanceAmount;
+                aprilMealFee.dueAmount = chargedAmount - advanceAmount;
+                aprilMealFee.status = advanceAmount >= chargedAmount ? 'paid' : 'partial';
+                await aprilMealFee.save({ session });
+
+                await Student.updateOne(
+                    { _id: studentId },
+                    { $inc: { advanceBalance: advanceAmount } }
+                ).session(session);
+
+                await Fees.deleteMany({
+                    student: studentId,
+                    month: 'May',
+                    academicYear: '2026',
+                    feeType: 'Meal Fee',
+                    isLateFeeRecord: { $ne: true }
+                }).session(session);
+
+                await session.commitTransaction();
+                session.endSession();
+
+                return {
+                    success: true,
+                    message: `April advance fixed: ৳${advanceAmount} added to advance balance`,
+                    data: {
+                        actualMealCost,
+                        chargedAmount,
+                        advanceAmount,
+                        newAdvanceBalance: advanceAmount
+                    }
+                };
+            }
+
+            await session.commitTransaction();
+            session.endSession();
+
+            return {
+                success: true,
+                message: 'No adjustment needed',
+                data: { actualMealCost, chargedAmount, advanceAmount: 0 }
+            };
+
+        } catch (error: any) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
+        }
     }
 }
 

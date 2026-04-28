@@ -1,6 +1,6 @@
 
 import cron from 'node-cron';
-import { feeGenerationService } from '../app/services/feeGenerate';
+import { feeGenerationService } from '../app/services/feeGenerate.service';
 
 
 let isInitialized = false;
