@@ -20,10 +20,7 @@ app.use(helmet());
 import './queue/classReport.worker';
 import { lateFeeService } from './app/modules/fees/lateFeeService';
 import { startLateFeeCron } from './jobs/lateFee.job';
-import { updateFeesClassField } from './scripts/updateFeesClassField';
-import { startMealCron } from './jobs/meal';
 import { startFeeGenerationCron } from './jobs/feeGenerate';
-import { startMealBalanceCron } from './jobs/mealBalance.job';
 
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
@@ -147,7 +144,7 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-// নিচের মত করে রাখুন:
+// late fee & fee generate cron job
 lateFeeService.initialize({
   enabled: true,
   dueDayOfMonth: 10,
@@ -156,10 +153,8 @@ lateFeeService.initialize({
   gracePeriodDays: 0,
 });
 
-startLateFeeCron(); // শুধু একবার
-startMealCron();
+startLateFeeCron();
 startFeeGenerationCron();
-startMealBalanceCron(); // এইটা যোগ করুন
 
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {

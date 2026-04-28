@@ -1,4 +1,4 @@
-// app/services/feeGeneration.service.ts
+
 import mongoose from "mongoose";
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
