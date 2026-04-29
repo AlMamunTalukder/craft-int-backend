@@ -1,4 +1,4 @@
-// app/services/feeGeneration.service.ts (সম্পূর্ণ)
+// app/services/feeGeneration.service.ts
 import mongoose from "mongoose";
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
@@ -48,6 +48,7 @@ export class FeeGenerationService {
         const enrollmentMonth = enrollmentDate.getMonth() + 1;
         const isEnrollmentMonth = (targetYear === enrollmentYear && targetMonth === enrollmentMonth);
         if (!isEnrollmentMonth) return false;
+
         const existingAdmissionFee = await Fees.findOne({
             student: student._id,
             feeType: 'Admission Fee',
@@ -73,7 +74,6 @@ export class FeeGenerationService {
             console.log(`═══════════════════════════════════════════════════`);
             console.log(`🚀 মাসিক ফি জেনারেশন শুরু হচ্ছে`);
             console.log(`📅 মাস: ${monthName} ${year}`);
-            console.log(`⏰ সময়: ${new Date().toISOString()}`);
             console.log(`═══════════════════════════════════════════════════`);
 
             const students = await Student.find({
@@ -125,18 +125,22 @@ export class FeeGenerationService {
                     const dueDate = this.calculateDueDate(month, year);
                     const studentFees: any[] = [];
 
-                    // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স চেক করুন (মিল ফির জন্য)
+                    // আগের মাসের অ্যাডভান্স ব্যালেন্স চেক করুন (শুধু মিল ফির জন্য)
                     const studentWithBalance = await Student.findById(student._id).session(session);
                     let advanceBalance = studentWithBalance?.advanceBalance || 0;
 
-                    console.log(`💰 ${student.name} এর অ্যাডভান্স ব্যালেন্স: ৳${advanceBalance}`);
+                    if (advanceBalance > 0) {
+                        console.log(`💰 ${student.name} এর বর্তমান অ্যাডভান্স ব্যালেন্স: ৳${advanceBalance}`);
+                    }
 
                     for (const feeItem of feeCategory.feeItems) {
+                        // Admission Fee চেক
                         if (feeItem.feeType === 'Admission Fee') {
                             const shouldGenerate = await this.shouldGenerateAdmissionFee(student, month, year);
                             if (!shouldGenerate) continue;
                         }
 
+                        // ইতিমধ্যে ফি আছে কিনা চেক করুন
                         const existingFee = await Fees.findOne({
                             student: student._id,
                             month: monthName,
@@ -153,7 +157,6 @@ export class FeeGenerationService {
                         let finalAmount = feeItem.amount;
                         let advanceUsed = 0;
                         let paidAmount = 0;
-                        let discount = 0;
                         let status = 'unpaid';
 
                         // শুধুমাত্র মিল ফির জন্য অ্যাডভান্স অ্যাডজাস্টমেন্ট
@@ -164,10 +167,11 @@ export class FeeGenerationService {
                                 paidAmount = advanceToUse;
 
                                 console.log(`💵 ${student.name}: অ্যাডভান্স ব্যালেন্স ৳${advanceToUse} এই মাসের মিল ফি থেকে কাটা হয়েছে`);
-                                console.log(`   - আসল মিল ফি: ৳${finalAmount}`);
-                                console.log(`   - কাটা হয়েছে: ৳${advanceToUse}`);
-                                console.log(`   - দিতে হবে: ৳${finalAmount - advanceToUse}`);
+                                console.log(`   📌 আসল মিল ফি: ৳${finalAmount}`);
+                                console.log(`   📌 কাটা হয়েছে: ৳${advanceToUse}`);
+                                console.log(`   📌 দিতে হবে: ৳${finalAmount - advanceToUse}`);
 
+                                // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স আপডেট
                                 await Student.updateOne(
                                     { _id: student._id },
                                     { $inc: { advanceBalance: -advanceToUse } }
@@ -180,6 +184,7 @@ export class FeeGenerationService {
                         const dueAmount = finalAmount - paidAmount;
                         if (dueAmount <= 0) status = 'paid';
 
+                        // লেট ফি ছাড়া ফি রেকর্ড তৈরি
                         const feeRecord = new Fees({
                             student: student._id,
                             class: studentClassName,
@@ -188,14 +193,15 @@ export class FeeGenerationService {
                             paidAmount: paidAmount,
                             advanceUsed: advanceUsed,
                             dueAmount: dueAmount,
-                            discount: discount,
+                            discount: 0,
                             waiver: 0,
                             feeType: feeItem.feeType,
                             status: status,
                             academicYear: academicYear,
                             isCurrentMonth: month === new Date().getMonth() + 1 && year === new Date().getFullYear(),
                             dueDate: dueDate,
-                            lateFeePerDay: 100,
+                            // লেট ফি সংক্রান্ত ফিল্ডগুলো 0 বা false সেট করা হয়েছে
+                            lateFeePerDay: 0,
                             lateFeeCalculated: 0,
                             lateFeeDays: 0,
                             lateFeeAmount: 0,
@@ -210,7 +216,7 @@ export class FeeGenerationService {
                         if (advanceUsed > 0) {
                             console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} (অ্যাডভান্স থেকে ৳${advanceUsed} কাটা হয়েছে, বাকি ৳${dueAmount})`);
                         } else {
-                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} জেনারেট হয়েছে (দিতে হবে ৳${dueAmount})`);
+                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} জেনারেট হয়েছে`);
                         }
                     }
 
@@ -281,7 +287,7 @@ export class FeeGenerationService {
 
             return {
                 success: true,
-                message: `${monthName} ${year} মাসের ফি জেনারেশন সম্পূর্ণ হয়েছে`,
+            message: `${monthName} ${year} মাসের ফি জেনারেশন সম্পূর্ণ হয়েছে`,
                 data: {
                     totalStudents: students.length,
                     generatedFeeRecords: generatedCount,

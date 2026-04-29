@@ -18,9 +18,10 @@ import { backupMongoDB, restoreMongoDB } from './utils/backupService';
 const app: Application = express();
 app.use(helmet());
 import './queue/classReport.worker';
-import { lateFeeService } from './app/modules/fees/lateFeeService';
-import { startLateFeeCron } from './jobs/lateFee.job';
+import { startMealCron } from './jobs/meal';
 import { startFeeGenerationCron } from './jobs/feeGenerate';
+import { startMealBalanceCron } from './jobs/mealBalance.job';
+
 
 // Define ARCHIVE_PATH
 const rootDir = process.cwd();
@@ -102,15 +103,6 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-lateFeeService.initialize({
-  enabled: true,
-  dueDayOfMonth: 10,
-  defaultLateFeePerDay: 100,
-  maxLateFeePercentage: 100,
-  gracePeriodDays: 0,
-});
-
-startLateFeeCron();
 
 app.get('/api/v1/logs', async (req: Request, res: Response) => {
   try {
@@ -144,17 +136,9 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-// late fee & fee generate cron job
-lateFeeService.initialize({
-  enabled: true,
-  dueDayOfMonth: 10,
-  defaultLateFeePerDay: 100,
-  maxLateFeePercentage: 100,
-  gracePeriodDays: 0,
-});
-
-startLateFeeCron();
+startMealCron();
 startFeeGenerationCron();
+startMealBalanceCron();
 
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {

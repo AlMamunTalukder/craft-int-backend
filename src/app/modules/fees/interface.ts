@@ -23,40 +23,40 @@ export interface IFees extends Document {
   isCurrentMonth: boolean;
 
   // ✅ Late Fee Fields
-  dueDate: Date; // When the fee was due (e.g., 10th of month)
+  dueDate: Date;
 
   // Auto-calculated late fee
-  lateFeePerDay: number; // Default 100tk per day
-  lateFeeCalculated: number; // Auto-calculated amount
-  lateFeeDays: number; // Number of days late
+  // lateFeePerDay: number; // Default 100tk per day
+  // lateFeeCalculated: number; // Auto-calculated amount
+  // lateFeeDays: number; // Number of days late
 
   // Final late fee (after customization)
-  lateFeeAmount: number; // Final amount after customization
-  lateFeeApplied: boolean;
-  lateFeeAppliedDate?: Date;
-  lastLateFeeCalculation?: Date;
-  totalLateFeePaid: number;
+  // lateFeeAmount: number; // Final amount after customization
+  // lateFeeApplied: boolean;
+  // lateFeeAppliedDate?: Date;
+  // lastLateFeeCalculation?: Date;
+  // totalLateFeePaid: number;
 
   // Customization tracking
-  lateFeeCustomized: boolean;
-  lateFeeCustomizations: Array<{
-    previousAmount: number;
-    newAmount: number;
-    reason: string;
-    customizedBy: string;
-    customizedAt: Date;
-    notes?: string;
-  }>;
+  // lateFeeCustomized: boolean;
+  // lateFeeCustomizations: Array<{
+  //   previousAmount: number;
+  //   newAmount: number;
+  //   reason: string;
+  //   customizedBy: string;
+  //   customizedAt: Date;
+  //   notes?: string;
+  // }>;
 
   // For tracking late fee records
-  isLateFeeRecord: boolean;
-  originalFeeId?: Types.ObjectId;
-  monthsOverdue: number;
-  daysOverdue: number;
+  // isLateFeeRecord: boolean;
+  // originalFeeId?: Types.ObjectId;
+  // monthsOverdue: number;
+  // daysOverdue: number;
 
   // Last payment info
-  lastPaymentDate?: Date;
-  lastPaymentAmount?: number;
+  // lastPaymentDate?: Date;
+  // lastPaymentAmount?: number;
 
   createdAt?: Date;
   updatedAt?: Date;
