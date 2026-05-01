@@ -1,18 +1,38 @@
 // app/controllers/mealBalance.controller.ts
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { mealFeeBalanceService } from '../../services/mealFeeBalance.service';
-import { Fees } from '../fees/model';
-import { Student } from '../student/student.model';
+import { mealFeeBalanceService } from './mealFeeBalance.service';
 
-
-export const calculateMonthlyMealBalance = async (req: Request, res: Response) => {
+// মাস শেষে মিল ফি জেনারেট করার জন্য (এডমিন কল করবে)
+export const generateMonthlyMealFees = async (req: Request, res: Response) => {
     try {
-        const { month, year } = req.body;
+        const { month, year, mealRate } = req.body;
+
+        // যদি month/year না দেওয়া থাকে তাহলে current month নিবে
         const targetMonth = month || new Date().getMonth() + 1;
         const targetYear = year || new Date().getFullYear();
+        const rate = mealRate || 55;
 
-        const result = await mealFeeBalanceService.calculateAllStudentsMonthlyMealBalance(targetMonth, targetYear);
+        // ভ্যালিডেশন
+        if (targetMonth < 1 || targetMonth > 12) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid month. Month must be between 1 and 12'
+            });
+        }
+
+        if (targetYear < 2000 || targetYear > 2100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid year'
+            });
+        }
+
+        const result = await mealFeeBalanceService.generateAllStudentsMealFee(
+            targetMonth,
+            targetYear,
+            rate
+        );
 
         res.status(200).json(result);
     } catch (error: any) {
@@ -20,79 +40,94 @@ export const calculateMonthlyMealBalance = async (req: Request, res: Response) =
     }
 };
 
-export const fixAprilMealFee = async (req: Request, res: Response) => {
+// নির্দিষ্ট স্টুডেন্টের জন্য টেস্ট জেনারেশন
+export const generateSingleStudentMealFee = async (req: Request, res: Response) => {
     try {
         const { studentId } = req.params;
+        const { month, year, mealRate } = req.body;
 
-        // April মাসের মিল ফি খোঁজা
-        const aprilMealFee = await Fees.findOne({
-            student: studentId,
-            month: 'April',
-            academicYear: '2026',
-            feeType: 'Meal Fee',
-            isLateFeeRecord: { $ne: true }
-        });
+        const targetMonth = month || new Date().getMonth() + 1;
+        const targetYear = year || new Date().getFullYear();
+        const rate = mealRate || 55;
 
-        if (!aprilMealFee) {
-            return res.status(404).json({ success: false, message: 'April meal fee not found' });
-        }
+        const result = await mealFeeBalanceService.generateMealFeeForStudent(
+            new mongoose.Types.ObjectId(studentId),
+            targetMonth,
+            targetYear,
+            rate
+        );
 
-        const student = await Student.findById(studentId).populate('mealAttendances');
-        if (!student) {
-            return res.status(404).json({ success: false, message: 'Student not found' });
-        }
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        // April মাসের মিল অ্যাটেনডেন্স থেকে আসল খরচ বের করা
-        const aprilMeals = (student.mealAttendances || []).filter((attendance: any) => {
-            if (!attendance.date) return false;
-            const date = new Date(attendance.date);
-            return date.getMonth() + 1 === 4 && date.getFullYear() === 2026;
-        });
+// নির্দিষ্ট স্টুডেন্টের মিল ফি দেখা
+export const getStudentMealFees = async (req: Request, res: Response) => {
+    try {
+        const { studentId } = req.params;
+        const result = await mealFeeBalanceService.getStudentMealFees(studentId);
+        res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        const actualMealCost = aprilMeals.reduce((sum: number, meal: any) => sum + (meal.mealCost || 0), 0);
-        const chargedAmount = aprilMealFee.amount;
-        const advanceAmount = chargedAmount - actualMealCost;
+// নির্দিষ্ট মাসের সব মিল ফি দেখা
+export const getMonthlyMealFees = async (req: Request, res: Response) => {
+    try {
+        const { month, year } = req.params;
+        const result = await mealFeeBalanceService.getMonthlyMealFees(
+            parseInt(month),
+            parseInt(year)
+        );
+        res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        if (advanceAmount > 0) {
-            // April ফি আপডেট করুন
-            aprilMealFee.advanceUsed = advanceAmount;
-            aprilMealFee.paidAmount = advanceAmount;
-            aprilMealFee.dueAmount = chargedAmount - advanceAmount;
-            aprilMealFee.status = 'partial';
-            await aprilMealFee.save();
+// সব স্টুডেন্টের মিল অ্যাটেনডেন্স চেক করা (টেস্টিং এর জন্য)
+export const checkMealAttendanceSummary = async (req: Request, res: Response) => {
+    try {
+        const { month, year } = req.query;
 
-            // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স আপডেট করুন
-            await Student.updateOne(
-                { _id: studentId },
-                { $inc: { advanceBalance: advanceAmount } }
-            );
+        const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
+        const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
 
-            // May মাসের মিল ফি ডিলিট করুন (পুনরায় জেনারেট হবে)
-            await Fees.deleteMany({
-                student: studentId,
-                month: 'May',
-                academicYear: '2026',
-                feeType: 'Meal Fee',
-                isLateFeeRecord: { $ne: true }
-            });
+        const result = await mealFeeBalanceService.getMealAttendanceSummary(targetMonth, targetYear);
 
-            return res.status(200).json({
-                success: true,
-                message: `April meal fee fixed: ৳${advanceAmount} advance added`,
-                data: {
-                    actualMealCost,
-                    chargedAmount,
-                    advanceAmount
-                }
-            });
-        }
+        res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        res.status(200).json({
-            success: true,
-            message: 'No adjustment needed',
-            data: { actualMealCost, chargedAmount, advanceAmount: 0 }
-        });
+// ডিলিট মিল ফি (টেস্টিং এর জন্য - ভুল জেনারেশন মুছতে)
+export const deleteMealFee = async (req: Request, res: Response) => {
+    try {
+        const { feeId } = req.params;
 
+        const result = await mealFeeBalanceService.deleteMealFee(feeId);
+
+        res.status(200).json(result);
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// নির্দিষ্ট মাসের সব মিল ফি ডিলিট (টেস্টিং এর জন্য)
+export const deleteMonthlyMealFees = async (req: Request, res: Response) => {
+    try {
+        const { month, year } = req.params;
+
+        const result = await mealFeeBalanceService.deleteMonthlyMealFees(
+            parseInt(month),
+            parseInt(year)
+        );
+
+        res.status(200).json(result);
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

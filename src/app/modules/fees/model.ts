@@ -31,35 +31,8 @@ const FeesSchema = new Schema<IFees>(
     isCurrentMonth: { type: Boolean, default: false },
 
     dueDate: { type: Date },
-
-    // lateFeePerDay: { type: Number, default: 100 },
-    // lateFeeCalculated: { type: Number, default: 0 },
-    // lateFeeDays: { type: Number, default: 0 },
-
-    // lateFeeAmount: { type: Number, default: 0 },
-    // lateFeeApplied: { type: Boolean, default: false },
-    // lateFeeAppliedDate: { type: Date },
-    // lastLateFeeCalculation: { type: Date },
-    // totalLateFeePaid: { type: Number, default: 0 },
-
-    // lateFeeCustomized: { type: Boolean, default: false },
-    // lateFeeCustomizations: [
-    //   {
-    //     previousAmount: { type: Number, required: true },
-    //     newAmount: { type: Number, required: true },
-    //     reason: { type: String, required: true },
-    //     customizedBy: { type: String, required: true },
-    //     customizedAt: { type: Date, default: Date.now },
-    //     notes: { type: String },
-    //   },
-    // ],
-
-    // isLateFeeRecord: { type: Boolean, default: false },
-    // originalFeeId: { type: Schema.Types.ObjectId, ref: 'Fees' },
-    // monthsOverdue: { type: Number, default: 0 },
-    // daysOverdue: { type: Number, default: 0 },
-    // lastPaymentDate: { type: Date },
-    // lastPaymentAmount: { type: Number },
+    mealCount: { type: Number, default: 0 },
+    mealRate: { type: Number, default: 55 },
   },
   { timestamps: true },
 );

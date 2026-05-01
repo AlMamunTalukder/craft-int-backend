@@ -374,12 +374,14 @@ const getSingleFee = async (id: string) => {
 };
 
 const updateFee = async (id: string, payload: Partial<IFees>) => {
-  const fee = await Fees.findById(id);
+  const fee = await Fees.findByIdAndUpdate(
+    id,
+    { $set: payload },  // $set replaces feeItems array entirely
+    { new: true, runValidators: true }
+  );
+
   if (!fee) throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
-
-  Object.assign(fee, payload);
-
-  return await fee.save();
+  return fee;
 };
 
 const deleteFee = async (id: string) => {

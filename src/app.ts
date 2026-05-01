@@ -20,7 +20,7 @@ app.use(helmet());
 import './queue/classReport.worker';
 import { startMealCron } from './jobs/meal';
 import { startFeeGenerationCron } from './jobs/feeGenerate';
-import { startMealBalanceCron } from './jobs/mealBalance.job';
+import { startMealFeeGenerationCron } from './jobs/mealBalance.job';
 
 
 // Define ARCHIVE_PATH
@@ -138,8 +138,7 @@ cron.schedule('0 0 * * *', async () => {
 
 startMealCron();
 startFeeGenerationCron();
-startMealBalanceCron();
-
+startMealFeeGenerationCron();
 app.post('/api/v1/restore', async (req: Request, res: Response) => {
   try {
     await restoreMongoDB();

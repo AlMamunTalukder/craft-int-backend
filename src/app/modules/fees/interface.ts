@@ -21,43 +21,9 @@ export interface IFees extends Document {
   paymentDate?: Date;
   academicYear: string;
   isCurrentMonth: boolean;
-
-  // ✅ Late Fee Fields
   dueDate: Date;
-
-  // Auto-calculated late fee
-  // lateFeePerDay: number; // Default 100tk per day
-  // lateFeeCalculated: number; // Auto-calculated amount
-  // lateFeeDays: number; // Number of days late
-
-  // Final late fee (after customization)
-  // lateFeeAmount: number; // Final amount after customization
-  // lateFeeApplied: boolean;
-  // lateFeeAppliedDate?: Date;
-  // lastLateFeeCalculation?: Date;
-  // totalLateFeePaid: number;
-
-  // Customization tracking
-  // lateFeeCustomized: boolean;
-  // lateFeeCustomizations: Array<{
-  //   previousAmount: number;
-  //   newAmount: number;
-  //   reason: string;
-  //   customizedBy: string;
-  //   customizedAt: Date;
-  //   notes?: string;
-  // }>;
-
-  // For tracking late fee records
-  // isLateFeeRecord: boolean;
-  // originalFeeId?: Types.ObjectId;
-  // monthsOverdue: number;
-  // daysOverdue: number;
-
-  // Last payment info
-  // lastPaymentDate?: Date;
-  // lastPaymentAmount?: number;
-
+  mealCount?: number; // মোট মিল সংখ্যা
+  mealRate?: number; // মিল রেট
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -1,8 +1,9 @@
 // app/services/mealFeeBalance.service.ts
 import mongoose from "mongoose";
-import { Student } from "../modules/student/student.model";
-import { Fees } from "../modules/fees/model";
-import { MealAttendance } from "../modules/mealAttendance/model";
+import { MealAttendance } from "./model";
+import { Student } from "../student/student.model";
+import { Fees } from "../fees/model";
+
 
 export class MealFeeBalanceService {
     private static instance: MealFeeBalanceService;
@@ -87,7 +88,16 @@ export class MealFeeBalanceService {
             // ক্লাস তথ্য পাওয়া
             let studentClass = (student as any).class;
             if (!studentClass && (student as any).className?.length > 0) {
-                studentClass = (student as any).className[0];
+                const classData = (student as any).className[0];
+                if (typeof classData === 'object') {
+                    studentClass = classData.className || classData.name || '';
+                } else {
+                    studentClass = String(classData);
+                }
+            }
+
+            if (!studentClass) {
+                studentClass = 'Not Assigned';
             }
 
             // মিল ফি জেনারেট করা
@@ -95,7 +105,7 @@ export class MealFeeBalanceService {
 
             const mealFee = new Fees({
                 student: studentId,
-                class: studentClass || 'Not Assigned',
+                class: studentClass,
                 month: monthName,
                 amount: totalMealCost,
                 paidAmount: 0,
@@ -248,7 +258,7 @@ export class MealFeeBalanceService {
 
         const totalAmount = mealFees.reduce((sum, fee) => sum + fee.amount, 0);
         const totalPaid = mealFees.reduce((sum, fee) => sum + fee.paidAmount, 0);
-        const totalDue = mealFees.reduce((sum, fee) => sum + fee.dueAmount, 0);
+        const totalDue = mealFees.reduce((sum, fee) => sum + (fee.dueAmount || fee.amount), 0);
 
         return {
             month: monthName,
@@ -258,6 +268,137 @@ export class MealFeeBalanceService {
             totalPaid,
             totalDue,
             fees: mealFees
+        };
+    }
+
+    // মিল অ্যাটেনডেন্স সামারি (টেস্টিং এর জন্য)
+    async getMealAttendanceSummary(month: number, year: number) {
+        const monthName = this.getMonthName(month);
+        const academicYear = year.toString();
+
+        const students = await Student.find({
+            status: 'active',
+            admissionStatus: 'enrolled',
+        }).select('_id name');
+
+        const summary = [];
+
+        for (const student of students) {
+            const mealAttendances = await MealAttendance.find({
+                student: student._id,
+                month: monthName,
+                academicYear: academicYear
+            });
+
+            const totalMeals = mealAttendances.reduce((sum, a) => sum + (a.totalMeals || 0), 0);
+            const totalCost = mealAttendances.reduce((sum, a) => sum + (a.mealCost || 0), 0);
+
+            // চেক করা এই মাসের ফি ইতিমধ্যে জেনারেট হয়েছে কিনা
+            const existingFee = await Fees.findOne({
+                student: student._id,
+                month: monthName,
+                academicYear: academicYear,
+                feeType: 'Meal Fee'
+            });
+
+            summary.push({
+                studentId: student._id,
+                studentName: (student as any).name,
+                totalMeals,
+                totalCost,
+                feeGenerated: !!existingFee,
+                feeId: existingFee?._id,
+                feeAmount: existingFee?.amount
+            });
+        }
+
+        const totalCostAll = summary.reduce((sum, s) => sum + s.totalCost, 0);
+        const generatedFees = summary.filter(s => s.feeGenerated);
+        const generatedAmount = generatedFees.reduce((sum, s) => sum + (s.feeAmount || 0), 0);
+
+        return {
+            month: monthName,
+            year,
+            totalStudents: students.length,
+            totalMealCost: totalCostAll,
+            studentsWithFees: generatedFees.length,
+            totalGeneratedAmount: generatedAmount,
+            studentsWithoutFees: summary.filter(s => !s.feeGenerated).length,
+            details: summary
+        };
+    }
+
+    // ডিলিট মিল ফি (টেস্টিং এর জন্য)
+    async deleteMealFee(feeId: string) {
+        const fee = await Fees.findById(feeId);
+
+        if (!fee) {
+            return { success: false, message: 'Fee not found' };
+        }
+
+        if (fee.feeType !== 'Meal Fee') {
+            return { success: false, message: 'This is not a meal fee' };
+        }
+
+        // স্টুডেন্টের fees array থেকে রিমুভ করা
+        await Student.updateOne(
+            { _id: fee.student },
+            { $pull: { fees: fee._id } }
+        );
+
+        // ফি ডিলিট করা
+        await Fees.deleteOne({ _id: feeId });
+
+        return {
+            success: true,
+            message: `Meal fee for ${fee.month} deleted successfully`,
+            data: {
+                feeId,
+                studentId: fee.student,
+                month: fee.month,
+                amount: fee.amount
+            }
+        };
+    }
+
+    // নির্দিষ্ট মাসের সব মিল ফি ডিলিট (টেস্টিং এর জন্য)
+    async deleteMonthlyMealFees(month: number, year: number) {
+        const monthName = this.getMonthName(month);
+        const academicYear = year.toString();
+
+        const fees = await Fees.find({
+            month: monthName,
+            academicYear: academicYear,
+            feeType: 'Meal Fee'
+        });
+
+        if (fees.length === 0) {
+            return { success: false, message: `No meal fees found for ${monthName} ${year}` };
+        }
+
+        // সবার fees array থেকে রিমুভ করা
+        for (const fee of fees) {
+            await Student.updateOne(
+                { _id: fee.student },
+                { $pull: { fees: fee._id } }
+            );
+        }
+
+        // সব ফি ডিলিট করা
+        const result = await Fees.deleteMany({
+            month: monthName,
+            academicYear: academicYear,
+            feeType: 'Meal Fee'
+        });
+
+        return {
+            success: true,
+            message: `${result.deletedCount} meal fees deleted for ${monthName} ${year}`,
+            data: {
+                month: monthName,
+                year,
+                deletedCount: result.deletedCount
+            }
         };
     }
 }
