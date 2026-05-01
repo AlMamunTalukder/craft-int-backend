@@ -272,7 +272,49 @@ const getAllAttendanceRecords = catchAsync(async (req: Request, res: Response) =
     data: result,
   });
 });
+const getAttendanceById = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
 
+  if (!id) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'Attendance ID is required',
+      data: null,
+    });
+  }
+
+  const result = await mealAttendanceServices.getAttendanceById(id);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Attendance record retrieved successfully',
+    data: result,
+  });
+});
+const updateAttendance = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updateData = req.body;
+
+  if (!id) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'Attendance ID is required',
+      data: null,
+    });
+  }
+
+  const result = await mealAttendanceServices.updateAttendance(id, updateData);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Meal attendance updated successfully',
+    data: result,
+  });
+});
 export const mealAttendanceControllers = {
   createOrUpdateAttendance,
   bulkCreateAttendance,
@@ -284,5 +326,7 @@ export const mealAttendanceControllers = {
   deleteAttendance,
   getStudentMealReport,
   getStudentWithMealHistory,
-  getAllAttendanceRecords
+  getAllAttendanceRecords,
+  getAttendanceById,
+  updateAttendance
 };

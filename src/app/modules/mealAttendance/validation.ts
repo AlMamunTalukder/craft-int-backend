@@ -29,4 +29,25 @@ const bulkAttendanceValidation = z.object({
   }),
 });
 
-export { createAttendanceValidation, bulkAttendanceValidation };
+
+const updateAttendanceValidation = z.object({
+  body: z.object({
+    student: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid student ID format').optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+    academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits (e.g., 2026)').optional(),
+    breakfast: z.boolean().optional(),
+    lunch: z.boolean().optional(),
+    dinner: z.boolean().optional(),
+    isHoliday: z.boolean().optional(),
+    isAbsent: z.boolean().optional(),
+    remarks: z.string().optional(),
+    mealRate: z.number().optional(),
+  }),
+});
+
+export {
+  createAttendanceValidation,
+  bulkAttendanceValidation,
+  updateAttendanceValidation
+};
+
