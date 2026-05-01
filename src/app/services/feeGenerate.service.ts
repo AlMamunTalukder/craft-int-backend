@@ -287,7 +287,7 @@ export class FeeGenerationService {
 
             return {
                 success: true,
-            message: `${monthName} ${year} মাসের ফি জেনারেশন সম্পূর্ণ হয়েছে`,
+                message: `${monthName} ${year} মাসের ফি জেনারেশন সম্পূর্ণ হয়েছে`,
                 data: {
                     totalStudents: students.length,
                     generatedFeeRecords: generatedCount,

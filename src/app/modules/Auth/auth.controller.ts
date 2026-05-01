@@ -6,58 +6,27 @@ import { AuthServices } from './auth.service';
 import config from '../../config';
 
 // In your backend auth.controller.ts
-const loginUser = catchAsync(async (req, res) => {
-  const result = await AuthServices.loginUser(req.body);
-  const { accessToken, refreshToken } = result;
-
-  // Set cookies for the main domain - THIS IS THE KEY FIX
-  res.cookie('accessToken', accessToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 15,
-    path: '/',
-    domain: '.craftinternationalinstitute.com',
-  });
-
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-    path: '/',
-    domain: '.craftinternationalinstitute.com',
-  });
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: 'Login successfully!',
-    data: result,
-  });
-});
-
 // const loginUser = catchAsync(async (req, res) => {
 //   const result = await AuthServices.loginUser(req.body);
 //   const { accessToken, refreshToken } = result;
 
-//   // httpOnly: true prevents JS from reading/clearing cookies
+//   // Set cookies for the main domain - THIS IS THE KEY FIX
 //   res.cookie('accessToken', accessToken, {
 //     httpOnly: true,
-//     secure: process.env.NODE_ENV === 'production',
+//     secure: true,
 //     sameSite: 'lax',
-//     maxAge: 1000 * 60 * 60 * 24 * 7,
+//     maxAge: 1000 * 60 * 15,
 //     path: '/',
-//     domain: 'localhost',
+//     domain: '.craftinternationalinstitute.com',
 //   });
 
 //   res.cookie('refreshToken', refreshToken, {
 //     httpOnly: true,
-//     secure: process.env.NODE_ENV === 'production',
+//     secure: true,
 //     sameSite: 'lax',
 //     maxAge: 1000 * 60 * 60 * 24 * 7,
 //     path: '/',
-//     domain: 'localhost',
+//     domain: '.craftinternationalinstitute.com',
 //   });
 
 //   sendResponse(res, {
@@ -67,6 +36,37 @@ const loginUser = catchAsync(async (req, res) => {
 //     data: result,
 //   });
 // });
+
+const loginUser = catchAsync(async (req, res) => {
+  const result = await AuthServices.loginUser(req.body);
+  const { accessToken, refreshToken } = result;
+
+  // httpOnly: true prevents JS from reading/clearing cookies
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    path: '/',
+    domain: 'localhost',
+  });
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    path: '/',
+    domain: 'localhost',
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Login successfully!',
+    data: result,
+  });
+});
 
 const refreshToken = catchAsync(async (req, res) => {
   const result = await AuthServices.refreshToken(req.cookies?.refreshToken);
