@@ -2,6 +2,7 @@ import express from 'express';
 import { feesControllers } from './controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { createFeeSchema } from './validation';
+import { getFeeDetailsByMonth, getFeeGenerationStatus, getStudentFeeStatus, triggerFeeGeneration } from './feeGeneration.controller';
 
 const router = express.Router();
 router.post(
@@ -25,4 +26,14 @@ router.get('/:id', feesControllers.getSingleFee);
 router.patch('/:id', feesControllers.updateFee);
 router.delete('/:id', feesControllers.deleteFee);
 
+router.post('/generate', triggerFeeGeneration);
+
+// 2. সার্ভারের ফি জেনারেশন স্ট্যাটাস দেখার জন্য
+router.get('/status', getFeeGenerationStatus);
+
+// 3. একটি নির্দিষ্ট স্টুডেন্টের ফি স্ট্যাটাস দেখার জন্য
+router.get('/student/:studentId', getStudentFeeStatus);
+
+// 4. একটি নির্দিষ্ট মাসের সব ফি দেখার জন্য (Report)
+router.get('/details/:month/:year', getFeeDetailsByMonth);
 export const feesRoutes = router;

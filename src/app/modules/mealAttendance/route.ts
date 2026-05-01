@@ -3,6 +3,7 @@ import express from 'express';
 import { mealAttendanceControllers } from './controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { bulkAttendanceValidation, createAttendanceValidation } from './validation';
+import { calculateMonthlyMealBalance } from './mealBalance.controller';
 
 const router = express.Router();
 
@@ -18,4 +19,7 @@ router.get('/summary', mealAttendanceControllers.getMonthlySummary);
 router.get('/date-range', mealAttendanceControllers.getAttendanceByDateRange);
 router.get('/date-range/all', mealAttendanceControllers.getAttendanceByDateRangeForAllStudents);
 
+router.post('/meal-balance/calculate', calculateMonthlyMealBalance);
+router.get('/:id', mealAttendanceControllers.getAttendanceById);
+router.put('/:id', validateRequest(createAttendanceValidation), mealAttendanceControllers.updateAttendance);
 export const mealAttendanceRoutes = router;

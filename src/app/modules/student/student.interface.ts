@@ -33,18 +33,18 @@ export interface IStudent extends Document {
   studentDepartment: 'hifz' | 'academic';
   birthDate?: string;
   birthRegistrationNo?: string;
-  age?: number; // NEW: age at admission
+  age?: number;
   gender?: Gender;
   mobile?: string;
   bloodGroup?: string;
   studentPhoto?: string;
-  nationality?: string; // NEW
-  nidBirth?: string; // NEW (alternative to birthRegistrationNo)
+  nationality?: string;
+  nidBirth?: string;
 
-  // Academic details
-  department?: string; // NEW (e.g., science, commerce)
-  class?: string; // NEW (e.g., "Six") – distinct from className (ObjectId[] ref)
-  session?: string; // NEW (e.g., "2024-2025")
+  category: string;
+  department?: string;
+  class?: string;
+  session?: string;
   className?: Types.ObjectId[] | any;
   section?: string[];
   batch?: string;
@@ -53,14 +53,14 @@ export interface IStudent extends Document {
   studentType: string;
   status?: StudentStatus;
 
-  // Financial
+
   advanceBalance: number;
   fees?: Types.ObjectId[];
   mealAttendances: Types.ObjectId[];
   payments?: Types.ObjectId[];
   receipts: Types.ObjectId[];
 
-  // Parent/Guardian – NEW structured replacement for flat fields
+
   parentInfo?: {
     father?: {
       nameBangla?: string;

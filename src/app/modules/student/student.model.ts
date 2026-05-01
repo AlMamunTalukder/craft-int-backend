@@ -50,6 +50,9 @@ const studentSchema = new Schema<IStudent>(
     section: [{ type: String }],
     batch: { type: String },
     activeSession: [{ type: String }],
+    category: {
+      type: String
+    },
     studentClassRoll: { type: String },
     studentType: { type: String },
     status: { type: String },

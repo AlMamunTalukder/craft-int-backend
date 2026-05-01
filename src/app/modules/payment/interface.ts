@@ -19,19 +19,17 @@ export interface IPayment {
   paymentDate?: Date;
   receiptNo: string;
 
-  // Payment breakdown
-  regularAmount?: number; // Amount paid for regular fees
-  lateFeeAmount?: number; // Amount paid for late fees
-  advanceUsed?: number; // Amount used from advance balance
+  regularAmount?: number;
+  // lateFeeAmount?: number;
+  advanceUsed?: number;
 
   // ✅ Late fee tracking
-  lateFeeCollected?: number; // Total late fee collected in this payment
-  lateFeeDetails?: Array<{
-    // Details of which late fees were paid
-    feeId: Types.ObjectId; // Original fee ID
-    lateFeeRecordId: Types.ObjectId; // Late fee record ID
-    amount: number; // Amount paid for this late fee
-  }>;
+  // lateFeeCollected?: number; 
+  // lateFeeDetails?: Array<{
+  //   feeId: Types.ObjectId; 
+  //   lateFeeRecordId: Types.ObjectId; 
+  //   amount: number;
+  // }>;
 
   transactionId?: string;
   note?: string;

@@ -3,20 +3,11 @@ import cron from 'node-cron';
 import moment from 'moment';
 import { Student } from '../app/modules/student/student.model';
 import { MealAttendance } from '../app/modules/mealAttendance/model';
-import { Types } from 'mongoose';
 
 const MEAL_RATE = 55;
 
-// ছুটির দিন চেক করার ফাংশন
 async function checkIfHoliday(date: string, academicYear: string): Promise<boolean> {
     try {
-        // আপনার holiday model থাকলে আনকমেন্ট করুন
-        // const { Holiday } = await import('../app/modules/holiday/model');
-        // const holiday = await Holiday.findOne({
-        //     date: moment(date).format('YYYY-MM-DD'),
-        //     academicYear: academicYear,
-        // });
-        // return !!holiday;
 
         return false;
     } catch (error) {

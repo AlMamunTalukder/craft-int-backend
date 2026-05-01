@@ -1,4 +1,3 @@
-// src/modules/mealAttendance/service.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
@@ -769,6 +768,121 @@ const getAllAttendanceRecords = async (
     uniqueStudents,
   };
 };
+const getAttendanceById = async (id: string) => {
+  if (!id) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
+  }
+
+  const attendance = await MealAttendance.findById(id)
+    .populate('student', 'name nameBangla studentId studentClassRoll studentType className email mobile gender')
+    .lean();
+
+  if (!attendance) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
+  }
+
+  // Format the response with additional calculated fields
+  const student = attendance.student as any;
+
+  return {
+    _id: attendance._id,
+    student: {
+      _id: student?._id,
+      studentId: student?.studentId,
+      name: student?.name,
+      nameBangla: student?.nameBangla,
+      roll: student?.studentClassRoll,
+      studentType: student?.studentType,
+      className: student?.className,
+      email: student?.email,
+      mobile: student?.mobile,
+      gender: student?.gender,
+    },
+    date: attendance.date,
+    month: attendance.month,
+    academicYear: attendance.academicYear,
+    breakfast: attendance.breakfast,
+    lunch: attendance.lunch,
+    dinner: attendance.dinner,
+    totalMeals: attendance.totalMeals,
+    mealCost: attendance.mealCost,
+    mealRate: attendance.mealRate,
+    isHoliday: attendance.isHoliday || false,
+    isAbsent: attendance.isAbsent || false,
+    remarks: attendance.remarks || '',
+  };
+};
+
+const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePayload>) => {
+  if (!id) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
+  }
+
+  const existingAttendance = await MealAttendance.findById(id);
+  if (!existingAttendance) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
+  }
+
+  const {
+    student,
+    date,
+    academicYear,
+    breakfast,
+    lunch,
+    dinner,
+    mealRate = MEAL_RATE,
+    remarks
+  } = payload;
+
+  // If student is being updated, verify student exists
+  if (student) {
+    const studentExists = await Student.findById(student).select('_id studentId name className admissionStatus status');
+    if (!studentExists) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+    if (studentExists.admissionStatus !== 'enrolled') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not enrolled');
+    if (studentExists.status !== 'active') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not active');
+  }
+
+  // Get the final values (use existing if not provided)
+  const finalStudent = student || existingAttendance.student;
+  const finalDate = date || existingAttendance.date;
+  const finalAcademicYear = academicYear || existingAttendance.academicYear;
+  const finalBreakfast = breakfast !== undefined ? breakfast : existingAttendance.breakfast;
+  const finalLunch = lunch !== undefined ? lunch : existingAttendance.lunch;
+  const finalDinner = dinner !== undefined ? dinner : existingAttendance.dinner;
+  const finalRemarks = remarks !== undefined ? remarks : existingAttendance.remarks;
+
+  const dateObj = moment(finalDate);
+  const formattedDate = dateObj.format('YYYY-MM-DD');
+  const month = dateObj.format('YYYY-MM');
+  const { totalMeals, mealCost: calculatedMealCost } = calculateMealStats(
+    finalBreakfast,
+    finalLunch,
+    finalDinner,
+    mealRate
+  );
+
+  const updateData = {
+    student: new Types.ObjectId(finalStudent as string),
+    date: formattedDate,
+    month,
+    academicYear: finalAcademicYear,
+    breakfast: finalBreakfast,
+    lunch: finalLunch,
+    dinner: finalDinner,
+    totalMeals,
+    mealCost: calculatedMealCost,
+    mealRate,
+    remarks: finalRemarks,
+  };
+
+  const result = await MealAttendance.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: true
+  }).populate('student', 'name nameBangla studentId studentClassRoll studentType className email mobile gender');
+
+  return result;
+};
+
 
 export const mealAttendanceServices = {
   createOrUpdateAttendance,
@@ -781,5 +895,7 @@ export const mealAttendanceServices = {
   deleteAttendance,
   getStudentMealReport,
   getStudentWithMealHistory,
-  getAllAttendanceRecords
+  getAllAttendanceRecords,
+  getAttendanceById,
+  updateAttendance
 };
