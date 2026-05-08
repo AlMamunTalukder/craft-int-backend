@@ -1,8 +1,12 @@
-// app/services/feeGeneration.service.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from "mongoose";
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
 import { FeeCategory } from "../modules/feeCategory/model";
+
+// ✅ Meal Fee feeGenerationService থেকে সম্পূর্ণ বাদ
+// Meal Fee শুধুমাত্র mealFeeBalanceService generate করবে (attendance based)
+const SKIP_FEE_TYPES = ['Meal Fee'];
 
 export class FeeGenerationService {
     private static instance: FeeGenerationService;
@@ -30,8 +34,8 @@ export class FeeGenerationService {
         return dueDate;
     }
 
-    private async getStudentClassInfo(student: any): Promise<string> {
-        if (student.class?.trim()) return student.class;
+    private getStudentClassInfo(student: any): string {
+        if (student.class?.trim()) return student.class.trim();
         if (student.className?.length > 0) {
             const classData = student.className[0];
             if (typeof classData === 'object') {
@@ -42,19 +46,30 @@ export class FeeGenerationService {
         return '';
     }
 
-    private async shouldGenerateAdmissionFee(student: any, targetMonth: number, targetYear: number): Promise<boolean> {
-        const enrollmentDate = student.createdAt || new Date();
-        const enrollmentYear = enrollmentDate.getFullYear();
-        const enrollmentMonth = enrollmentDate.getMonth() + 1;
-        const isEnrollmentMonth = (targetYear === enrollmentYear && targetMonth === enrollmentMonth);
-        if (!isEnrollmentMonth) return false;
-
+    /**
+     * ✅ Check if Admission Fee should be generated for this student
+     * Admission Fee will be generated only ONCE per student (lifetime)
+     * Based on student's enrollment or when first time fee is generated
+     */
+    private async shouldGenerateAdmissionFee(
+        student: any,
+        // Removed unused parameters to fix type error
+    ): Promise<boolean> {
+        // ✅ Check if already has Admission Fee (lifetime check - no month filter)
         const existingAdmissionFee = await Fees.findOne({
             student: student._id,
             feeType: 'Admission Fee',
-            isLateFeeRecord: { $ne: true },
         });
-        return !existingAdmissionFee;
+
+        if (existingAdmissionFee) {
+            console.log(`   ℹ️ ${student.name}: Admission Fee already exists (generated on ${existingAdmissionFee.createdAt})`);
+            return false;
+        }
+
+        // ✅ If no existing Admission Fee, generate it
+        // এইটা প্রথমবার generate হবে যখন student active হবে
+        console.log(`   ✅ ${student.name}: No existing Admission Fee, generating now`);
+        return true;
     }
 
     async generateMonthlyFees(month: number, year: number) {
@@ -71,35 +86,39 @@ export class FeeGenerationService {
             const monthName = this.getMonthName(month);
             const academicYear = year.toString();
 
-            console.log(`═══════════════════════════════════════════════════`);
-            console.log(`🚀 মাসিক ফি জেনারেশন শুরু হচ্ছে`);
-            console.log(`📅 মাস: ${monthName} ${year}`);
-            console.log(`═══════════════════════════════════════════════════`);
-
             const students = await Student.find({
                 status: 'active',
                 admissionStatus: 'enrolled',
             }).lean();
 
-            console.log(`📊 মোট সক্রিয় শিক্ষার্থী: ${students.length}`);
-
             let generatedCount = 0;
             let skippedCount = 0;
             let errorCount = 0;
+            let admissionFeeCount = 0;
             const generatedFees: any[] = [];
             const errors: any[] = [];
 
+            console.log(`\n═══════════════════════════════════════════════════`);
+            console.log(`💰 Generating Fees for ${monthName} ${year}`);
+            console.log(`📊 Total Students: ${students.length}`);
+            console.log(`═══════════════════════════════════════════════════\n`);
+
             for (const student of students) {
                 try {
-                    const studentClassName = await this.getStudentClassInfo(student);
+                    const studentClassName = this.getStudentClassInfo(student);
                     if (!studentClassName) {
                         errorCount++;
-                        errors.push({ studentId: student._id, studentName: student.name, error: 'No class assigned' });
+                        errors.push({
+                            studentId: student._id,
+                            studentName: student.name,
+                            error: 'No class assigned',
+                        });
                         continue;
                     }
 
                     const studentCategory = student.category || student.studentType || 'Residential';
 
+                    // FeeCategory খোঁজা
                     let feeCategory = await FeeCategory.findOne({
                         categoryName: studentCategory,
                         className: studentClassName,
@@ -107,8 +126,12 @@ export class FeeGenerationService {
 
                     if (!feeCategory) {
                         feeCategory = await FeeCategory.findOne({
-                            categoryName: { $regex: new RegExp(`^${studentCategory}$`, 'i') },
-                            className: { $regex: new RegExp(`^${studentClassName}$`, 'i') },
+                            categoryName: {
+                                $regex: new RegExp(`^${studentCategory}$`, 'i'),
+                            },
+                            className: {
+                                $regex: new RegExp(`^${studentClassName}$`, 'i'),
+                            },
                         }).session(session);
                     }
 
@@ -117,7 +140,7 @@ export class FeeGenerationService {
                         errors.push({
                             studentId: student._id,
                             studentName: student.name,
-                            error: `No fee category found for ${studentCategory} - ${studentClassName}`
+                            error: `No fee category: ${studentCategory} - ${studentClassName}`,
                         });
                         continue;
                     }
@@ -125,106 +148,124 @@ export class FeeGenerationService {
                     const dueDate = this.calculateDueDate(month, year);
                     const studentFees: any[] = [];
 
-                    // আগের মাসের অ্যাডভান্স ব্যালেন্স চেক করুন (শুধু মিল ফির জন্য)
-                    const studentWithBalance = await Student.findById(student._id).session(session);
+                    // Advance balance
+                    const studentWithBalance = await Student.findById(
+                        student._id
+                    ).session(session);
                     let advanceBalance = studentWithBalance?.advanceBalance || 0;
 
-                    if (advanceBalance > 0) {
-                        console.log(`💰 ${student.name} এর বর্তমান অ্যাডভান্স ব্যালেন্স: ৳${advanceBalance}`);
-                    }
-
                     for (const feeItem of feeCategory.feeItems) {
-                        // Admission Fee চেক
-                        if (feeItem.feeType === 'Admission Fee') {
-                            const shouldGenerate = await this.shouldGenerateAdmissionFee(student, month, year);
-                            if (!shouldGenerate) continue;
-                        }
-
-                        // ইতিমধ্যে ফি আছে কিনা চেক করুন
-                        const existingFee = await Fees.findOne({
-                            student: student._id,
-                            month: monthName,
-                            academicYear: academicYear,
-                            feeType: feeItem.feeType,
-                            isLateFeeRecord: { $ne: true },
-                        }).session(session);
-
-                        if (existingFee) {
-                            console.log(`⏭️ ${student.name} এর ${feeItem.feeType} ইতিমধ্যে জেনারেট হয়েছে`);
+                        // ✅ Meal Fee skip করুন — mealFeeBalanceService handle করবে
+                        if (SKIP_FEE_TYPES.includes(feeItem.feeType)) {
+                            console.log(
+                                `⏭️  ${student.name}: ${feeItem.feeType} skipped (handled by meal attendance system)`
+                            );
                             continue;
                         }
 
-                        let finalAmount = feeItem.amount;
+                        // ✅ Admission Fee special handling - ONCE per student lifetime
+                        if (feeItem.feeType === 'Admission Fee') {
+                            // Fixed: removed unused month and year parameters
+                            const shouldGenerate = await this.shouldGenerateAdmissionFee(student);
+                            if (!shouldGenerate) {
+                                console.log(`⏭️  ${student.name}: Admission Fee already exists, skipping`);
+                                continue;
+                            }
+                        } else {
+                            // ✅ For monthly fees (Monthly Fee, Tuition Fee, Seat Rent etc.)
+                            // Check if already exists for this month
+                            const existingFee = await Fees.findOne({
+                                student: student._id,
+                                month: monthName,
+                                academicYear: academicYear,
+                                feeType: feeItem.feeType,
+                            }).session(session);
+
+                            if (existingFee) {
+                                console.log(
+                                    `⏭️  ${student.name}: ${feeItem.feeType} already exists for ${monthName}`
+                                );
+                                continue;
+                            }
+                        }
+
+                        // Changed from 'let' to 'const' since it's never reassigned
+                        const finalAmount = feeItem.amount;
                         let advanceUsed = 0;
                         let paidAmount = 0;
                         let status = 'unpaid';
 
-                        // শুধুমাত্র মিল ফির জন্য অ্যাডভান্স অ্যাডজাস্টমেন্ট
-                        if (feeItem.feeType === 'Meal Fee' && advanceBalance > 0) {
+                        // Check advance balance for this fee
+                        if (advanceBalance > 0 && finalAmount > 0) {
                             const advanceToUse = Math.min(advanceBalance, finalAmount);
-                            if (advanceToUse > 0) {
-                                advanceUsed = advanceToUse;
-                                paidAmount = advanceToUse;
+                            advanceUsed = advanceToUse;
+                            paidAmount = advanceToUse;
+                            advanceBalance -= advanceToUse;
 
-                                console.log(`💵 ${student.name}: অ্যাডভান্স ব্যালেন্স ৳${advanceToUse} এই মাসের মিল ফি থেকে কাটা হয়েছে`);
-                                console.log(`   📌 আসল মিল ফি: ৳${finalAmount}`);
-                                console.log(`   📌 কাটা হয়েছে: ৳${advanceToUse}`);
-                                console.log(`   📌 দিতে হবে: ৳${finalAmount - advanceToUse}`);
-
-                                // স্টুডেন্টের অ্যাডভান্স ব্যালেন্স আপডেট
-                                await Student.updateOne(
-                                    { _id: student._id },
-                                    { $inc: { advanceBalance: -advanceToUse } }
-                                ).session(session);
-
-                                advanceBalance -= advanceToUse;
-                            }
+                            console.log(`   💰 ${student.name}: Using ৳${advanceToUse} from advance for ${feeItem.feeType}`);
                         }
 
                         const dueAmount = finalAmount - paidAmount;
                         if (dueAmount <= 0) status = 'paid';
 
-                        // লেট ফি ছাড়া ফি রেকর্ড তৈরি
+                        // ✅ For Admission Fee, month field set to "Admission Fee" (not month name)
+                        // For monthly fees, use the month name
+                        const feeMonth = feeItem.feeType === 'Admission Fee' ? 'Admission Fee' : monthName;
+
+                        // ✅ Due date for Admission Fee: 30 days from generation
+                        // For monthly fees: 10th of the month
+                        const feeDueDate = feeItem.feeType === 'Admission Fee'
+                            ? new Date(year, month - 1, 30)
+                            : dueDate;
+
                         const feeRecord = new Fees({
                             student: student._id,
                             class: studentClassName,
-                            month: monthName,
+                            month: feeMonth,
                             amount: finalAmount,
-                            paidAmount: paidAmount,
-                            advanceUsed: advanceUsed,
-                            dueAmount: dueAmount,
+                            paidAmount,
+                            advanceUsed,
+                            dueAmount,
                             discount: 0,
                             waiver: 0,
                             feeType: feeItem.feeType,
-                            status: status,
-                            academicYear: academicYear,
-                            isCurrentMonth: month === new Date().getMonth() + 1 && year === new Date().getFullYear(),
-                            dueDate: dueDate,
-                            // লেট ফি সংক্রান্ত ফিল্ডগুলো 0 বা false সেট করা হয়েছে
-                            lateFeePerDay: 0,
-                            lateFeeCalculated: 0,
-                            lateFeeDays: 0,
-                            lateFeeAmount: 0,
-                            lateFeeApplied: false,
-                            isLateFeeRecord: false,
+                            status,
+                            academicYear,
+                            isCurrentMonth: feeItem.feeType !== 'Admission Fee' &&
+                                month === new Date().getMonth() + 1 &&
+                                year === new Date().getFullYear(),
+                            dueDate: feeDueDate,
                         });
 
                         await feeRecord.save({ session });
                         studentFees.push(feeRecord);
                         generatedCount++;
 
-                        if (advanceUsed > 0) {
-                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} (অ্যাডভান্স থেকে ৳${advanceUsed} কাটা হয়েছে, বাকি ৳${dueAmount})`);
+                        if (feeItem.feeType === 'Admission Fee') {
+                            admissionFeeCount++;
+                            console.log(
+                                `✅ ${student.name}: ${feeItem.feeType} ৳${finalAmount} (One-time fee for class ${studentClassName})`
+                            );
                         } else {
-                            console.log(`✅ ${student.name} এর ${feeItem.feeType}: ৳${finalAmount} জেনারেট হয়েছে`);
+                            console.log(
+                                `✅ ${student.name}: ${feeItem.feeType} ৳${finalAmount} (${monthName} ${year})`
+                            );
                         }
                     }
 
-                    if (studentFees.length > 0) {
-                        const feeIds = studentFees.map(fee => fee._id);
+                    // Update student's advance balance if used
+                    if (studentWithBalance && studentWithBalance.advanceBalance !== advanceBalance) {
                         await Student.updateOne(
                             { _id: student._id },
-                            { $push: { fees: { $each: feeIds } } }
+                            { $set: { advanceBalance: advanceBalance } }
+                        ).session(session);
+                    }
+
+                    if (studentFees.length > 0) {
+                        const feeIds = studentFees.map((f) => f._id);
+                        await Student.updateOne(
+                            { _id: student._id },
+                            { $addToSet: { fees: { $each: feeIds } } }
                         ).session(session);
 
                         generatedFees.push({
@@ -232,73 +273,74 @@ export class FeeGenerationService {
                             studentName: student.name,
                             className: studentClassName,
                             category: studentCategory,
-                            fees: studentFees.map(fee => ({
+                            fees: studentFees.map((fee) => ({
                                 feeType: fee.feeType,
                                 amount: fee.amount,
-                                paidAmount: fee.paidAmount,
-                                advanceUsed: fee.advanceUsed,
                                 dueAmount: fee.dueAmount,
                                 status: fee.status,
                                 feeId: fee._id,
+                                month: fee.month,
                             })),
-                            totalAmount: studentFees.reduce((sum, fee) => sum + fee.amount, 0),
-                            totalPaid: studentFees.reduce((sum, fee) => sum + fee.paidAmount, 0),
-                            totalDue: studentFees.reduce((sum, fee) => sum + fee.dueAmount, 0),
+                            totalAmount: studentFees.reduce(
+                                (s, f) => s + f.amount, 0
+                            ),
+                            totalDue: studentFees.reduce(
+                                (s, f) => s + f.dueAmount, 0
+                            ),
                         });
                     } else {
                         skippedCount++;
                     }
-
                 } catch (error: any) {
                     errorCount++;
-                    errors.push({ studentId: student._id, studentName: student.name, error: error.message });
-                    console.error(`❌ ${student.name} প্রসেস করতে ব্যর্থ:`, error.message);
+                    errors.push({
+                        studentId: student._id,
+                        studentName: student.name,
+                        error: error.message,
+                    });
+                    console.error(`❌ ${student.name}:`, error.message);
                 }
             }
 
             await session.commitTransaction();
             session.endSession();
 
-            const totalGeneratedAmount = generatedFees.reduce((sum, student) => sum + student.totalAmount, 0);
-            const totalPaidAmount = generatedFees.reduce((sum, student) => sum + student.totalPaid, 0);
-            const totalDueAmount = generatedFees.reduce((sum, student) => sum + student.totalDue, 0);
+            const totalAmount = generatedFees.reduce(
+                (s, st) => s + st.totalAmount, 0
+            );
+            const totalDue = generatedFees.reduce(
+                (s, st) => s + st.totalDue, 0
+            );
 
             console.log(`\n═══════════════════════════════════════════════════`);
             console.log(`✅ মাসিক ফি জেনারেশন সম্পূর্ণ`);
-            console.log(`📊 পরিসংখ্যান:`);
-            console.log(`   - মোট শিক্ষার্থী: ${students.length}`);
-            console.log(`   - জেনারেটেড ফি রেকর্ড: ${generatedCount}`);
-            console.log(`   - প্রসেসড শিক্ষার্থী: ${generatedFees.length}`);
-            console.log(`   - স্কিপড শিক্ষার্থী: ${skippedCount}`);
-            console.log(`   - ত্রুটি: ${errorCount}`);
-            console.log(`   - মোট ফি পরিমাণ: ৳${totalGeneratedAmount.toLocaleString()}`);
-            console.log(`   - অ্যাডভান্স থেকে পরিশোধিত: ৳${totalPaidAmount.toLocaleString()}`);
-            console.log(`   - বাকি পরিমাণ: ৳${totalDueAmount.toLocaleString()}`);
-            console.log(`═══════════════════════════════════════════════════`);
-
-            if (errors.length > 0) {
-                console.error(`\n⚠️ ত্রুটির বিবরণ:`);
-                errors.slice(0, 10).forEach((err, idx) => {
-                    console.error(`   ${idx + 1}. ${err.studentName}: ${err.error}`);
-                });
-            }
+            console.log(`   জেনারেটেড রেকর্ড: ${generatedCount}`);
+            console.log(`   Admission Fee জেনারেটেড: ${admissionFeeCount} (একবার করে সব student এর জন্য)`);
+            console.log(`   Monthly Fees: ${generatedCount - admissionFeeCount}`);
+            console.log(`   স্কিপড: ${skippedCount} | ত্রুটি: ${errorCount}`);
+            console.log(`   মোট পরিমাণ: ৳${totalAmount.toLocaleString()}`);
+            console.log(`   বাকি পরিমাণ: ৳${totalDue.toLocaleString()}`);
+            console.log(`   ⚠️  Meal Fee আলাদাভাবে মাস শেষে generate হবে`);
+            console.log(`═══════════════════════════════════════════════════\n`);
 
             this.isRunning = false;
 
             return {
                 success: true,
-                message: `${monthName} ${year} মাসের ফি জেনারেশন সম্পূর্ণ হয়েছে`,
+                message: `${monthName} ${year} ফি জেনারেশন সম্পূর্ণ (Meal Fee বাদে)`,
                 data: {
                     totalStudents: students.length,
                     generatedFeeRecords: generatedCount,
+                    admissionFeesGenerated: admissionFeeCount,
+                    monthlyFeesGenerated: generatedCount - admissionFeeCount,
                     studentsProcessed: generatedFees.length,
                     skippedCount,
                     errorCount,
-                    totalAmount: totalGeneratedAmount,
-                    totalPaid: totalPaidAmount,
-                    totalDue: totalDueAmount,
+                    totalAmount,
+                    totalDue,
                     generatedFees,
                     errors: errors.slice(0, 100),
+                    note: 'Admission Fee generated only ONCE per student (lifetime). Monthly fees generated every month.',
                     timestamp: new Date().toISOString(),
                 },
             };
@@ -313,9 +355,10 @@ export class FeeGenerationService {
 
     async generateCurrentMonthFees() {
         const now = new Date();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        return await this.generateMonthlyFees(month, year);
+        return await this.generateMonthlyFees(
+            now.getMonth() + 1,
+            now.getFullYear()
+        );
     }
 }
 
