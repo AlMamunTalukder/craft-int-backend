@@ -11,7 +11,7 @@ router.post(
   feesControllers.createSingleFee,
 );
 router.get('/class-summary', feesControllers.getClassWiseFeeSummary);
-router.get('/due', feesControllers.getStudentDueFees);
+router.get('/due', feesControllers.getAllDueFees);
 router.post('/create-monthly', feesControllers.createMonthlyFees);
 router.post('/create-bulk-monthly', feesControllers.createBulkMonthlyFees);
 router.post('/pay', feesControllers.payFee);

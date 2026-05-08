@@ -1,10 +1,8 @@
-// modules/fees/interface.ts
 import { Document, Types } from 'mongoose';
 
 export interface IFees extends Document {
   _id: Types.ObjectId;
   student: Types.ObjectId;
-  enrollment?: Types.ObjectId;
   class?: string;
   month?: string;
   amount: number;
@@ -22,8 +20,8 @@ export interface IFees extends Document {
   academicYear: string;
   isCurrentMonth: boolean;
   dueDate: Date;
-  mealCount?: number; // মোট মিল সংখ্যা
-  mealRate?: number; // মিল রেট
+  mealCount?: number;
+  mealRate?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

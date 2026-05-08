@@ -4,10 +4,6 @@ import { IFees } from './interface';
 const FeesSchema = new Schema<IFees>(
   {
     student: { type: Schema.Types.ObjectId, ref: 'Student', required: true },
-    enrollment: {
-      type: Schema.Types.ObjectId,
-      ref: 'Enrollment',
-    },
     class: { type: String, required: true },
     month: { type: String },
     amount: { type: Number, required: true },

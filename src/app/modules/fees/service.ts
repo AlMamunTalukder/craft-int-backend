@@ -62,7 +62,6 @@ const payFee = async (
 
     const paymentData = {
       student: fee.student,
-      enrollment: fee.enrollment,
       fee: fee._id,
       amountPaid: amountPaid,
       paymentMethod: paymentMethod,
@@ -209,7 +208,6 @@ const payFeeWithAdvance = async (
     await fee.save({ session });
     const paymentData = {
       student: fee.student,
-      enrollment: fee.enrollment,
       fee: fee._id,
       amountPaid: totalPaid,
       paymentMethod: paymentMethod,
@@ -348,8 +346,8 @@ const getAllFees = async (query: Record<string, any>) => {
         path: 'enrollment',
         populate: {
           path: 'className',
-          model: 'Class', // Make sure this matches your Class model name
-          select: 'name className', // Select the fields you need from the Class model
+          model: 'Class',
+          select: 'name className',
         },
       })
       .populate('student'),
@@ -376,7 +374,7 @@ const getSingleFee = async (id: string) => {
 const updateFee = async (id: string, payload: Partial<IFees>) => {
   const fee = await Fees.findByIdAndUpdate(
     id,
-    { $set: payload },  // $set replaces feeItems array entirely
+    { $set: payload },
     { new: true, runValidators: true }
   );
 
@@ -676,19 +674,14 @@ export const getClassWiseFeeSummary = async (query: {
     query.academicYear || new Date().getFullYear().toString();
 
   const matchStage: Record<string, any> = { academicYear };
-
-  // Only add month filter if month is provided
   if (query.month) {
     matchStage.month = { $regex: `^${query.month}-`, $options: 'i' };
   }
 
   const pipeline: any[] = [
     { $match: matchStage },
-
-    // Add computed fields
     {
       $addFields: {
-        // Use the direct class field from fees document
         resolvedClass: {
           $cond: {
             if: {
@@ -837,8 +830,6 @@ export const getClassWiseFeeSummary = async (query: {
   ];
 
   const classes = await Fees.aggregate(pipeline).allowDiskUse(true);
-
-  // Calculate grand total
   const grandTotal = classes.reduce(
     (acc, c) => {
       acc.totalAmount += c.yearly.totalAmount;
