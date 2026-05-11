@@ -18,7 +18,7 @@ import { backupMongoDB, restoreMongoDB } from './utils/backupService';
 const app: Application = express();
 app.use(helmet());
 import './queue/classReport.worker';
-import { startMealCron } from './jobs/meal';
+
 import { startFeeGenerationCron } from './jobs/feeGenerate';
 import { startMealFeeGenerationCron } from './jobs/mealBalance.job';
 
@@ -136,7 +136,7 @@ cron.schedule('0 0 * * *', async () => {
   }
 });
 
-startMealCron();
+// startMealCron();
 startFeeGenerationCron();
 startMealFeeGenerationCron();
 app.post('/api/v1/restore', async (req: Request, res: Response) => {

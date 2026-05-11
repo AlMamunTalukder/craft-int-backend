@@ -3,9 +3,6 @@ import mongoose from "mongoose";
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
 import { FeeCategory } from "../modules/feeCategory/model";
-
-// ✅ Meal Fee feeGenerationService থেকে সম্পূর্ণ বাদ
-// Meal Fee শুধুমাত্র mealFeeBalanceService generate করবে (attendance based)
 const SKIP_FEE_TYPES = ['Meal Fee'];
 
 export class FeeGenerationService {
@@ -46,15 +43,9 @@ export class FeeGenerationService {
         return '';
     }
 
-    /**
-     * ✅ Check if Admission Fee should be generated for this student
-     * Admission Fee will be generated only ONCE per student (lifetime)
-     * Based on student's enrollment or when first time fee is generated
-     */
     private async shouldGenerateAdmissionFee(
         student: any,
     ): Promise<boolean> {
-        // ✅ Check if already has Admission Fee (lifetime check - no month filter)
         const existingAdmissionFee = await Fees.findOne({
             student: student._id,
             feeType: 'Admission Fee',
@@ -86,7 +77,7 @@ export class FeeGenerationService {
             const students = await Student.find({
                 status: 'active',
                 admissionStatus: 'enrolled',
-            }).lean();
+            }).populate("className").lean();
 
             let generatedCount = 0;
             let skippedCount = 0;
@@ -94,12 +85,6 @@ export class FeeGenerationService {
             let admissionFeeCount = 0;
             const generatedFees: any[] = [];
             const errors: any[] = [];
-
-            console.log(`\n═══════════════════════════════════════════════════`);
-            console.log(` Generating Fees for ${monthName} ${year}`);
-            console.log(` Total Students: ${students.length}`);
-            console.log(`═══════════════════════════════════════════════════\n`);
-
             for (const student of students) {
                 try {
                     const studentClassName = this.getStudentClassInfo(student);
@@ -115,7 +100,7 @@ export class FeeGenerationService {
 
                     const studentCategory = student.category || student.studentType || 'Residential';
 
-                    // FeeCategory খোঁজা
+
                     let feeCategory = await FeeCategory.findOne({
                         categoryName: studentCategory,
                         className: studentClassName,

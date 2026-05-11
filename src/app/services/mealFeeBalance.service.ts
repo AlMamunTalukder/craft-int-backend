@@ -115,7 +115,7 @@ export class MealFeeBalanceService {
             }
 
             // Get student details
-            const student = await Student.findById(studentId).session(session);
+            const student = await Student.findById(studentId).populate("className").session(session);
             if (!student) {
                 await session.abortTransaction();
                 session.endSession();
@@ -225,11 +225,7 @@ export class MealFeeBalanceService {
         const students = await Student.find({
             status: 'active',
             admissionStatus: 'enrolled',
-        }).select('_id name advanceBalance class className');
-
-        console.log(`\n🍽️ ===== Generating Meal Fees: ${monthName} ${year} =====`);
-        console.log(`Total Students: ${students.length} | Meal Rate: ৳${mealRate}`);
-        console.log(`Month Format: ${monthFormat}\n`);
+        }).select('_id name advanceBalance class className').populate("className");
 
         let successCount = 0;
         let skippedCount = 0;
@@ -462,7 +458,7 @@ export class MealFeeBalanceService {
             feeType: 'Meal Fee',
         });
 
-        const student = await Student.findById(studentId).select('name advanceBalance');
+        const student = await Student.findById(studentId).populate("className").select('name advanceBalance');
 
         return {
             studentInfo: {
