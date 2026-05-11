@@ -3,14 +3,11 @@ import httpStatus from 'http-status';
 import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 import { classReportServices } from './classreport.service';
-<<<<<<< HEAD
-=======
 import { clearClassReportsCache } from './classreport.utils';
->>>>>>> cf2df89ec0061879ce01fdf5c2774a1dc8d85b03
 
 const createClassReport = catchAsync(async (req, res) => {
   const result = await classReportServices.createClassReport(req.body);
-     await clearClassReportsCache();
+  await clearClassReportsCache();
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -21,7 +18,7 @@ const createClassReport = catchAsync(async (req, res) => {
 const getAllClassReports = catchAsync(async (req, res, next) => {
   try {
     const result = await classReportServices.getAllClassReports(req.query);
-console.log('query', req.query )
+    console.log('query', req.query)
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
@@ -70,7 +67,7 @@ const updateClassReport = catchAsync(async (req, res, next) => {
       formattedData,
     );
 
-       await clearClassReportsCache();
+    await clearClassReportsCache();
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
@@ -85,7 +82,7 @@ const deleteClassReport = catchAsync(async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await classReportServices.deleteClassReport(id);
-   await clearClassReportsCache();
+    await clearClassReportsCache();
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
@@ -105,11 +102,7 @@ const deleteClassReport = catchAsync(async (req, res, next) => {
 //   ).replace(/\/$/, '');
 
 //   try {
-<<<<<<< HEAD
-//     const pdfBuffer = await classReportServices.generateClassReportPdf(
-=======
 //     const pdfBuffer = await classReportServices.ge(
->>>>>>> cf2df89ec0061879ce01fdf5c2774a1dc8d85b03
 //       classreportid,
 //       baseUrl,
 //     );

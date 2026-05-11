@@ -10,11 +10,7 @@ import {
 import { ClassReport } from './classreport.model';
 import { Student } from '../student/student.model';
 import { Types } from 'mongoose';
-<<<<<<< HEAD
-import Redis from "ioredis"
-=======
 import Redis from 'ioredis';
->>>>>>> dd0855e81ace138525c35a0ab3833180e1fbe85a
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
@@ -768,11 +764,11 @@ export const getAllClassReports = async (query: IClassReportQuery) => {
   // 2. ✅ hasComments filter (students who have comments)
   const hasCommentsFilter = hasCommentsQuery
     ? {
-        $and: [
-          { $ne: ['$$evaluation.comments', null] },
-          { $ne: ['$$evaluation.comments', ''] },
-        ],
-      }
+      $and: [
+        { $ne: ['$$evaluation.comments', null] },
+        { $ne: ['$$evaluation.comments', ''] },
+      ],
+    }
     : null;
 
   // 3. Other filters like lessonEvaluation, handwriting

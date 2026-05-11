@@ -99,24 +99,21 @@ const classReportSchema = new Schema<IClassReport>(
   },
 );
 
-<<<<<<< HEAD
+
 classReportSchema.index({ teachers: 1, classes: 1, subjects: 1 })
 classReportSchema.index({ date: 1, hour: 1 })
 classReportSchema.index({ createdAt: -1 })
-<<<<<<< HEAD
-=======
-=======
+
 // Add compound indexes for better query performance
 classReportSchema.index({ teachers: 1, classes: 1, subjects: 1 });
 classReportSchema.index({ date: 1, hour: 1 });
 classReportSchema.index({ createdAt: -1 });
->>>>>>> 4e87b02699127b2dffccf9940286335a283db072
 
 // Add index for comments filtering
 classReportSchema.index({ 'studentEvaluations.comments': 1 });
 
 // Add text index for better text search
->>>>>>> cf2df89ec0061879ce01fdf5c2774a1dc8d85b03
+
 classReportSchema.index({
   teachers: 'text',
   classes: 'text',
