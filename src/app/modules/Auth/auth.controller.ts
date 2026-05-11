@@ -3,9 +3,7 @@ import httpStatus from 'http-status';
 import { catchAsync } from '../../../utils/catchAsync';
 import sendResponse from '../../../utils/sendResponse';
 import { AuthServices } from './auth.service';
-import config from '../../config';
 
-// In your backend auth.controller.ts
 const loginUser = catchAsync(async (req, res) => {
   const result = await AuthServices.loginUser(req.body);
   const { accessToken, refreshToken } = result;
