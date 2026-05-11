@@ -341,9 +341,22 @@ const generateBulkMonthlyFees = async (
 
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
-    Fees.find()
-
-      .populate('student'),
+    Fees.find().populate({
+      path: 'student',
+      select: 'name studentId className fees', // only needed fields
+      populate: [
+        {
+          path: 'fees',
+          model: 'Fees',
+          select: 'month amount paidAmount dueAmount status',
+        },
+        {
+          path: 'className',
+          model: 'Class',
+          select: 'className',
+        },
+      ],
+    }),
     query,
   )
     .search(['class', 'month', 'status'])

@@ -70,6 +70,7 @@ const studentSchema = new Schema<IStudent>(
       previousClass: { type: String },
       gpa: { type: String },
     },
+
     parentInfo: {
       father: {
         nameBangla: { type: String },
