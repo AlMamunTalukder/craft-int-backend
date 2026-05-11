@@ -377,8 +377,6 @@ export const createEnrollment = async (
       primaryClassName =
         payload.studentDepartment === 'hifz' ? 'Hifz' : 'Class One';
     }
-
-    // ----- PARENT INFO (Fixed: Added nid and income) -----
     const parentInfo = {
       father: {
         nameBangla: payload.fatherNameBangla || '',
@@ -410,8 +408,6 @@ export const createEnrollment = async (
         address: payload.guardianVillage || '',
       },
     };
-
-    // ==================== STUDENT LOOKUP LOGIC ====================
     let studentDoc: any = null;
     let userDoc: any = null;
     let generatedStudentId = '';
@@ -462,7 +458,6 @@ export const createEnrollment = async (
 
     // ==================== STUDENT CREATION OR UPDATE ====================
     if (!studentDoc) {
-      // Generate new student ID
       generatedStudentId = await generateStudentId(classNameForId || primaryClassName);
 
       const email = payload.email ||

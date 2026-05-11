@@ -1,55 +1,71 @@
-// jobs/mealBalance.job.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import cron from 'node-cron';
 import { mealFeeBalanceService } from '../app/services/mealFeeBalance.service';
 
 let isInitialized = false;
 
-export const startMealBalanceCron = () => {
+/**
+ * Start cron job for automatic meal fee generation
+ * Runs on the last day of every month at 11:59 PM
+ */
+export const startMealFeeGenerationCron = () => {
     if (isInitialized) {
-        console.log('⚠️ Meal balance cron already initialized');
+        console.log('⚠️ Meal fee generation cron already initialized');
         return;
     }
 
-    console.log('🚀 Initializing Meal Balance Cron Job...');
-    console.log('═══════════════════════════════════════════════════');
-
-    // মাসের শেষ দিন রাত ১১:৫৯ মিনিটে চালু হবে (সঠিক সিনট্যাক্স)
-    // "59 23 28-31 * *" মানে: ২৮ থেকে ৩১ তারিখের মধ্যে যেটা শেষ তারিখ সেটাতে রাত ১১:৫৯ এ চালু হবে
+    // ✅ Runs at 23:59 on the last day of every month
     cron.schedule('59 23 28-31 * *', async () => {
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
         const currentYear = now.getFullYear();
+
+        // Check if today is the last day of the month
         const lastDayOfMonth = new Date(currentYear, currentMonth, 0).getDate();
         const currentDay = now.getDate();
 
-        // শুধুমাত্র মাসের শেষ দিনে রান করবে
-        if (currentDay === lastDayOfMonth) {
-            console.log('\n───────────────────────────────────────────────────');
-            console.log('🍽️ MEAL BALANCE CALCULATION CRON JOB TRIGGERED');
-            console.log(`📅 Date: ${new Date().toISOString()}`);
-            console.log('───────────────────────────────────────────────────\n');
+        if (currentDay !== lastDayOfMonth) {
+            console.log(`📅 Not last day of month (today: ${currentDay}, last: ${lastDayOfMonth}), skipping...`);
+            return;
+        }
 
-            try {
-                const result = await mealFeeBalanceService.calculateAllStudentsMonthlyMealBalance(currentMonth, currentYear);
+        console.log(`\n🍽️ [CRON] Starting automatic meal fee generation for ${currentMonth}/${currentYear}`);
+        console.log(`⏰ Time: ${now.toLocaleString()}`);
 
-                console.log(`✅ মিল ব্যালেন্স ক্যালকুলেশন সম্পূর্ণ:`);
-                console.log(`   - মোট শিক্ষার্থী: ${result.data.totalStudents}`);
-                console.log(`   - সফল: ${result.data.successCount}`);
-                console.log(`   - ত্রুটি: ${result.data.errorCount}`);
+        try {
+            const result = await mealFeeBalanceService.generateAllStudentsMealFee(
+                currentMonth,
+                currentYear,
+                55
+            );
 
-                if (result.data.adjustments.length > 0) {
-                    console.log(`\n📊 অ্যাডজাস্টমেন্ট সমূহ:`);
-                    result.data.adjustments.forEach((adj: any) => {
-                        console.log(`   - ${adj.studentName}: ${adj.message}`);
-                    });
-                }
-            } catch (error) {
-                console.error('❌ Meal balance cron job failed:', error);
+            if (result.success) {
+                console.log(`✅ [CRON] Generation completed successfully`);
+                console.log(`📊 ${result.data.successCount} students processed`);
+                console.log(`💰 Total amount: ৳${result.data.totalAmount.toLocaleString()}`);
+                console.log(`💵 Total due: ৳${result.data.totalDue.toLocaleString()}`);
+            } else {
+                console.log(`❌ [CRON] Generation failed: ${result.message}`);
             }
+        } catch (error: any) {
+            console.error('❌ [CRON] Meal fee generation failed:', error.message);
         }
     });
 
     isInitialized = true;
-    console.log('✅ Meal Balance Cron Job initialized successfully');
-    console.log('⏰ Will run on last day of every month at 11:59 PM\n');
+    console.log('✅ Meal Fee Generation Cron initialized');
+    console.log('   Schedule: Last day of every month at 11:59 PM');
+};
+
+/**
+ * Manually trigger meal fee generation for testing
+ */
+export const triggerMealFeeGenerationManually = async (
+    month: number,
+    year: number,
+    mealRate: number = 55
+) => {
+    console.log(`🔧 Manually triggering meal fee generation for ${month}/${year}`);
+    return await mealFeeBalanceService.generateAllStudentsMealFee(month, year, mealRate);
 };

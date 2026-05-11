@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/controllers/feeGeneration.controller.ts
 import { Request, Response } from 'express';
 // import { feeGenerationService } from '../../services/feeGeneration.service'; // পাথ ঠিক করুন

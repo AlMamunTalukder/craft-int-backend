@@ -5,6 +5,7 @@ import { catchAsync } from '../../../utils/catchAsync';
 import { mealAttendanceServices } from './service';
 import { Request, Response } from 'express';
 import moment from 'moment';
+import { IBulkGetQueryPayload } from './interface';
 
 const createOrUpdateAttendance = catchAsync(async (req: Request, res: Response) => {
   const result = await mealAttendanceServices.createOrUpdateAttendance(req.body);
@@ -106,50 +107,6 @@ const getMonthlySummary = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const getAttendanceByDateRange = catchAsync(async (req: Request, res: Response) => {
-  const { className, startDate, endDate, academicYear } = req.query;
-
-  if (!className) {
-    return sendResponse(res, {
-      statusCode: httpStatus.BAD_REQUEST,
-      success: false,
-      message: 'class parameter is required',
-      data: null,
-    });
-  }
-
-  if (!startDate || !endDate) {
-    return sendResponse(res, {
-      statusCode: httpStatus.BAD_REQUEST,
-      success: false,
-      message: 'startDate and endDate are required (format: YYYY-MM-DD)',
-      data: null,
-    });
-  }
-
-  if (!academicYear) {
-    return sendResponse(res, {
-      statusCode: httpStatus.BAD_REQUEST,
-      success: false,
-      message: 'academicYear parameter is required',
-      data: null,
-    });
-  }
-
-  const result = await mealAttendanceServices.getAttendanceByDateRange(
-    className as string,
-    startDate as string,
-    endDate as string,
-    academicYear as string
-  );
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: 'Attendance by date range retrieved successfully',
-    data: result,
-  });
-});
 
 const getAttendanceByDateRangeForAllStudents = catchAsync(async (req: Request, res: Response) => {
   const { startDate, endDate, academicYear } = req.query;
@@ -213,23 +170,6 @@ const getStudentMealReport = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const getStudentWithMealHistory = catchAsync(async (req: Request, res: Response) => {
-  const { studentId } = req.params;
-  const { academicYear, month } = req.query;
-
-  const result = await mealAttendanceServices.getStudentWithMealHistory(
-    studentId,
-    academicYear as string,
-    month as string
-  );
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: 'Student with meal history retrieved successfully',
-    data: result,
-  });
-});
 
 const deleteAttendance = catchAsync(async (req: Request, res: Response) => {
   const result = await mealAttendanceServices.deleteAttendance(req.params.id);
@@ -315,17 +255,102 @@ const updateAttendance = catchAsync(async (req: Request, res: Response) => {
     data: result,
   });
 });
+
+
+const bulkUpdateAttendance = catchAsync(async (req: Request, res: Response) => {
+  const result = await mealAttendanceServices.bulkUpdateAttendance(req.body);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
+
+
+
+const bulkGetAttendance = catchAsync(async (req: Request, res: Response) => {
+  const queryPayload: IBulkGetQueryPayload = {
+    studentIds: req.query.studentIds ? (req.query.studentIds as string).split(',') : undefined,
+    classNames: req.query.classNames ? (req.query.classNames as string).split(',') : undefined,
+    startDate: req.query.startDate as string,
+    endDate: req.query.endDate as string,
+    month: req.query.month as string,
+    academicYear: req.query.academicYear as string,
+    mealStatus: req.query.mealStatus as 'all' | 'taken' | 'not_taken',
+    breakfast: req.query.breakfast === 'true' ? true : req.query.breakfast === 'false' ? false : undefined,
+    lunch: req.query.lunch === 'true' ? true : req.query.lunch === 'false' ? false : undefined,
+    dinner: req.query.dinner === 'true' ? true : req.query.dinner === 'false' ? false : undefined,
+  };
+
+  if (!queryPayload.academicYear) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'academicYear is required',
+      data: null,
+    });
+  }
+
+  const result = await mealAttendanceServices.bulkGetAttendance(queryPayload);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
+
+
+const bulkGetByDateRange = catchAsync(async (req: Request, res: Response) => {
+  const { startDate, endDate, academicYear } = req.query;
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 50;
+  const className = req.query.className as string;
+  const studentType = req.query.studentType as string;
+
+  if (!startDate || !endDate || !academicYear) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'startDate, endDate and academicYear are required',
+      data: null,
+    });
+  }
+
+  const result = await mealAttendanceServices.bulkGetByDateRange(
+    startDate as string,
+    endDate as string,
+    academicYear as string,
+    page,
+    limit,
+    className,
+    studentType
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
+
+
 export const mealAttendanceControllers = {
   createOrUpdateAttendance,
   bulkCreateAttendance,
+  bulkUpdateAttendance,
+  bulkGetAttendance,
+  bulkGetByDateRange,
   getAttendanceByStudentAndMonth,
   getMonthlyAttendanceSheet,
   getMonthlySummary,
-  getAttendanceByDateRange,
   getAttendanceByDateRangeForAllStudents,
   deleteAttendance,
   getStudentMealReport,
-  getStudentWithMealHistory,
   getAllAttendanceRecords,
   getAttendanceById,
   updateAttendance
