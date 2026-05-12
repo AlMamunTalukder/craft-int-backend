@@ -13,7 +13,7 @@ const loginUser = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 15,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
     path: '/',
     domain: '.craftinternationalinstitute.com',
   });
@@ -22,7 +22,8 @@ const loginUser = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 7,
+
+    maxAge: 1000 * 60 * 60 * 24 * 60,
     path: '/',
     domain: '.craftinternationalinstitute.com',
   });
@@ -73,7 +74,7 @@ const refreshToken = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 15,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
     path: '/',
   });
 
