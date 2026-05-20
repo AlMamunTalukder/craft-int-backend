@@ -8,6 +8,7 @@ export const categoryNameEnum = z.union([
     'Day Care',
     'Non-Residential One Meal',
     'Day Care One Meal',
+    "Residential No Meal"
   ]),
   z.literal(''),
 ]);
