@@ -299,7 +299,6 @@ export const createEnrollment = async (
     let primaryClassName = '';
     let classNameForId = '';
 
-    // ----- CLASS NAME RESOLUTION -----
     if (Array.isArray(payload.className)) {
       const rawClassIds = payload.className
         .filter((cls: any) => cls && cls !== '')
@@ -641,9 +640,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
   session.startTransaction();
 
   try {
-    console.log('=== updateEnrollment START ===', id);
 
-    // ── Get existing enrollment ───────────────────────────────────────────────
     const existingEnrollment = await Enrollment.findById(id)
       .populate('student')
       .session(session);
@@ -1845,6 +1842,7 @@ const getPromotionEligibleStudents = async (classId: string) => {
   if (!classExists) {
     throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
   }
+  console.log('classExists', classExists);
 
   const eligibleEnrollments = await Enrollment.find({
     className: classId,
@@ -1857,6 +1855,8 @@ const getPromotionEligibleStudents = async (classId: string) => {
     .populate('className', 'className')
     .sort({ roll: 1 });
 
+  console.log('eligibleEnrollments', eligibleEnrollments);
+
   if (!eligibleEnrollments || eligibleEnrollments.length === 0) {
     return {
       success: true,
@@ -1866,15 +1866,15 @@ const getPromotionEligibleStudents = async (classId: string) => {
   }
 
   const formattedStudents = eligibleEnrollments.map((enrollment: any) => ({
-    enrollmentId: enrollment._id,
-    studentId: enrollment.student._id,
-    studentIdentifier: enrollment.student.studentId,
-    studentName: enrollment.student.name,
-    currentClass: enrollment.className?.[0]?.className || 'N/A',
-    currentRoll: enrollment.roll,
-    section: enrollment.section,
-    fatherName: enrollment.student.fatherName,
-    mobile: enrollment.student.mobile,
+    enrollmentId: enrollment?._id,
+    studentId: enrollment?.student?._id,
+    studentIdentifier: enrollment?.student?.studentId,
+    studentName: enrollment?.student?.name,
+    currentClass: enrollment?.className?.[0]?.className || 'N/A',
+    currentRoll: enrollment?.roll,
+    section: enrollment?.section,
+    fatherName: enrollment?.student?.fatherName,
+    mobile: enrollment?.student?.mobile,
   }));
 
   return {
