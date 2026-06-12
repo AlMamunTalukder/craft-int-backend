@@ -55,20 +55,24 @@ const getAttendanceByStudentAndMonth = catchAsync(async (req: Request, res: Resp
   });
 });
 
+// app/modules/mealAttendance/controller.ts
+
 const getMonthlyAttendanceSheet = catchAsync(async (req: Request, res: Response) => {
+  // আপনি আর রিকোযস অনুযায় className এখন option থাকতে পারবেন।
+  // যদি frontend ক্লাস পাঠায (All Classes), তাহলে এটি validation আসবে Service এ handle করবে।
   const { className, month, academicYear } = req.query;
 
-  if (!className || !month || !academicYear) {
+  if (!month || !academicYear) {
     return sendResponse(res, {
       statusCode: httpStatus.BAD_REQUEST,
       success: false,
-      message: 'class, month and academicYear are required',
+      message: 'month and academicYear are required',
       data: null,
     });
   }
 
   const result = await mealAttendanceServices.getMonthlyAttendanceSheet(
-    className as string,
+    className as string | undefined,
     month as string,
     academicYear as string
   );
@@ -80,7 +84,6 @@ const getMonthlyAttendanceSheet = catchAsync(async (req: Request, res: Response)
     data: result,
   });
 });
-
 const getMonthlySummary = catchAsync(async (req: Request, res: Response) => {
   const { className, month, academicYear } = req.query;
 
@@ -337,7 +340,32 @@ const bulkGetByDateRange = catchAsync(async (req: Request, res: Response) => {
     data: result.data,
   });
 });
+const deleteMonthlyAttendance = catchAsync(async (req: Request, res: Response) => {
+  const { className, month, academicYear } = req.query;
 
+  // Only Month and Year are strictly required. Class is optional for "All Classes" deletion.
+  if (!month || !academicYear) {
+    return sendResponse(res, {
+      statusCode: httpStatus.BAD_REQUEST,
+      success: false,
+      message: 'month and academicYear are required',
+      data: null,
+    });
+  }
+
+  const result = await mealAttendanceServices.deleteMonthlyAttendance(
+    className as string, // Pass undefined if not provided
+    month as string,
+    academicYear as string
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result,
+  });
+});
 
 export const mealAttendanceControllers = {
   createOrUpdateAttendance,
@@ -353,5 +381,6 @@ export const mealAttendanceControllers = {
   getStudentMealReport,
   getAllAttendanceRecords,
   getAttendanceById,
-  updateAttendance
+  updateAttendance,
+  deleteMonthlyAttendance
 };

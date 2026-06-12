@@ -255,23 +255,60 @@ const getAttendanceByStudentAndMonth = async (studentId: string, month: string, 
 };
 
 
-const getMonthlyAttendanceSheet = async (className: string, month: string, academicYear: string) => {
-  if (!className) throw new AppError(httpStatus.BAD_REQUEST, 'Class name is required');
+// app/modules/mealAttendance/service.ts
+
+const getMonthlyAttendanceSheet = async (className: string | undefined, month: string, academicYear: string) => {
+  // Validation
+  if (!month || !academicYear) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
+  }
   if (!moment(month, 'YYYY-MM', true).isValid()) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
   }
 
-  const students = await getStudentsByClassName(className);
-  if (!students.length) throw new AppError(httpStatus.NOT_FOUND, `No students found for class: ${className}`);
+  // 1. Get Students (All Classes or Specific Class)
+  let students: any[];
+  if (className) {
+    // Specific class logic (Backward compatible)
+    students = await getStudentsByClassName(className);
+  } else {
+    // All Classes Logic (Your Request)
+    students = await Student.find({
+      admissionStatus: 'enrolled',
+      status: 'active'
+    }).select('_id studentId name nameBangla studentClassRoll studentType className class').lean();
+  }
 
+  if (!students.length) {
+    // No students found (handle gracefully)
+    return {
+      month,
+      academicYear,
+      className: className || 'All Classes',
+      dates: [],
+      students: [],
+      mealRate: MEAL_RATE,
+      totalStudents: 0,
+      grandTotalMeals: 0,
+      grandTotalCost: 0,
+      grandTotalBreakfast: 0,
+      grandTotalLunch: 0,
+      grandTotalDinner: 0,
+      dailyTotals: []
+    };
+  }
+
+  // 2. Fetch Attendance
   const attendances = await MealAttendance.find({ month, academicYear });
 
+  // 3. Map for quick lookup
   const attendanceMap = new Map();
   attendances.forEach(att => {
     const key = `${att.student.toString()}_${moment(att.date).format('YYYY-MM-DD')}`;
     attendanceMap.set(key, att);
   });
 
+  // 4. Generate Dates List
   const startDate = moment(`${month}-01`);
   const endDate = startDate.clone().endOf('month');
   const dates: string[] = [];
@@ -281,6 +318,52 @@ const getMonthlyAttendanceSheet = async (className: string, month: string, acade
     currentDate.add(1, 'day');
   }
 
+  // 5. Generate Sheet Data & Calculate Totals
+  let grandTotalMeals = 0;
+  let grandTotalCost = 0;
+  let grandTotalBreakfast = 0;
+  let grandTotalLunch = 0;
+  let grandTotalDinner = 0;
+
+  // Calculate Daily Totals (Daywise total for ALL classes)
+  const dailyTotals = dates.map(date => {
+    let totalMeals = 0;
+    let totalBreakfast = 0;
+    let totalLunch = 0;
+    let totalDinner = 0;
+
+    attendances.forEach(att => {
+      if (moment(att.date).format('YYYY-MM-DD') === date) {
+        totalMeals += att.totalMeals || 0;
+        // totalCost += att.mealCost || 0;
+
+        if (att.breakfast) totalBreakfast++;
+        if (att.lunch) totalLunch++;
+        if (att.dinner) totalDinner++;
+      }
+    });
+
+    return {
+      date,
+      totalMeals,
+      totalCost: totalMeals * MEAL_RATE, // Or sum cost directly
+      totalBreakfast,
+      totalLunch,
+      totalDinner,
+      isWeekend: [0, 6].includes(moment(date).day()),
+    };
+  });
+
+  // Accumulate Grand Totals
+  dailyTotals.forEach(day => {
+    grandTotalMeals += day.totalMeals;
+    grandTotalCost += day.totalCost;
+    grandTotalBreakfast += day.totalBreakfast;
+    grandTotalLunch += day.totalLunch;
+    grandTotalDinner += day.totalDinner;
+  });
+
+  // 6. Generate Student-Specific Data
   const sheetData = students.map(student => {
     const studentAttendance = dates.map(date => {
       const key = `${student._id.toString()}_${date}`;
@@ -296,8 +379,8 @@ const getMonthlyAttendanceSheet = async (className: string, month: string, acade
       };
     });
 
-    const totalMeals = studentAttendance.reduce((sum, day) => sum + day.totalMeals, 0);
-    const mealCost = totalMeals * MEAL_RATE;
+    const studentTotalMeals = studentAttendance.reduce((sum, day) => sum + day.totalMeals, 0);
+    const studentMealCost = studentTotalMeals * MEAL_RATE;
 
     return {
       student: {
@@ -307,27 +390,31 @@ const getMonthlyAttendanceSheet = async (className: string, month: string, acade
         nameBangla: student.nameBangla,
         roll: student.studentClassRoll,
         type: student.studentType,
-        class: className,
+        class: student.className || student.class, // Handle array/object properly
       },
       attendance: studentAttendance,
-      totalMeals,
-      mealCost,
+      totalMeals: studentTotalMeals,
+      mealCost: studentMealCost,
     };
   });
 
+  // 7. Return Full Response (Keeping existing structure + Adding new stats)
   return {
     month,
     academicYear,
-    className,
+    className: className || 'All Classes',
     dates,
     students: sheetData,
     mealRate: MEAL_RATE,
     totalStudents: sheetData.length,
-    grandTotalMeals: sheetData.reduce((sum, s) => sum + s.totalMeals, 0),
-    grandTotalCost: sheetData.reduce((sum, s) => sum + s.mealCost, 0),
+    grandTotalMeals,
+    grandTotalCost,
+    grandTotalBreakfast,
+    grandTotalLunch,
+    grandTotalDinner,
+    dailyTotals, // The new daywise summary
   };
 };
-
 
 const getMonthlySummary = async (className: string, month: string, academicYear: string) => {
   const sheetData = await getMonthlyAttendanceSheet(className, month, academicYear);
@@ -527,11 +614,7 @@ const getStudentMealReport = async (studentId: string, startDate: string, endDat
       averageMealsPerDay: (totalMeals / totalDays).toFixed(2),
     }
   };
-};
-
-
-
-
+}
 
 const getAllAttendanceRecords = async (
   page: number = 1,
@@ -1205,6 +1288,71 @@ const bulkGetByDateRange = async (
   };
 };
 
+const deleteMonthlyAttendance = async (
+  className: string | undefined,
+  month: string,
+  academicYear: string
+) => {
+  // 1. Validation
+  if (!month || !academicYear) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
+  }
+
+  // 2. Prepare Student Query
+  // We start with basic filters (Active & Enrolled)
+  let studentQuery: any = {
+    admissionStatus: 'enrolled',
+    status: 'active'
+  };
+
+  // 3. Handle "All Classes" vs Specific Class
+  if (className && className !== 'ALL') {
+    // SPECIFIC CLASS LOGIC
+    const classIds = await getClassIdsByClassName(className);
+    if (classIds.length === 0) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
+    }
+    // Filter students by the found class IDs
+    studentQuery.className = { $in: classIds };
+  }
+  // ELSE: If className is undefined or 'ALL', we do NOT add className filter.
+  // This means we fetch ALL students from the DB.
+
+  // 4. Get Students
+  const students = await Student.find(studentQuery).select('_id');
+
+  if (students.length === 0) {
+    // Check if we filtered by class and found nothing
+    if (className && className !== 'ALL') {
+      throw new AppError(httpStatus.NOT_FOUND, 'No active students found in this class');
+    }
+    throw new AppError(httpStatus.NOT_FOUND, 'No active students found');
+  }
+
+  const studentIds = students.map(s => s._id);
+
+  // 5. Robust Delete Logic using Date Range
+  // We calculate the start and end date of the month to avoid string formatting issues
+  const startDate = moment(month, 'YYYY-MM').startOf('month').startOf('day').toDate();
+  const endDate = moment(month, 'YYYY-MM').endOf('month').endOf('day').toDate();
+
+  // Delete records where student is in the list AND date is within the selected month
+  const deleteResult = await MealAttendance.deleteMany({
+    student: { $in: studentIds },
+    date: { $gte: startDate, $lte: endDate },
+    academicYear
+  });
+
+  if (deleteResult.deletedCount === 0) {
+    throw new AppError(httpStatus.NOT_FOUND, 'No attendance records found for this month');
+  }
+
+  return {
+    deletedCount: deleteResult.deletedCount,
+    message: `Successfully deleted ${deleteResult.deletedCount} records for ${className || 'All Classes'} in ${month}`
+  };
+};
+
 
 export const mealAttendanceServices = {
   createOrUpdateAttendance,
@@ -1220,7 +1368,8 @@ export const mealAttendanceServices = {
   getStudentMealReport,
   getAllAttendanceRecords,
   getAttendanceById,
-  updateAttendance
+  updateAttendance,
+  deleteMonthlyAttendance
 };
 
 

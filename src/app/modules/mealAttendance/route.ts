@@ -19,5 +19,6 @@ router.get('/summary', mealAttendanceControllers.getMonthlySummary);
 router.get('/date-range/all', mealAttendanceControllers.getAttendanceByDateRangeForAllStudents);
 router.get('/:id', mealAttendanceControllers.getAttendanceById);
 router.put('/:id', validateRequest(createAttendanceValidation), mealAttendanceControllers.updateAttendance);
+router.delete('/bulk/month', mealAttendanceControllers.deleteMonthlyAttendance)
 
 export const mealAttendanceRoutes = router;
