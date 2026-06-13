@@ -18,6 +18,7 @@ const createUserValidation = z.object({
         'teacher',
         'super_admin',
         'accountant',
+        'staff'
       ])
       .default('user'),
     status: z.enum(['active', 'inactive']).default('active'),

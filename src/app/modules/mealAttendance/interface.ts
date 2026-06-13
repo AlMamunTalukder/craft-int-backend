@@ -18,6 +18,7 @@ export interface IMealAttendance {
   remarks?: string;
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
+  isFreeMeal: boolean;
 }
 
 export interface ICreateAttendancePayload {
@@ -38,6 +39,8 @@ export interface IBulkAttendancePayload {
     breakfast?: boolean;
     lunch?: boolean;
     dinner?: boolean;
+    isFreeMeal?: boolean; // ✅ NEW
+
   }>;
   academicYear: string;
 }

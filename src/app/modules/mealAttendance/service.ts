@@ -10,25 +10,26 @@ import { IBulkAttendancePayload, IBulkGetQueryPayload, IBulkUpdateAttendancePayl
 
 const MEAL_RATE = 55;
 
-
-
-const calculateMealStats = (breakfast: boolean, lunch: boolean, dinner: boolean, mealRate: number = MEAL_RATE) => {
+const calculateMealStats = (
+  breakfast: boolean,
+  lunch: boolean,
+  dinner: boolean,
+  mealRate: number = MEAL_RATE,
+  isFreeMeal: boolean = false
+) => {
   const totalMeals = [breakfast, lunch, dinner].filter(Boolean).length;
-  const mealCost = totalMeals * mealRate;
+  const mealCost = isFreeMeal ? 0 : totalMeals * mealRate;
   return { totalMeals, mealCost };
 };
-
 
 const updateStudentMealAttendance = async (studentId: string, attendanceId: string, isDelete: boolean = false) => {
   try {
     if (isDelete) {
-      // Remove attendance reference from student
       await Student.findByIdAndUpdate(
         studentId,
         { $pull: { mealAttendances: attendanceId } }
       );
     } else {
-      // Add attendance reference to student (use $addToSet to avoid duplicates)
       await Student.findByIdAndUpdate(
         studentId,
         { $addToSet: { mealAttendances: attendanceId } }
@@ -51,7 +52,6 @@ const getClassIdsByClassName = async (className: string): Promise<Types.ObjectId
   }
 };
 
-
 const getStudentsByClassName = async (className: string): Promise<any[]> => {
   const classIds = await getClassIdsByClassName(className);
 
@@ -70,7 +70,6 @@ const getStudentsByClassName = async (className: string): Promise<any[]> => {
     .select('_id studentId name nameBangla studentClassRoll studentType className class')
     .lean();
 };
-
 
 const createOrUpdateAttendance = async (payload: ICreateAttendancePayload) => {
   const { student, date, academicYear, breakfast = false, lunch = false, dinner = false, mealRate = MEAL_RATE, remarks } = payload;
@@ -110,15 +109,11 @@ const createOrUpdateAttendance = async (payload: ICreateAttendancePayload) => {
     result = await MealAttendance.findByIdAndUpdate(existingAttendance._id, updateData, { new: true, runValidators: true });
   } else {
     result = await MealAttendance.create(updateData);
-    // CRITICAL: Add attendance reference to student
     await updateStudentMealAttendance(student, result._id.toString(), false);
   }
 
   return result;
 };
-
-
-// In service.ts - fix the bulkCreateAttendance function
 
 const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   const { attendances, academicYear } = payload;
@@ -132,20 +127,20 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
 
   for (const att of attendances) {
     const date = moment(att.date).format('YYYY-MM-DD');
-    const month = moment(att.date).format('YYYY-MM'); // Fix: Use YYYY-MM format to match interface
+    const month = moment(att.date).format('YYYY-MM');
     const breakfast = att.breakfast || false;
     const lunch = att.lunch || false;
     const dinner = att.dinner || false;
-    const { totalMeals, mealCost } = calculateMealStats(breakfast, lunch, dinner);
+    const isFreeMeal = att.isFreeMeal || false;
 
-    // Check if attendance exists
+    const { totalMeals, mealCost } = calculateMealStats(breakfast, lunch, dinner, MEAL_RATE, isFreeMeal);
+
     const existingAttendance = await MealAttendance.findOne({
       student: new Types.ObjectId(att.studentId),
       date,
       academicYear,
     });
 
-    // Create a temporary ID for new attendance
     const tempId = new Types.ObjectId();
 
     if (!existingAttendance) {
@@ -162,7 +157,7 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
           $setOnInsert: { _id: tempId },
           $set: {
             student: new Types.ObjectId(att.studentId),
-            date: new Date(date), // Convert string to Date object
+            date: new Date(date),
             month,
             academicYear,
             breakfast,
@@ -171,6 +166,7 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
             totalMeals,
             mealCost,
             mealRate: MEAL_RATE,
+            isFreeMeal: isFreeMeal,
             isHoliday: false,
             isAbsent: false,
           }
@@ -182,7 +178,6 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
 
   const result = await MealAttendance.bulkWrite(bulkOperations);
 
-  // CRITICAL: Update student references for new attendances
   for (const item of newAttendanceIds) {
     await updateStudentMealAttendance(item.studentId, item.attendanceId, false);
   }
@@ -195,7 +190,6 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   };
 };
 
-
 const deleteAttendance = async (id: string) => {
   const attendance = await MealAttendance.findById(id);
   if (!attendance) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
@@ -203,13 +197,10 @@ const deleteAttendance = async (id: string) => {
   const studentId = attendance.student.toString();
   const result = await MealAttendance.findByIdAndDelete(id);
 
-  // Remove attendance reference from student
   await updateStudentMealAttendance(studentId, id, true);
 
   return result;
 };
-
-
 
 const getAttendanceByStudentAndMonth = async (studentId: string, month: string, academicYear: string) => {
   const student = await Student.findById(studentId).select('_id studentId name nameBangla studentClassRoll studentType');
@@ -254,11 +245,10 @@ const getAttendanceByStudentAndMonth = async (studentId: string, month: string, 
   };
 };
 
-
-// app/modules/mealAttendance/service.ts
-
+// ============================================================
+// ✅ UPDATED: getMonthlyAttendanceSheet — now Free-Meal aware
+// ============================================================
 const getMonthlyAttendanceSheet = async (className: string | undefined, month: string, academicYear: string) => {
-  // Validation
   if (!month || !academicYear) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
   }
@@ -269,10 +259,8 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
   // 1. Get Students (All Classes or Specific Class)
   let students: any[];
   if (className) {
-    // Specific class logic (Backward compatible)
     students = await getStudentsByClassName(className);
   } else {
-    // All Classes Logic (Your Request)
     students = await Student.find({
       admissionStatus: 'enrolled',
       status: 'active'
@@ -280,7 +268,6 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
   }
 
   if (!students.length) {
-    // No students found (handle gracefully)
     return {
       month,
       academicYear,
@@ -294,6 +281,8 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
       grandTotalBreakfast: 0,
       grandTotalLunch: 0,
       grandTotalDinner: 0,
+      grandTotalFreeMeals: 0,
+      grandTotalFreeMealCostSaved: 0,
       dailyTotals: []
     };
   }
@@ -324,18 +313,31 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
   let grandTotalBreakfast = 0;
   let grandTotalLunch = 0;
   let grandTotalDinner = 0;
+  let grandTotalFreeMeals = 0;
+  let grandTotalFreeMealCostSaved = 0;
 
   // Calculate Daily Totals (Daywise total for ALL classes)
   const dailyTotals = dates.map(date => {
     let totalMeals = 0;
+    let totalCost = 0;
     let totalBreakfast = 0;
     let totalLunch = 0;
     let totalDinner = 0;
+    let totalFreeMeals = 0;
+    let freeMealCostSaved = 0;
 
     attendances.forEach(att => {
       if (moment(att.date).format('YYYY-MM-DD') === date) {
-        totalMeals += att.totalMeals || 0;
-        // totalCost += att.mealCost || 0;
+        const meals = att.totalMeals || 0;
+        totalMeals += meals;
+
+        if (att.isFreeMeal) {
+          // Free meal -> not added to cost, but track count + what it would have cost
+          totalFreeMeals += 1;
+          freeMealCostSaved += meals * MEAL_RATE;
+        } else {
+          totalCost += att.mealCost || 0;
+        }
 
         if (att.breakfast) totalBreakfast++;
         if (att.lunch) totalLunch++;
@@ -346,10 +348,12 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
     return {
       date,
       totalMeals,
-      totalCost: totalMeals * MEAL_RATE, // Or sum cost directly
+      totalCost,
       totalBreakfast,
       totalLunch,
       totalDinner,
+      totalFreeMeals,
+      freeMealCostSaved,
       isWeekend: [0, 6].includes(moment(date).day()),
     };
   });
@@ -361,6 +365,8 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
     grandTotalBreakfast += day.totalBreakfast;
     grandTotalLunch += day.totalLunch;
     grandTotalDinner += day.totalDinner;
+    grandTotalFreeMeals += day.totalFreeMeals;
+    grandTotalFreeMealCostSaved += day.freeMealCostSaved;
   });
 
   // 6. Generate Student-Specific Data
@@ -368,19 +374,30 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
     const studentAttendance = dates.map(date => {
       const key = `${student._id.toString()}_${date}`;
       const attendance = attendanceMap.get(key);
+      const meals = attendance?.totalMeals || 0;
+      const isFree = attendance?.isFreeMeal || false;
+
       return {
         date,
         breakfast: attendance?.breakfast || false,
         lunch: attendance?.lunch || false,
         dinner: attendance?.dinner || false,
-        totalMeals: attendance?.totalMeals || 0,
+        totalMeals: meals,
+        // ✅ Free meal days cost 0 — use stored mealCost (which is already 0 if free)
+        mealCost: isFree ? 0 : (attendance?.mealCost ?? meals * MEAL_RATE),
+        isFreeMeal: isFree,
         isHoliday: attendance?.isHoliday || false,
         isAbsent: attendance?.isAbsent || false,
       };
     });
 
     const studentTotalMeals = studentAttendance.reduce((sum, day) => sum + day.totalMeals, 0);
-    const studentMealCost = studentTotalMeals * MEAL_RATE;
+    // ✅ Sum actual per-day cost (0 on free-meal days) instead of totalMeals * MEAL_RATE
+    const studentMealCost = studentAttendance.reduce((sum, day) => sum + day.mealCost, 0);
+    const studentFreeMealsCount = studentAttendance.filter(d => d.isFreeMeal).length;
+    const studentFreeMealCostSaved = studentAttendance
+      .filter(d => d.isFreeMeal)
+      .reduce((sum, d) => sum + d.totalMeals * MEAL_RATE, 0);
 
     return {
       student: {
@@ -390,15 +407,17 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
         nameBangla: student.nameBangla,
         roll: student.studentClassRoll,
         type: student.studentType,
-        class: student.className || student.class, // Handle array/object properly
+        class: student.className || student.class,
       },
       attendance: studentAttendance,
       totalMeals: studentTotalMeals,
       mealCost: studentMealCost,
+      freeMealsCount: studentFreeMealsCount,
+      freeMealCostSaved: studentFreeMealCostSaved,
     };
   });
 
-  // 7. Return Full Response (Keeping existing structure + Adding new stats)
+  // 7. Return Full Response
   return {
     month,
     academicYear,
@@ -412,10 +431,15 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
     grandTotalBreakfast,
     grandTotalLunch,
     grandTotalDinner,
-    dailyTotals, // The new daywise summary
+    grandTotalFreeMeals,
+    grandTotalFreeMealCostSaved,
+    dailyTotals,
   };
 };
 
+// ============================================================
+// ✅ UPDATED: getMonthlySummary — Free-Meal aware
+// ============================================================
 const getMonthlySummary = async (className: string, month: string, academicYear: string) => {
   const sheetData = await getMonthlyAttendanceSheet(className, month, academicYear);
 
@@ -431,7 +455,9 @@ const getMonthlySummary = async (className: string, month: string, academicYear:
       studentId: student.student.studentId,
       studentType: student.student.type,
       totalMeals: student.totalMeals,
-      actualMealCost: student.mealCost,
+      actualMealCost: student.mealCost, // already excludes free-meal days
+      freeMealsCount: student.freeMealsCount,
+      freeMealCostSaved: student.freeMealCostSaved,
       monthlyMealFee,
       adjustment,
       netPayable: student.mealCost > monthlyMealFee ? student.mealCost - monthlyMealFee : 0,
@@ -450,6 +476,8 @@ const getMonthlySummary = async (className: string, month: string, academicYear:
   const totalMonthlyFee = summary.reduce((sum, s) => sum + s.monthlyMealFee, 0);
   const totalNetPayable = summary.reduce((sum, s) => sum + s.netPayable, 0);
   const totalRefund = summary.reduce((sum, s) => sum + s.refund, 0);
+  const totalFreeMeals = summary.reduce((sum, s) => sum + s.freeMealsCount, 0);
+  const totalFreeMealCostSaved = summary.reduce((sum, s) => sum + s.freeMealCostSaved, 0);
 
   return {
     month,
@@ -463,12 +491,13 @@ const getMonthlySummary = async (className: string, month: string, academicYear:
       totalMonthlyFee,
       totalNetPayable,
       totalRefund,
+      totalFreeMeals,
+      totalFreeMealCostSaved,
       averageMealsPerStudent: (totalMeals / summary.length).toFixed(2),
       mealRate: MEAL_RATE,
     },
   };
 };
-
 
 const getAttendanceByDateRangeForAllStudents = async (startDate: string, endDate: string, academicYear: string) => {
   if (!startDate || !endDate) throw new AppError(httpStatus.BAD_REQUEST, 'Start date and end date are required');
@@ -716,6 +745,7 @@ const getAllAttendanceRecords = async (
     uniqueStudents,
   };
 };
+
 const getAttendanceById = async (id: string) => {
   if (!id) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
@@ -729,7 +759,6 @@ const getAttendanceById = async (id: string) => {
     throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
   }
 
-  // Format the response with additional calculated fields
   const student = attendance.student as any;
 
   return {
@@ -782,7 +811,6 @@ const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePa
     remarks
   } = payload;
 
-  // If student is being updated, verify student exists
   if (student) {
     const studentExists = await Student.findById(student).select('_id studentId name className admissionStatus status');
     if (!studentExists) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
@@ -790,7 +818,6 @@ const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePa
     if (studentExists.status !== 'active') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not active');
   }
 
-  // Get the final values (use existing if not provided)
   const finalStudent = student || existingAttendance.student;
   const finalDate = date || existingAttendance.date;
   const finalAcademicYear = academicYear || existingAttendance.academicYear;
@@ -831,7 +858,6 @@ const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePa
   return result;
 };
 
-
 const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
   const { updates } = payload;
 
@@ -855,7 +881,6 @@ const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
       try {
         const { id, data } = update;
 
-        // Check if attendance exists
         const existingAttendance = await MealAttendance.findById(id).session(session);
         if (!existingAttendance) {
           results.failed++;
@@ -866,7 +891,6 @@ const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
           continue;
         }
 
-        // Prepare update data
         const {
           student,
           date,
@@ -878,7 +902,6 @@ const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
           remarks
         } = data;
 
-        // Get final values
         const finalStudent = student || existingAttendance.student.toString();
         const finalDate = date || existingAttendance.date;
         const finalAcademicYear = academicYear || existingAttendance.academicYear;
@@ -887,7 +910,6 @@ const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
         const finalDinner = dinner !== undefined ? dinner : existingAttendance.dinner;
         const finalRemarks = remarks !== undefined ? remarks : existingAttendance.remarks;
 
-        // Verify student exists if changed
         if (student && student !== existingAttendance.student.toString()) {
           const studentExists = await Student.findById(student).session(session);
           if (!studentExists) {
@@ -962,7 +984,6 @@ const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
   }
 };
 
-
 const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
   const {
     studentIds,
@@ -983,12 +1004,10 @@ const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
 
   const matchStage: any = { academicYear };
 
-  // Filter by student IDs
   if (studentIds && studentIds.length > 0) {
     matchStage.student = { $in: studentIds.map(id => new Types.ObjectId(id)) };
   }
 
-  // Filter by class names
   if (classNames && classNames.length > 0) {
     const { Class } = require('../class/class.model');
     const allClassIds: Types.ObjectId[] = [];
@@ -1017,7 +1036,6 @@ const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
     }
   }
 
-  // Filter by date range (using startDate/endDate)
   if (startDate && endDate) {
     const start = moment(startDate, 'YYYY-MM-DD');
     const end = moment(endDate, 'YYYY-MM-DD');
@@ -1032,7 +1050,6 @@ const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
     };
   }
 
-  // Filter by month
   if (month) {
     if (!moment(month, 'YYYY-MM', true).isValid()) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
@@ -1040,24 +1057,20 @@ const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
     matchStage.month = month;
   }
 
-  // Filter by meal status
   if (mealStatus === 'taken') {
     matchStage.totalMeals = { $gt: 0 };
   } else if (mealStatus === 'not_taken') {
     matchStage.totalMeals = 0;
   }
 
-  // Filter by specific meals
   if (breakfast !== undefined) matchStage.breakfast = breakfast;
   if (lunch !== undefined) matchStage.lunch = lunch;
   if (dinner !== undefined) matchStage.dinner = dinner;
 
-  // Get attendance records
   const attendances = await MealAttendance.find(matchStage)
     .populate('student', 'name nameBangla studentId studentClassRoll studentType className class email mobile')
     .sort({ date: 1, 'student.name': 1 });
 
-  // Group by student for better organization
   const groupedByStudent = new Map();
 
   attendances.forEach(attendance => {
@@ -1091,7 +1104,6 @@ const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
     }
   });
 
-  // Calculate overall statistics
   const overallStats = {
     totalStudents: groupedByStudent.size,
     totalAttendanceRecords: attendances.length,
@@ -1143,7 +1155,6 @@ const bulkGetByDateRange = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid date format. Use YYYY-MM-DD');
   }
 
-  // Build student filter
   const studentFilter: any = {
     admissionStatus: 'enrolled',
     status: 'active'
@@ -1293,36 +1304,26 @@ const deleteMonthlyAttendance = async (
   month: string,
   academicYear: string
 ) => {
-  // 1. Validation
   if (!month || !academicYear) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
   }
 
-  // 2. Prepare Student Query
-  // We start with basic filters (Active & Enrolled)
   let studentQuery: any = {
     admissionStatus: 'enrolled',
     status: 'active'
   };
 
-  // 3. Handle "All Classes" vs Specific Class
   if (className && className !== 'ALL') {
-    // SPECIFIC CLASS LOGIC
     const classIds = await getClassIdsByClassName(className);
     if (classIds.length === 0) {
       throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
     }
-    // Filter students by the found class IDs
     studentQuery.className = { $in: classIds };
   }
-  // ELSE: If className is undefined or 'ALL', we do NOT add className filter.
-  // This means we fetch ALL students from the DB.
 
-  // 4. Get Students
   const students = await Student.find(studentQuery).select('_id');
 
   if (students.length === 0) {
-    // Check if we filtered by class and found nothing
     if (className && className !== 'ALL') {
       throw new AppError(httpStatus.NOT_FOUND, 'No active students found in this class');
     }
@@ -1331,12 +1332,9 @@ const deleteMonthlyAttendance = async (
 
   const studentIds = students.map(s => s._id);
 
-  // 5. Robust Delete Logic using Date Range
-  // We calculate the start and end date of the month to avoid string formatting issues
   const startDate = moment(month, 'YYYY-MM').startOf('month').startOf('day').toDate();
   const endDate = moment(month, 'YYYY-MM').endOf('month').endOf('day').toDate();
 
-  // Delete records where student is in the list AND date is within the selected month
   const deleteResult = await MealAttendance.deleteMany({
     student: { $in: studentIds },
     date: { $gte: startDate, $lte: endDate },
@@ -1352,7 +1350,6 @@ const deleteMonthlyAttendance = async (
     message: `Successfully deleted ${deleteResult.deletedCount} records for ${className || 'All Classes'} in ${month}`
   };
 };
-
 
 export const mealAttendanceServices = {
   createOrUpdateAttendance,
@@ -1371,5 +1368,3 @@ export const mealAttendanceServices = {
   updateAttendance,
   deleteMonthlyAttendance
 };
-
-

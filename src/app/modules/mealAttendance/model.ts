@@ -64,6 +64,7 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
     remarks: {
       type: String,
     },
+    isFreeMeal: { type: Boolean, default: false },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

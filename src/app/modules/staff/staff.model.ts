@@ -1,7 +1,8 @@
 import { Schema, model } from 'mongoose';
+import { Types } from 'mongoose';
 import { IStaff } from './staff.interface';
 
-// Address schema
+// Address schema structure that matches both permanent and present address forms
 const addressSchema = new Schema(
   {
     address: String,
@@ -13,10 +14,10 @@ const addressSchema = new Schema(
     country: String,
     zipCode: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
-// Education schema
+// Education qualification schema
 const educationSchema = new Schema(
   {
     degree: String,
@@ -24,7 +25,7 @@ const educationSchema = new Schema(
     year: String,
     specialization: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
 // Certification schema
@@ -35,7 +36,7 @@ const certificationSchema = new Schema(
     year: String,
     description: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
 // Work experience schema
@@ -47,20 +48,22 @@ const experienceSchema = new Schema(
     to: String,
     description: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
 const staffSchema = new Schema<IStaff>(
   {
-    // Basic Information
+    // Basic Information (Step 1)
     staffId: {
       type: String,
     },
     staffSerial: {
       type: Number,
-
     },
     smartIdCard: {
+      type: String,
+    },
+    staffDepartment: {
       type: String,
     },
     name: {
@@ -72,10 +75,10 @@ const staffSchema = new Schema<IStaff>(
     },
     email: {
       type: String,
+      required: true,
     },
     dateOfBirth: {
       type: Date,
-      required:true
     },
     bloodGroup: {
       type: String,
@@ -95,10 +98,19 @@ const staffSchema = new Schema<IStaff>(
     staffPhoto: {
       type: String,
     },
+    resumeDoc: {
+      type: String,
+    },
+    certificateDoc: {
+      type: String,
+    },
+    nationalIdDoc: {
+      type: String,
+    },
 
-    // Address
     permanentAddress: {
       type: addressSchema,
+      required: true,
     },
     currentAddress: {
       type: addressSchema,
@@ -108,7 +120,6 @@ const staffSchema = new Schema<IStaff>(
       default: false,
     },
 
-    // Professional Info
     designation: {
       type: String,
     },
@@ -123,10 +134,7 @@ const staffSchema = new Schema<IStaff>(
     },
     staffType: {
       type: String,
-
     },
-
-    // Educational Background
     educationalQualifications: {
       type: [educationSchema],
     },
@@ -137,22 +145,19 @@ const staffSchema = new Schema<IStaff>(
       type: [experienceSchema],
     },
 
-    // Additional Info
+    // Additional Information (Step 5)
     status: {
       type: String,
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
+    },
 
-    },
-    language: {
-      type: String,
 
-    },
-    activeSession: {
-      type: String,
-    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Staff = model<IStaff>('Staff', staffSchema);
+

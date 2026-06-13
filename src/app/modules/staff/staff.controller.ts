@@ -17,18 +17,19 @@ const createStaff = catchAsync(async (req: Request, res: Response) => {
 });
 
 // Get all staff
-const getAllStaff = catchAsync(async (req: Request, res: Response) => {
-  const result = await staffServices.getAllStaff(req.query);
+const getAllStaffs = catchAsync(async (req: Request, res: Response) => {
+  const result = await staffServices.getAllStaffs(req.query);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Staff members retrieved successfully',
-    data: result,
+    message: 'Staffs retrieved successfully',
+    meta: result.meta,
+    data: result.data,
   });
 });
 
-// Get single staff member
+// Get single staff
 const getSingleStaff = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const staff = await staffServices.getSingleStaff(id);
@@ -36,7 +37,7 @@ const getSingleStaff = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Staff member retrieved successfully',
+    message: 'Staff retrieved successfully',
     data: staff,
   });
 });
@@ -44,6 +45,7 @@ const getSingleStaff = catchAsync(async (req: Request, res: Response) => {
 // Update staff
 const updateStaff = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
+  console.log(id, req.body);
   const updatedStaff = await staffServices.updateStaff(id, req.body);
 
   sendResponse(res, {
@@ -67,10 +69,13 @@ const deleteStaff = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+
 export const staffControllers = {
   createStaff,
-  getAllStaff,
+  getAllStaffs,
   getSingleStaff,
   updateStaff,
   deleteStaff,
+
 };
