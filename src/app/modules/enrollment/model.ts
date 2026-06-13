@@ -24,6 +24,7 @@ const enrollmentSchema = new Schema<IEnrollment>(
     fees: [{ type: Schema.Types.ObjectId, ref: 'Fees' }],
     paymentStatus: { type: String, default: 'pending' },
 
+
     parentInfo: {
       father: {
         nameBangla: { type: String },

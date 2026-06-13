@@ -30,18 +30,17 @@ const getAllStudents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-//client side user data show
 const getStudentByUserId = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params;
 
-  // First find the user
+
   const user = await User.findOne({ userId: userId });
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  // Then find the student linked to this user
+
   const student = await Student.findOne({
     user: user._id,
   })

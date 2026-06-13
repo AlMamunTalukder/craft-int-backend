@@ -7,7 +7,7 @@ import { IFeeCategory } from './interface';
 
 const createFeeCategory = async (payload: IFeeCategory | IFeeCategory[]) => {
   if (Array.isArray(payload)) {
-    // ✅ Check for duplicates within the incoming array itself
+    //  Check for duplicates within the incoming array itself
     const seen = new Set<string>();
     for (const item of payload) {
       const key = `${item.className}-${item.categoryName || ''}`;

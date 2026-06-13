@@ -1,7 +1,6 @@
 import { Types } from 'mongoose';
 
 export interface IEnrollment {
-  // Core fields
   studentId: string;
   student: Types.ObjectId;
   studentName: string;
@@ -21,7 +20,6 @@ export interface IEnrollment {
   studentType?: string;
   paymentStatus?: 'pending' | 'partial' | 'paid' | string;
 
-  // Parent info (structured)
   parentInfo?: {
     father?: {
       nameBangla?: string;
@@ -96,8 +94,6 @@ export interface IEnrollment {
   payment?: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
-
-  // ===== NEW FIELDS =====
   familyEnvironment?: {
     halalIncome?: string;
     parentsPrayer?: string;

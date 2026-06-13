@@ -25,38 +25,38 @@ const paymentSchema = new Schema<IPayment>(
       type: Number,
       default: 0,
     },
-    lateFeeAmount: {
-      type: Number,
-      default: 0,
-    },
+    // lateFeeAmount: {
+    //   type: Number,
+    //   default: 0,
+    // },
     advanceUsed: {
       type: Number,
       default: 0,
     },
 
     // ✅ Late fee tracking
-    lateFeeCollected: {
-      type: Number,
-      default: 0,
-    },
-    lateFeeDetails: [
-      {
-        feeId: {
-          type: Schema.Types.ObjectId,
-          ref: 'Fees',
-          required: true,
-        },
-        lateFeeRecordId: {
-          type: Schema.Types.ObjectId,
-          ref: 'Fees',
-          required: true,
-        },
-        amount: {
-          type: Number,
-          required: true,
-        },
-      },
-    ],
+    // lateFeeCollected: {
+    //   type: Number,
+    //   default: 0,
+    // },
+    // lateFeeDetails: [
+    //   {
+    //     feeId: {
+    //       type: Schema.Types.ObjectId,
+    //       ref: 'Fees',
+    //       required: true,
+    //     },
+    //     lateFeeRecordId: {
+    //       type: Schema.Types.ObjectId,
+    //       ref: 'Fees',
+    //       required: true,
+    //     },
+    //     amount: {
+    //       type: Number,
+    //       required: true,
+    //     },
+    //   },
+    // ],
 
     paymentMethod: {
       type: String,
@@ -104,7 +104,7 @@ const paymentSchema = new Schema<IPayment>(
 paymentSchema.index({ receiptNo: 1 }, { unique: true });
 paymentSchema.index({ student: 1 });
 paymentSchema.index({ paymentDate: -1 });
-paymentSchema.index({ 'lateFeeDetails.feeId': 1 });
-paymentSchema.index({ 'lateFeeDetails.lateFeeRecordId': 1 });
+// paymentSchema.index({ 'lateFeeDetails.feeId': 1 });
+// paymentSchema.index({ 'lateFeeDetails.lateFeeRecordId': 1 });
 
 export const Payment = model<IPayment>('Payment', paymentSchema);

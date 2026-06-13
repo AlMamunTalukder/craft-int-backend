@@ -166,6 +166,10 @@ const getAllStudents = async (query: Record<string, unknown>) => {
       .populate({
         path: 'payments',
         model: 'Payment',
+      })
+      .populate({
+        path: 'mealAttendances',
+        model: 'MealAttendance',
       }),
     processedQuery,
   )
@@ -183,8 +187,7 @@ const getAllStudents = async (query: Record<string, unknown>) => {
     data,
   };
 };
-
-export const getSingleStudent = async (id: string): Promise<IStudent> => {
+export const getSingleStudent = async (id: string): Promise<any> => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
   }
@@ -206,36 +209,60 @@ export const getSingleStudent = async (id: string): Promise<IStudent> => {
     .populate({
       path: 'receipts',
       model: 'Receipt',
+    })
+    .populate({
+      path: 'mealAttendances',
+      model: 'MealAttendance',
+      options: { sort: { date: -1 } }
     });
 
   if (!student) {
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
   }
 
-  return student;
+  const mealAttendances = student.mealAttendances || [];
+  const totalMeals = mealAttendances.reduce((sum: number, att: any) => sum + (att.totalMeals || 0), 0);
+  const totalCost = mealAttendances.reduce((sum: number, att: any) => sum + (att.mealCost || 0), 0);
+  const totalBreakfast = mealAttendances.filter((att: any) => att.breakfast).length;
+  const totalLunch = mealAttendances.filter((att: any) => att.lunch).length;
+  const totalDinner = mealAttendances.filter((att: any) => att.dinner).length;
+  const totalPresentDays = mealAttendances.filter((att: any) => att.totalMeals > 0).length
+  const studentObject = student.toObject();
+
+  return {
+    ...studentObject,
+    mealStatistics: {
+      totalMeals,
+      totalCost,
+      totalBreakfast,
+      totalLunch,
+      totalDinner,
+      totalPresentDays,
+      totalAbsentDays: mealAttendances.length - totalPresentDays,
+      attendanceRate: mealAttendances.length > 0
+        ? ((totalPresentDays / mealAttendances.length) * 100).toFixed(2)
+        : '0',
+    },
+  };
 };
 
 const updateStudent = async (
   id: string,
   payload: Partial<IStudent>,
 ): Promise<IStudent> => {
-  // Validate ID
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
   }
 
-  // Check if student exists
   const existingStudent = await Student.findById(id);
   if (!existingStudent) {
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
   }
 
-  // Handle sameAsPermanent logic for addresses
   if (payload.sameAsPermanent && payload.permanentAddress) {
     payload.presentAddress = { ...payload.permanentAddress };
   }
 
-  // Process arrays
   const processedPayload: any = { ...payload };
 
   if (payload.className) {
@@ -256,7 +283,7 @@ const updateStudent = async (
       : [payload.activeSession];
   }
 
-  // Update student with new data
+
   const student = await Student.findByIdAndUpdate(id, processedPayload, {
     new: true,
     runValidators: true,
@@ -269,7 +296,6 @@ const updateStudent = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Failed to update student');
   }
 
-  // If email was updated, also update the user account
   if (payload.email) {
     await User.findOneAndUpdate(
       { studentId: student.studentId },
@@ -282,7 +308,6 @@ const updateStudent = async (
 };
 
 const deleteStudent = async (id: string): Promise<IStudent> => {
-  // Validate ID
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
   }
@@ -295,11 +320,7 @@ const deleteStudent = async (id: string): Promise<IStudent> => {
     if (!student) {
       throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
     }
-
-    // Delete the student
     const deletedStudent = await Student.findByIdAndDelete(id, { session });
-
-    // Delete the associated user account
     await User.findOneAndDelete({ studentId: student.studentId }, { session });
 
     await session.commitTransaction();
