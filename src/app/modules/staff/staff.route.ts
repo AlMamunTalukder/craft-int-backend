@@ -1,15 +1,11 @@
 import express from 'express';
 import { staffControllers } from './staff.controller';
-import { validateRequest } from '../../middlewares/validateRequest';
-import { auth } from '../../middlewares/auth';
-import { StaffValidations } from './staff.validation';
 
 const router = express.Router();
 
 router.post(
   '/',
   // auth('admin', 'super_admin', 'staff', 'student'),
-  // validateRequest(StaffValidations.createStaffValidation),
   staffControllers.createStaff,
 );
 
@@ -26,7 +22,6 @@ router.delete(
 router.patch(
   '/:id',
   // auth('admin', 'super_admin', 'staff'),
-  // validateRequest(StaffValidations.updateStaffValidation),
   staffControllers.updateStaff,
 );
 

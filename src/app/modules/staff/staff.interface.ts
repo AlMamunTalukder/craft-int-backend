@@ -56,12 +56,10 @@ export interface IStaff {
   sameAsPermanent?: boolean;
 
   // Professional Information
-  designation: string;
   department: string;
   staffDepartment: string;
   joiningDate: Date;
   monthlySalary: number;
-  staffType: 'Teacher' | 'Staff' | 'Other';
 
   // Educational Information
   educationalQualifications?: IEducation[];
@@ -69,7 +67,4 @@ export interface IStaff {
   workExperience?: IExperience[];
 
   status: 'Active' | 'Inactive';
-
-  createdAt?: Date;
-  updatedAt?: Date;
 }

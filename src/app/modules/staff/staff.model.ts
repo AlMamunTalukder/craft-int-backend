@@ -1,5 +1,4 @@
 import { Schema, model } from 'mongoose';
-import { Types } from 'mongoose';
 import { IStaff } from './staff.interface';
 
 // Address schema structure that matches both permanent and present address forms
@@ -120,9 +119,6 @@ const staffSchema = new Schema<IStaff>(
       default: false,
     },
 
-    designation: {
-      type: String,
-    },
     department: {
       type: String,
     },
@@ -131,9 +127,6 @@ const staffSchema = new Schema<IStaff>(
     },
     monthlySalary: {
       type: Number,
-    },
-    staffType: {
-      type: String,
     },
     educationalQualifications: {
       type: [educationSchema],
