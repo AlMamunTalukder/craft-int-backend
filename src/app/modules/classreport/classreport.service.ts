@@ -764,11 +764,11 @@ export const getAllClassReports = async (query: IClassReportQuery) => {
   // 2. ✅ hasComments filter (students who have comments)
   const hasCommentsFilter = hasCommentsQuery
     ? {
-        $and: [
-          { $ne: ['$$evaluation.comments', null] },
-          { $ne: ['$$evaluation.comments', ''] },
-        ],
-      }
+      $and: [
+        { $ne: ['$$evaluation.comments', null] },
+        { $ne: ['$$evaluation.comments', ''] },
+      ],
+    }
     : null;
 
   // 3. Other filters like lessonEvaluation, handwriting

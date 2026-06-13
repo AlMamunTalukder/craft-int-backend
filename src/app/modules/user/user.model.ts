@@ -39,6 +39,7 @@ const userSchema = new Schema<TUser, UserModel>(
         'super_visor',
         'class_teacher',
         'accountant',
+        'staff'
       ],
       default: 'user',
     },

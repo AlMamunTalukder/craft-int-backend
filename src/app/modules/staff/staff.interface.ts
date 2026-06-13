@@ -1,3 +1,4 @@
+
 export interface IAddress {
   address?: string;
   village?: string;
@@ -41,35 +42,29 @@ export interface IStaff {
   email: string;
   dateOfBirth?: Date;
   bloodGroup?: string;
-  gender: 'Male' | 'Female' | 'Other';
+  gender: string;
   nationality?: string;
   religion?: string;
-  maritalStatus?: 'Single' | 'Married' | 'Divorced' | 'Widowed';
+  maritalStatus?: string;
   staffPhoto?: string;
-
+  resumeDoc: string;
+  certificateDoc: string;
+  nationalIdDoc: string;
   // Address Information
   permanentAddress: IAddress;
   currentAddress?: IAddress;
   sameAsPermanent?: boolean;
 
   // Professional Information
-  designation: string;
   department: string;
+  staffDepartment: string;
   joiningDate: Date;
   monthlySalary: number;
-  staffType: 'Teacher' | 'Staff' | 'Other';
 
   // Educational Information
   educationalQualifications?: IEducation[];
   certifications?: ICertification[];
   workExperience?: IExperience[];
 
-  // Additional Information
   status: 'Active' | 'Inactive';
-  language?: 'Bangla' | 'English' | 'Other';
-  activeSession?: string;
-
-  // System fields
-  createdAt?: Date;
-  updatedAt?: Date;
 }

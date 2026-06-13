@@ -205,7 +205,6 @@ const applyAdjustmentToStudentFees = async (
       const adjustmentPayload: IFeeAdjustment = {
         student: new Types.ObjectId(studentId),
         fee: fee._id as Types.ObjectId,
-        enrollment: fee.enrollment as Types.ObjectId,
         type: adjustmentData.type || 'discount',
         adjustmentType: adjustmentData.adjustmentType || 'flat',
         value: adjustmentData.value || 0,
@@ -483,7 +482,6 @@ const getFeeReportWithAdjustments = async (
 
   const report = {
     student: fees[0]?.student || null,
-    enrollment: fees[0]?.enrollment || null,
     fees: fees.map((fee) => {
       const feeAdjustments = adjustments.filter(
         (adj) => adj.fee && adj.fee._id.toString() === fee._id.toString(),

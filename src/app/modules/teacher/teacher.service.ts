@@ -57,6 +57,11 @@ const createTeacher = async (payload: Partial<ITeacher>): Promise<ITeacher> => {
 };
 
 const getAllTeachers = async (query: Record<string, unknown>) => {
+  // If no sort parameter is provided, default to -updatedAt
+  if (!query.sort) {
+    query.sort = '-updatedAt';
+  }
+
   const teacherQuery = new QueryBuilder(Teacher.find(), query)
     .search(teacherSearchableFields)
     .filter()
@@ -72,6 +77,7 @@ const getAllTeachers = async (query: Record<string, unknown>) => {
     data,
   };
 };
+
 
 const getSingleTeacher = async (id: string): Promise<ITeacher> => {
   const teacher = await Teacher.findById(id);

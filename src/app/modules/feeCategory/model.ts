@@ -11,6 +11,7 @@ const feeCategorySchema = new Schema(
         'Day Care',
         'Non-Residential One Meal',
         'Day Care One Meal',
+        'Residential No Meal'
       ],
       default: '',
     },

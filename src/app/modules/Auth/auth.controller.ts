@@ -3,9 +3,7 @@ import httpStatus from 'http-status';
 import { catchAsync } from '../../../utils/catchAsync';
 import sendResponse from '../../../utils/sendResponse';
 import { AuthServices } from './auth.service';
-import config from '../../config';
 
-// In your backend auth.controller.ts
 const loginUser = catchAsync(async (req, res) => {
   const result = await AuthServices.loginUser(req.body);
   const { accessToken, refreshToken } = result;
@@ -15,7 +13,7 @@ const loginUser = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 15,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
     path: '/',
     domain: '.craftinternationalinstitute.com',
   });
@@ -24,7 +22,8 @@ const loginUser = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 7,
+
+    maxAge: 1000 * 60 * 60 * 24 * 60,
     path: '/',
     domain: '.craftinternationalinstitute.com',
   });
@@ -55,7 +54,7 @@ const loginUser = catchAsync(async (req, res) => {
 //     httpOnly: true,
 //     secure: process.env.NODE_ENV === 'production',
 //     sameSite: 'lax',
-//     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+//     maxAge: 1000 * 60 * 60 * 24 * 7,
 //     path: '/',
 //     domain: 'localhost',
 //   });
@@ -75,7 +74,7 @@ const refreshToken = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 15,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
     path: '/',
   });
 
@@ -112,13 +111,7 @@ const changePassword = catchAsync(async (req, res) => {
   });
 });
 
-// auth.controller.ts
 const getMe = catchAsync(async (req, res) => {
-  console.log('=== GET ME CONTROLLER ===');
-  console.log('req.user:', req.user);
-  console.log('req.user.role:', req.user?.role);
-  console.log('========================');
-
   if (!req.user) {
     return sendResponse(res, {
       statusCode: httpStatus.UNAUTHORIZED,

@@ -16,10 +16,9 @@ export const getClassNameFromClassModel = async (
   session: mongoose.ClientSession,
 ): Promise<string> => {
   try {
-    // Get the Class model - it has 'className' field
+
     const Class = mongoose.model<IClass>('Class');
 
-    // Fetch the class document with the className field
     const classDoc = await Class.findById(classId)
       .select('className')
       .session(session)
@@ -32,7 +31,6 @@ export const getClassNameFromClassModel = async (
 
     console.log('Class document found:', classDoc);
 
-    // Return the className field
     if (classDoc.className) {
       return classDoc.className;
     }

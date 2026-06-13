@@ -1,18 +1,17 @@
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
-import { Staff } from './staff.model'; // Ensure you have this model
+import { Staff } from './staff.model';
 import QueryBuilder from '../../builder/QueryBuilder';
-import { IStaff } from './staff.interface'; // Define the IStaff interface accordingly
-
-import { generateStaffId } from './staff.utils'; // You need to create this utility
-import { staffSearchableFields } from './staff.constant'; // Define fields to enable search
+import { IStaff } from './staff.interface';
+import { generateStaffId } from './staff.utils';
+import { staffSearchableFields } from './staff.constant';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
 
 const createStaff = async (payload: Partial<IStaff>): Promise<IStaff> => {
-  const { name } = payload;
-
-  if (!name) {
+  const { email, name } = payload;
+  console.log(payload);
+  if (!email || !name) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Required fields are missing');
   }
 
@@ -30,14 +29,17 @@ const createStaff = async (payload: Partial<IStaff>): Promise<IStaff> => {
       );
     }
 
-    const staff = await Staff.create([{ ...payload, staffId }], { session });
+    const staff = await Staff.create([{ ...payload, staffId }], {
+      session,
+    });
 
     await User.create(
       [
         {
-          email: payload.email || 'staff@gmail.com',
+          email,
           password: 'staff123',
           name,
+          role: 'staff',
         },
       ],
       { session },
@@ -53,7 +55,12 @@ const createStaff = async (payload: Partial<IStaff>): Promise<IStaff> => {
   }
 };
 
-const getAllStaff = async (query: Record<string, unknown>) => {
+const getAllStaffs = async (query: Record<string, unknown>) => {
+  // If no sort parameter is provided, default to -updatedAt
+  if (!query.sort) {
+    query.sort = '-updatedAt';
+  }
+
   const staffQuery = new QueryBuilder(Staff.find(), query)
     .search(staffSearchableFields)
     .filter()
@@ -62,11 +69,11 @@ const getAllStaff = async (query: Record<string, unknown>) => {
     .fields();
 
   const meta = await staffQuery.countTotal();
-  const staffs = await staffQuery.modelQuery;
+  const data = await staffQuery.modelQuery;
 
   return {
     meta,
-    staffs,
+    data,
   };
 };
 
@@ -84,6 +91,7 @@ const updateStaff = async (
   id: string,
   payload: Partial<IStaff>,
 ): Promise<IStaff> => {
+  console.log(payload);
   const updatedStaff = await Staff.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
@@ -111,7 +119,7 @@ const deleteStaff = async (id: string): Promise<IStaff> => {
 
 export const staffServices = {
   createStaff,
-  getAllStaff,
+  getAllStaffs,
   getSingleStaff,
   updateStaff,
   deleteStaff,

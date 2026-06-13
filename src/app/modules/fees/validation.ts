@@ -10,7 +10,6 @@ const objectId = z
 
 export const createFeeSchema = z.object({
   body: z.object({
-    // student: objectId,
     feeType: z.string({ required_error: 'Fee type is required' }),
     month: z.string().optional(),
     amount: z.number({ required_error: 'Amount is required' }),

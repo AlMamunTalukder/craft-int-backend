@@ -62,7 +62,6 @@ const payFee = async (
 
     const paymentData = {
       student: fee.student,
-      enrollment: fee.enrollment,
       fee: fee._id,
       amountPaid: amountPaid,
       paymentMethod: paymentMethod,
@@ -209,7 +208,6 @@ const payFeeWithAdvance = async (
     await fee.save({ session });
     const paymentData = {
       student: fee.student,
-      enrollment: fee.enrollment,
       fee: fee._id,
       amountPaid: totalPaid,
       paymentMethod: paymentMethod,
@@ -343,16 +341,22 @@ const generateBulkMonthlyFees = async (
 
 const getAllFees = async (query: Record<string, any>) => {
   const queryBuilder = new QueryBuilder(
-    Fees.find()
-      .populate({
-        path: 'enrollment',
-        populate: {
-          path: 'className',
-          model: 'Class', // Make sure this matches your Class model name
-          select: 'name className', // Select the fields you need from the Class model
+    Fees.find().populate({
+      path: 'student',
+      select: 'name studentId className fees', // only needed fields
+      populate: [
+        {
+          path: 'fees',
+          model: 'Fees',
+          select: 'month amount paidAmount dueAmount status',
         },
-      })
-      .populate('student'),
+        {
+          path: 'className',
+          model: 'Class',
+          select: 'className',
+        },
+      ],
+    }),
     query,
   )
     .search(['class', 'month', 'status'])
@@ -374,12 +378,14 @@ const getSingleFee = async (id: string) => {
 };
 
 const updateFee = async (id: string, payload: Partial<IFees>) => {
-  const fee = await Fees.findById(id);
+  const fee = await Fees.findByIdAndUpdate(
+    id,
+    { $set: payload },
+    { new: true, runValidators: true }
+  );
+
   if (!fee) throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
-
-  Object.assign(fee, payload);
-
-  return await fee.save();
+  return fee;
 };
 
 const deleteFee = async (id: string) => {
@@ -674,19 +680,14 @@ export const getClassWiseFeeSummary = async (query: {
     query.academicYear || new Date().getFullYear().toString();
 
   const matchStage: Record<string, any> = { academicYear };
-
-  // Only add month filter if month is provided
   if (query.month) {
     matchStage.month = { $regex: `^${query.month}-`, $options: 'i' };
   }
 
   const pipeline: any[] = [
     { $match: matchStage },
-
-    // Add computed fields
     {
       $addFields: {
-        // Use the direct class field from fees document
         resolvedClass: {
           $cond: {
             if: {
@@ -835,8 +836,6 @@ export const getClassWiseFeeSummary = async (query: {
   ];
 
   const classes = await Fees.aggregate(pipeline).allowDiskUse(true);
-
-  // Calculate grand total
   const grandTotal = classes.reduce(
     (acc, c) => {
       acc.totalAmount += c.yearly.totalAmount;

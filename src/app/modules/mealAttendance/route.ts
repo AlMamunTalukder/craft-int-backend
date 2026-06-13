@@ -1,0 +1,24 @@
+import express from 'express';
+import { mealAttendanceControllers } from './controller';
+import { validateRequest } from '../../middlewares/validateRequest';
+import { bulkAttendanceValidation, createAttendanceValidation } from './validation';
+const router = express.Router();
+
+// Existing routes
+router.post('/', validateRequest(createAttendanceValidation), mealAttendanceControllers.createOrUpdateAttendance);
+router.post('/bulk', validateRequest(bulkAttendanceValidation), mealAttendanceControllers.bulkCreateAttendance);
+router.put('/bulk', mealAttendanceControllers.bulkUpdateAttendance);
+router.get('/bulk', mealAttendanceControllers.bulkGetAttendance);
+router.get('/bulk/date-range', mealAttendanceControllers.bulkGetByDateRange);
+router.delete('/:id', mealAttendanceControllers.deleteAttendance);
+router.get('/all', mealAttendanceControllers.getAllAttendanceRecords);
+router.get('/student/:studentId/report', mealAttendanceControllers.getStudentMealReport);
+router.get('/student/:studentId/:month/:academicYear', mealAttendanceControllers.getAttendanceByStudentAndMonth);
+router.get('/sheet', mealAttendanceControllers.getMonthlyAttendanceSheet);
+router.get('/summary', mealAttendanceControllers.getMonthlySummary);
+router.get('/date-range/all', mealAttendanceControllers.getAttendanceByDateRangeForAllStudents);
+router.get('/:id', mealAttendanceControllers.getAttendanceById);
+router.put('/:id', validateRequest(createAttendanceValidation), mealAttendanceControllers.updateAttendance);
+router.delete('/bulk/month', mealAttendanceControllers.deleteMonthlyAttendance)
+
+export const mealAttendanceRoutes = router;

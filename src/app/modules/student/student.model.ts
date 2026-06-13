@@ -1,3 +1,4 @@
+
 import { model, Schema } from 'mongoose';
 import { IStudent } from './student.interface';
 
@@ -49,6 +50,9 @@ const studentSchema = new Schema<IStudent>(
     section: [{ type: String }],
     batch: { type: String },
     activeSession: [{ type: String }],
+    category: {
+      type: String
+    },
     studentClassRoll: { type: String },
     studentType: { type: String },
     status: { type: String },
@@ -119,8 +123,24 @@ const studentSchema = new Schema<IStudent>(
       enum: ['pending', 'approved', 'rejected', 'enrolled'],
       default: 'pending',
     },
+
+    mealAttendances: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
+      select: false,
+    }
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+studentSchema.virtual('mealAttendanceList', {
+  ref: 'MealAttendance',
+  localField: '_id',
+  foreignField: 'student',
+  justOne: false,
+});
 
 export const Student = model<IStudent>('Student', studentSchema);
