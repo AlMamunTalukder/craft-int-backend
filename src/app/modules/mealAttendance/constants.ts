@@ -1,0 +1,15 @@
+
+export const DEFAULT_BREAKFAST_RATE = 40;
+export const DEFAULT_LUNCH_RATE = 45;
+export const DEFAULT_DINNER_RATE = 80;
+
+export const DEFAULT_MEAL_RATES = {
+    breakfast: DEFAULT_BREAKFAST_RATE,
+    lunch: DEFAULT_LUNCH_RATE,
+    dinner: DEFAULT_DINNER_RATE,
+};
+
+
+export const AVERAGE_MEAL_RATE = Math.round(
+    (DEFAULT_BREAKFAST_RATE + DEFAULT_LUNCH_RATE + DEFAULT_DINNER_RATE) / 3,
+);

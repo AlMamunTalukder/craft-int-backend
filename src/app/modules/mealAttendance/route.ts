@@ -1,24 +1,32 @@
 import express from 'express';
 import { mealAttendanceControllers } from './controller';
-import { validateRequest } from '../../middlewares/validateRequest';
-import { bulkAttendanceValidation, createAttendanceValidation } from './validation';
+
 const router = express.Router();
 
-// Existing routes
-router.post('/', validateRequest(createAttendanceValidation), mealAttendanceControllers.createOrUpdateAttendance);
-router.post('/bulk', validateRequest(bulkAttendanceValidation), mealAttendanceControllers.bulkCreateAttendance);
-router.put('/bulk', mealAttendanceControllers.bulkUpdateAttendance);
-router.get('/bulk', mealAttendanceControllers.bulkGetAttendance);
-router.get('/bulk/date-range', mealAttendanceControllers.bulkGetByDateRange);
-router.delete('/:id', mealAttendanceControllers.deleteAttendance);
+// Bulk create / upsert attendance (used by both Add and Update forms)
+router.post('/bulk', mealAttendanceControllers.bulkCreateAttendance);
+
+// Delete all attendance for a month (personType + className aware)
+router.delete('/bulk/month', mealAttendanceControllers.deleteMonthlyAttendance);
+
+// List records (table view) - personType + className aware
 router.get('/all', mealAttendanceControllers.getAllAttendanceRecords);
-router.get('/student/:studentId/report', mealAttendanceControllers.getStudentMealReport);
-router.get('/student/:studentId/:month/:academicYear', mealAttendanceControllers.getAttendanceByStudentAndMonth);
+
+// Monthly sheet (used to pre-populate Add/Update grids) - personType aware
 router.get('/sheet', mealAttendanceControllers.getMonthlyAttendanceSheet);
+
+// Monthly summary/report - personType aware
 router.get('/summary', mealAttendanceControllers.getMonthlySummary);
-router.get('/date-range/all', mealAttendanceControllers.getAttendanceByDateRangeForAllStudents);
+
+// Legacy: single student monthly report
+router.get(
+    '/student/:studentId/:month/:academicYear',
+    mealAttendanceControllers.getAttendanceByStudentAndMonth,
+);
+
+// Single record CRUD
 router.get('/:id', mealAttendanceControllers.getAttendanceById);
-router.put('/:id', validateRequest(createAttendanceValidation), mealAttendanceControllers.updateAttendance);
-router.delete('/bulk/month', mealAttendanceControllers.deleteMonthlyAttendance)
+router.put('/:id', mealAttendanceControllers.updateAttendance);
+router.delete('/:id', mealAttendanceControllers.deleteAttendance);
 
 export const mealAttendanceRoutes = router;

@@ -82,4 +82,5 @@ export interface ITeacher {
   // System fields
   createdAt?: Date;
   updatedAt?: Date;
+  mealAttendances: Types.ObjectId[]
 }

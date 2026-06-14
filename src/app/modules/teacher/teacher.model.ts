@@ -95,19 +95,19 @@ const teacherSchema = new Schema<ITeacher>(
       type: String,
     },
     teacherPhoto: {
-      type: String, 
+      type: String,
     },
     resumeDoc: {
-      type: String, 
+      type: String,
     },
     certificateDoc: {
-      type: String, 
+      type: String,
     },
     nationalIdDoc: {
-      type: String, 
+      type: String,
     },
 
-    
+
     permanentAddress: {
       type: addressSchema,
       required: true,
@@ -191,6 +191,10 @@ const teacherSchema = new Schema<ITeacher>(
     room: {
       type: Schema.Types.ObjectId,
       ref: 'Room',
+    },
+    mealAttendances: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
+      select: false,
     },
   },
   {

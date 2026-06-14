@@ -144,7 +144,11 @@ const staffSchema = new Schema<IStaff>(
       enum: ['Active', 'Inactive'],
       default: 'Active',
     },
-
+    // ─── Meal attendance relation ───
+    mealAttendances: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
+      select: false,
+    },
 
   },
   {

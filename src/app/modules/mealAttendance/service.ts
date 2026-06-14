@@ -1,131 +1,238 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { MealAttendance } from './model';
 import moment from 'moment';
 import { Student } from '../student/student.model';
-import mongoose, { Types } from 'mongoose';
-import { IBulkAttendancePayload, IBulkGetQueryPayload, IBulkUpdateAttendancePayload, ICreateAttendancePayload } from './interface';
+import { Types } from 'mongoose';
+import {
+  IBulkAttendancePayload,
+  ICreateAttendancePayload,
+  PersonType,
+} from './interface';
+import {
+  DEFAULT_BREAKFAST_RATE,
+  DEFAULT_LUNCH_RATE,
+  DEFAULT_DINNER_RATE,
+  DEFAULT_MEAL_RATES,
+  AVERAGE_MEAL_RATE,
+} from './constants';
 
-const MEAL_RATE = 55;
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
 const calculateMealStats = (
   breakfast: boolean,
   lunch: boolean,
   dinner: boolean,
-  mealRate: number = MEAL_RATE,
-  isFreeMeal: boolean = false
+  breakfastRate = DEFAULT_BREAKFAST_RATE,
+  lunchRate = DEFAULT_LUNCH_RATE,
+  dinnerRate = DEFAULT_DINNER_RATE,
+  isFreeMeal = false,
 ) => {
   const totalMeals = [breakfast, lunch, dinner].filter(Boolean).length;
-  const mealCost = isFreeMeal ? 0 : totalMeals * mealRate;
+  const rawCost =
+    (breakfast ? breakfastRate : 0) +
+    (lunch ? lunchRate : 0) +
+    (dinner ? dinnerRate : 0);
+  const mealCost = isFreeMeal ? 0 : rawCost;
   return { totalMeals, mealCost };
 };
 
-const updateStudentMealAttendance = async (studentId: string, attendanceId: string, isDelete: boolean = false) => {
-  try {
-    if (isDelete) {
-      await Student.findByIdAndUpdate(
-        studentId,
-        { $pull: { mealAttendances: attendanceId } }
-      );
-    } else {
-      await Student.findByIdAndUpdate(
-        studentId,
-        { $addToSet: { mealAttendances: attendanceId } }
-      );
-    }
-  } catch (error) {
-    console.error('Error updating student meal attendance:', error);
+/** Lazily require model to avoid circular deps */
+const getTeacherModel = () => require('../teacher/teacher.model').Teacher;
+const getStaffModel = () => require('../staff/staff.model').Staff;
+
+/**
+ * Resolve the correct Mongoose model + field name for a given personType.
+ * Returns { model, field } where field is 'student' | 'teacher' | 'staff'.
+ */
+const resolvePersonModel = (personType: PersonType) => {
+  switch (personType) {
+    case 'teacher':
+      return { PersonModel: getTeacherModel(), field: 'teacher' as const };
+    case 'staff':
+      return { PersonModel: getStaffModel(), field: 'staff' as const };
+    default:
+      return { PersonModel: Student, field: 'student' as const };
+  }
+};
+
+/** Verify person exists and is active */
+const validatePerson = async (personId: string, personType: PersonType) => {
+  const { PersonModel } = resolvePersonModel(personType);
+  const person = await PersonModel.findById(personId).select('_id name status admissionStatus').lean();
+  if (!person) {
+    throw new AppError(httpStatus.NOT_FOUND, `${personType} not found`);
+  }
+  // Students have admissionStatus; teachers/staff use status
+  if (personType === 'student') {
+    if ((person as any).admissionStatus !== 'enrolled')
+      throw new AppError(httpStatus.BAD_REQUEST, 'Student is not enrolled');
+    if ((person as any).status !== 'active')
+      throw new AppError(httpStatus.BAD_REQUEST, 'Student is not active');
+  } else {
+    if ((person as any).status && (person as any).status !== 'Active')
+      throw new AppError(httpStatus.BAD_REQUEST, `${personType} is not active`);
+  }
+  return person;
+};
+
+/** Build the filter object for finding an attendance record by person */
+const buildPersonFilter = (personId: string, personType: PersonType) => {
+  const { field } = resolvePersonModel(personType);
+  return { [field]: new Types.ObjectId(personId), personType };
+};
+
+/** Build the $set object for upsert */
+const buildPersonSet = (personId: string, personType: PersonType) => {
+  const { field } = resolvePersonModel(personType);
+  return { [field]: new Types.ObjectId(personId), personType };
+};
+
+/** Populate path based on personType (for queries) */
+const getPopulatePath = (personType: PersonType) => {
+  switch (personType) {
+    case 'teacher': return 'teacher';
+    case 'staff': return 'staff';
+    default: return 'student';
   }
 };
 
 const getClassIdsByClassName = async (className: string): Promise<Types.ObjectId[]> => {
   try {
     const { Class } = require('../class/class.model');
-    const classes = await Class.find({ className: className });
-    if (!classes.length) return [];
+    const classes = await Class.find({ className });
     return classes.map((c: any) => c._id);
-  } catch (error) {
-    console.error('Error finding class IDs:', error);
+  } catch {
     return [];
   }
 };
 
-const getStudentsByClassName = async (className: string): Promise<any[]> => {
-  const classIds = await getClassIdsByClassName(className);
-
-  const query: any = {
-    admissionStatus: 'enrolled',
-    status: 'active'
-  };
-
-  if (classIds.length > 0) {
-    query.className = { $in: classIds };
-  } else {
-    query.class = className;
+/** Fetch all enrolled students for a class (or all if no class given) */
+const getStudentsByClassName = async (className?: string): Promise<any[]> => {
+  const query: any = { admissionStatus: 'enrolled', status: 'active' };
+  if (className) {
+    const classIds = await getClassIdsByClassName(className);
+    if (classIds.length > 0) query.className = { $in: classIds };
+    else query.class = className;
   }
-
-  return await Student.find(query)
+  return Student.find(query)
     .select('_id studentId name nameBangla studentClassRoll studentType className class')
     .lean();
 };
 
-const createOrUpdateAttendance = async (payload: ICreateAttendancePayload) => {
-  const { student, date, academicYear, breakfast = false, lunch = false, dinner = false, mealRate = MEAL_RATE, remarks } = payload;
+/** Fetch all active teachers */
+const getAllActiveTeachers = async (): Promise<any[]> => {
+  const Teacher = getTeacherModel();
+  return Teacher.find({ status: 'Active' })
+    .select('_id teacherId name phone email designation department staffType')
+    .lean();
+};
 
-  const studentExists = await Student.findById(student).select('_id studentId name className admissionStatus status');
-  if (!studentExists) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
-  if (studentExists.admissionStatus !== 'enrolled') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not enrolled');
-  if (studentExists.status !== 'active') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not active');
+/** Fetch all active staff */
+const getAllActiveStaff = async (): Promise<any[]> => {
+  const StaffModel = getStaffModel();
+  return StaffModel.find({ status: 'Active' })
+    .select('_id staffId name phone email staffDepartment designation')
+    .lean();
+};
 
-  const dateObj = moment(date);
-  const formattedDate = dateObj.format('YYYY-MM-DD');
-  const month = dateObj.format('YYYY-MM');
-  const { totalMeals, mealCost: calculatedMealCost } = calculateMealStats(breakfast, lunch, dinner, mealRate);
+/** Normalise a teacher/staff record to a common shape for sheet generation */
+const normaliseTeacher = (t: any) => ({
+  _id: t._id,
+  personId: t.teacherId,
+  name: t.name,
+  nameBangla: t.nameBangla || '',
+  roll: t.teacherId,
+  type: t.staffType || 'Teacher',
+  department: t.department || '',
+});
 
-  const existingAttendance = await MealAttendance.findOne({
-    student: new Types.ObjectId(student),
-    date: formattedDate,
-    academicYear,
-  });
+const normaliseStaff = (s: any) => ({
+  _id: s._id,
+  personId: s.staffId,
+  name: s.name,
+  nameBangla: s.nameBangla || '',
+  roll: s.staffId,
+  type: 'Staff',
+  department: s.staffDepartment || '',
+});
 
-  const updateData = {
-    student: new Types.ObjectId(student),
-    date: formattedDate,
-    month,
-    academicYear,
-    breakfast,
-    lunch,
-    dinner,
-    totalMeals,
-    mealCost: calculatedMealCost,
-    mealRate,
-    remarks,
+const normaliseStudent = (s: any) => ({
+  _id: s._id,
+  personId: s.studentId,
+  name: s.name,
+  nameBangla: s.nameBangla || '',
+  roll: s.studentClassRoll,
+  type: s.studentType || 'Student',
+  department: '',
+});
+
+// ─────────────────────────────────────────────
+// Relation sync — keep Student/Teacher/Staff.mealAttendances current
+// ─────────────────────────────────────────────
+
+/**
+ * After any create/upsert of attendance records, re-sync the
+ * `mealAttendances` reference array on each touched Student/Teacher/Staff
+ * document so populating that field always returns the full, correct list.
+ */
+const syncPersonMealAttendances = async (
+  persons: { personId: string; personType: PersonType }[],
+) => {
+  if (!persons.length) return;
+
+  const grouped: Record<PersonType, Set<string>> = {
+    student: new Set(),
+    teacher: new Set(),
+    staff: new Set(),
   };
 
-  let result;
-  if (existingAttendance) {
-    result = await MealAttendance.findByIdAndUpdate(existingAttendance._id, updateData, { new: true, runValidators: true });
-  } else {
-    result = await MealAttendance.create(updateData);
-    await updateStudentMealAttendance(student, result._id.toString(), false);
-  }
+  persons.forEach(({ personId, personType }) => grouped[personType]?.add(personId));
 
-  return result;
+  for (const personType of Object.keys(grouped) as PersonType[]) {
+    const ids = Array.from(grouped[personType]);
+    if (!ids.length) continue;
+
+    const { PersonModel, field } = resolvePersonModel(personType);
+
+    const ops = await Promise.all(
+      ids.map(async personId => {
+        const attendanceIds = await MealAttendance.find({
+          personType,
+          [field]: new Types.ObjectId(personId),
+        }).distinct('_id');
+
+        return {
+          updateOne: {
+            filter: { _id: new Types.ObjectId(personId) },
+            update: { $set: { mealAttendances: attendanceIds } },
+          },
+        };
+      }),
+    );
+
+    if (ops.length) await PersonModel.bulkWrite(ops);
+  }
 };
+
+// ─────────────────────────────────────────────
+// Core CRUD
+// ─────────────────────────────────────────────
 
 const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   const { attendances, academicYear } = payload;
+  if (!attendances?.length) throw new AppError(httpStatus.BAD_REQUEST, 'No attendance data provided');
 
-  if (!attendances || !attendances.length) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'No attendance data provided');
-  }
-
-  const bulkOperations = [];
-  const newAttendanceIds: { studentId: string; attendanceId: string }[] = [];
+  const bulkOperations: any[] = [];
+  const touchedPersons = new Map<string, { personId: string; personType: PersonType }>();
 
   for (const att of attendances) {
+    const personType: PersonType = att.personType || 'student';
+    const personId = att.personId;
     const date = moment(att.date).format('YYYY-MM-DD');
     const month = moment(att.date).format('YYYY-MM');
     const breakfast = att.breakfast || false;
@@ -133,30 +240,24 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
     const dinner = att.dinner || false;
     const isFreeMeal = att.isFreeMeal || false;
 
-    const { totalMeals, mealCost } = calculateMealStats(breakfast, lunch, dinner, MEAL_RATE, isFreeMeal);
+    // Custom-or-default per-meal rates
+    const breakfastRate = att.breakfastRate ?? DEFAULT_BREAKFAST_RATE;
+    const lunchRate = att.lunchRate ?? DEFAULT_LUNCH_RATE;
+    const dinnerRate = att.dinnerRate ?? DEFAULT_DINNER_RATE;
 
-    const existingAttendance = await MealAttendance.findOne({
-      student: new Types.ObjectId(att.studentId),
-      date,
-      academicYear,
-    });
+    const { totalMeals, mealCost } = calculateMealStats(
+      breakfast, lunch, dinner, breakfastRate, lunchRate, dinnerRate, isFreeMeal,
+    );
 
-    const tempId = new Types.ObjectId();
-
-    if (!existingAttendance) {
-      newAttendanceIds.push({
-        studentId: att.studentId,
-        attendanceId: tempId.toString(),
-      });
-    }
+    const personFilter = buildPersonFilter(personId, personType);
+    const personSet = buildPersonSet(personId, personType);
 
     bulkOperations.push({
       updateOne: {
-        filter: { student: new Types.ObjectId(att.studentId), date: new Date(date), academicYear },
+        filter: { ...personFilter, date: new Date(date), academicYear },
         update: {
-          $setOnInsert: { _id: tempId },
           $set: {
-            student: new Types.ObjectId(att.studentId),
+            ...personSet,
             date: new Date(date),
             month,
             academicYear,
@@ -164,23 +265,26 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
             lunch,
             dinner,
             totalMeals,
+            breakfastRate,
+            lunchRate,
+            dinnerRate,
             mealCost,
-            mealRate: MEAL_RATE,
-            isFreeMeal: isFreeMeal,
+            isFreeMeal,
             isHoliday: false,
             isAbsent: false,
-          }
+          },
         },
         upsert: true,
       },
     });
+
+    touchedPersons.set(`${personType}_${personId}`, { personId, personType });
   }
 
   const result = await MealAttendance.bulkWrite(bulkOperations);
 
-  for (const item of newAttendanceIds) {
-    await updateStudentMealAttendance(item.studentId, item.attendanceId, false);
-  }
+  // Keep Student/Teacher/Staff.mealAttendances reference arrays in sync
+  await syncPersonMealAttendances(Array.from(touchedPersons.values()));
 
   return {
     modifiedCount: result.modifiedCount,
@@ -190,241 +294,255 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   };
 };
 
-const deleteAttendance = async (id: string) => {
-  const attendance = await MealAttendance.findById(id);
+const getAttendanceById = async (id: string) => {
+  if (!id) throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
+
+  const attendance = await MealAttendance.findById(id).lean();
   if (!attendance) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
 
-  const studentId = attendance.student.toString();
-  const result = await MealAttendance.findByIdAndDelete(id);
+  // Populate based on personType
+  let personData: any = null;
+  if (attendance.personType === 'teacher' && attendance.teacher) {
+    const Teacher = getTeacherModel();
+    personData = await Teacher.findById(attendance.teacher)
+      .select('_id teacherId name nameBangla designation department staffType')
+      .lean();
+  } else if (attendance.personType === 'staff' && attendance.staff) {
+    const StaffModel = getStaffModel();
+    personData = await StaffModel.findById(attendance.staff)
+      .select('_id staffId name nameBangla staffDepartment')
+      .lean();
+  } else if (attendance.student) {
+    personData = await Student.findById(attendance.student)
+      .select('_id studentId name nameBangla studentClassRoll studentType className email mobile gender')
+      .lean();
+  }
 
-  await updateStudentMealAttendance(studentId, id, true);
+  return {
+    _id: attendance._id,
+    personType: attendance.personType,
+    person: personData,
+    // Legacy compat
+    student: attendance.personType === 'student' ? personData : null,
+    date: attendance.date,
+    month: attendance.month,
+    academicYear: attendance.academicYear,
+    breakfast: attendance.breakfast,
+    lunch: attendance.lunch,
+    dinner: attendance.dinner,
+    totalMeals: attendance.totalMeals,
+    breakfastRate: attendance.breakfastRate ?? DEFAULT_BREAKFAST_RATE,
+    lunchRate: attendance.lunchRate ?? DEFAULT_LUNCH_RATE,
+    dinnerRate: attendance.dinnerRate ?? DEFAULT_DINNER_RATE,
+    mealCost: attendance.mealCost,
+    isFreeMeal: attendance.isFreeMeal || false,
+    isHoliday: attendance.isHoliday || false,
+    isAbsent: attendance.isAbsent || false,
+    remarks: attendance.remarks || '',
+  };
+};
+
+const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePayload>) => {
+  if (!id) throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
+
+  const existing = await MealAttendance.findById(id);
+  if (!existing) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
+
+  const breakfast = payload.breakfast !== undefined ? payload.breakfast : existing.breakfast;
+  const lunch = payload.lunch !== undefined ? payload.lunch : existing.lunch;
+  const dinner = payload.dinner !== undefined ? payload.dinner : existing.dinner;
+  const isFreeMeal = payload.isFreeMeal !== undefined ? payload.isFreeMeal : existing.isFreeMeal;
+
+  const breakfastRate = payload.breakfastRate ?? existing.breakfastRate ?? DEFAULT_BREAKFAST_RATE;
+  const lunchRate = payload.lunchRate ?? existing.lunchRate ?? DEFAULT_LUNCH_RATE;
+  const dinnerRate = payload.dinnerRate ?? existing.dinnerRate ?? DEFAULT_DINNER_RATE;
+
+  const { totalMeals, mealCost } = calculateMealStats(
+    breakfast, lunch, dinner, breakfastRate, lunchRate, dinnerRate, isFreeMeal,
+  );
+
+  const dateStr = payload.date || existing.date?.toString();
+  const formattedDate = moment(dateStr).format('YYYY-MM-DD');
+  const month = moment(dateStr).format('YYYY-MM');
+
+  const result = await MealAttendance.findByIdAndUpdate(
+    id,
+    {
+      date: formattedDate,
+      month,
+      academicYear: payload.academicYear || existing.academicYear,
+      breakfast,
+      lunch,
+      dinner,
+      isFreeMeal,
+      totalMeals,
+      breakfastRate,
+      lunchRate,
+      dinnerRate,
+      mealCost,
+      remarks: payload.remarks !== undefined ? payload.remarks : existing.remarks,
+    },
+    { new: true, runValidators: true },
+  );
 
   return result;
 };
 
-const getAttendanceByStudentAndMonth = async (studentId: string, month: string, academicYear: string) => {
-  const student = await Student.findById(studentId).select('_id studentId name nameBangla studentClassRoll studentType');
-  if (!student) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
-  if (!moment(month, 'YYYY-MM', true).isValid()) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
+const deleteAttendance = async (id: string) => {
+  const attendance = await MealAttendance.findById(id);
+  if (!attendance) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
+
+  const deleted = await MealAttendance.findByIdAndDelete(id);
+
+  // Keep the person's mealAttendances relation array in sync
+  const { PersonModel, field } = resolvePersonModel(attendance.personType);
+  const personId = (attendance as any)[field];
+  if (personId) {
+    await PersonModel.updateOne({ _id: personId }, { $pull: { mealAttendances: attendance._id } });
   }
 
-  const attendances = await MealAttendance.find({
-    student: new Types.ObjectId(studentId),
-    month,
-    academicYear,
-  }).sort({ date: 1 });
-
-  const totalMeals = attendances.reduce((sum, att) => sum + att.totalMeals, 0);
-  const totalCost = attendances.reduce((sum, att) => sum + att.mealCost, 0);
-  const presentDays = attendances.filter(att => att.totalMeals > 0).length;
-  const totalDays = moment(month, 'YYYY-MM').daysInMonth();
-
-  return {
-    student: {
-      id: student._id,
-      studentId: student.studentId,
-      name: student.name,
-      nameBangla: student.nameBangla,
-      roll: student.studentClassRoll,
-      type: student.studentType,
-    },
-    month,
-    academicYear,
-    attendances,
-    summary: {
-      totalMeals,
-      totalCost,
-      totalBreakfast: attendances.filter(a => a.breakfast).length,
-      totalLunch: attendances.filter(a => a.lunch).length,
-      totalDinner: attendances.filter(a => a.dinner).length,
-      presentDays,
-      absentDays: totalDays - presentDays,
-      attendancePercentage: ((presentDays / totalDays) * 100).toFixed(2),
-    }
-  };
+  return deleted;
 };
 
-// ============================================================
-// ✅ UPDATED: getMonthlyAttendanceSheet — now Free-Meal aware
-// ============================================================
-const getMonthlyAttendanceSheet = async (className: string | undefined, month: string, academicYear: string) => {
-  if (!month || !academicYear) {
+// ─────────────────────────────────────────────
+// Monthly Sheet (unified: students / teachers / staff)
+// ─────────────────────────────────────────────
+
+const getMonthlyAttendanceSheet = async (
+  personType: PersonType = 'student',
+  month: string,
+  academicYear: string,
+  className?: string, // only relevant for students
+) => {
+  if (!month || !academicYear)
     throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
-  }
-  if (!moment(month, 'YYYY-MM', true).isValid()) {
+  if (!moment(month, 'YYYY-MM', true).isValid())
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
-  }
 
-  // 1. Get Students (All Classes or Specific Class)
-  let students: any[];
-  if (className) {
-    students = await getStudentsByClassName(className);
+  // 1. Fetch persons list
+  let persons: any[] = [];
+  let normalise: (p: any) => any;
+
+  if (personType === 'teacher') {
+    persons = await getAllActiveTeachers();
+    normalise = normaliseTeacher;
+  } else if (personType === 'staff') {
+    persons = await getAllActiveStaff();
+    normalise = normaliseStaff;
   } else {
-    students = await Student.find({
-      admissionStatus: 'enrolled',
-      status: 'active'
-    }).select('_id studentId name nameBangla studentClassRoll studentType className class').lean();
+    persons = await getStudentsByClassName(className);
+    normalise = normaliseStudent;
   }
 
-  if (!students.length) {
-    return {
-      month,
-      academicYear,
-      className: className || 'All Classes',
-      dates: [],
-      students: [],
-      mealRate: MEAL_RATE,
-      totalStudents: 0,
-      grandTotalMeals: 0,
-      grandTotalCost: 0,
-      grandTotalBreakfast: 0,
-      grandTotalLunch: 0,
-      grandTotalDinner: 0,
-      grandTotalFreeMeals: 0,
-      grandTotalFreeMealCostSaved: 0,
-      dailyTotals: []
-    };
+  if (!persons.length) {
+    return emptySheet(month, academicYear, personType);
   }
 
-  // 2. Fetch Attendance
-  const attendances = await MealAttendance.find({ month, academicYear });
+  // 2. Fetch attendance records for this person type + month
+  const personField = personType === 'teacher' ? 'teacher' : personType === 'staff' ? 'staff' : 'student';
+  const attendances = await MealAttendance.find({ personType, month, academicYear }).lean();
 
-  // 3. Map for quick lookup
-  const attendanceMap = new Map();
+  // 3. Build lookup map: personId_date → record
+  const attendanceMap = new Map<string, any>();
   attendances.forEach(att => {
-    const key = `${att.student.toString()}_${moment(att.date).format('YYYY-MM-DD')}`;
-    attendanceMap.set(key, att);
+    const pid = (att[personField] as Types.ObjectId)?.toString();
+    const dateKey = moment(att.date).format('YYYY-MM-DD');
+    if (pid) attendanceMap.set(`${pid}_${dateKey}`, att);
   });
 
-  // 4. Generate Dates List
-  const startDate = moment(`${month}-01`);
-  const endDate = startDate.clone().endOf('month');
-  const dates: string[] = [];
-  const currentDate = startDate.clone();
-  while (currentDate <= endDate) {
-    dates.push(currentDate.format('YYYY-MM-DD'));
-    currentDate.add(1, 'day');
-  }
+  // 4. Generate date list for the month
+  const dates = generateMonthDates(month);
 
-  // 5. Generate Sheet Data & Calculate Totals
-  let grandTotalMeals = 0;
-  let grandTotalCost = 0;
-  let grandTotalBreakfast = 0;
-  let grandTotalLunch = 0;
-  let grandTotalDinner = 0;
-  let grandTotalFreeMeals = 0;
-  let grandTotalFreeMealCostSaved = 0;
+  // 5. Build per-person rows
+  let grandTotalMeals = 0, grandTotalCost = 0;
+  let grandTotalBreakfast = 0, grandTotalLunch = 0, grandTotalDinner = 0;
+  let grandTotalFreeMeals = 0, grandTotalFreeMealCostSaved = 0;
 
-  // Calculate Daily Totals (Daywise total for ALL classes)
   const dailyTotals = dates.map(date => {
-    let totalMeals = 0;
-    let totalCost = 0;
-    let totalBreakfast = 0;
-    let totalLunch = 0;
-    let totalDinner = 0;
-    let totalFreeMeals = 0;
-    let freeMealCostSaved = 0;
-
+    let tMeals = 0, tCost = 0, tB = 0, tL = 0, tD = 0, tFree = 0, tFreeSaved = 0;
     attendances.forEach(att => {
       if (moment(att.date).format('YYYY-MM-DD') === date) {
-        const meals = att.totalMeals || 0;
-        totalMeals += meals;
-
-        if (att.isFreeMeal) {
-          // Free meal -> not added to cost, but track count + what it would have cost
-          totalFreeMeals += 1;
-          freeMealCostSaved += meals * MEAL_RATE;
-        } else {
-          totalCost += att.mealCost || 0;
-        }
-
-        if (att.breakfast) totalBreakfast++;
-        if (att.lunch) totalLunch++;
-        if (att.dinner) totalDinner++;
+        tMeals += att.totalMeals || 0;
+        if (att.isFreeMeal) { tFree++; tFreeSaved += (att.totalMeals || 0) * AVERAGE_MEAL_RATE; }
+        else tCost += att.mealCost || 0;
+        if (att.breakfast) tB++;
+        if (att.lunch) tL++;
+        if (att.dinner) tD++;
       }
     });
-
-    return {
-      date,
-      totalMeals,
-      totalCost,
-      totalBreakfast,
-      totalLunch,
-      totalDinner,
-      totalFreeMeals,
-      freeMealCostSaved,
-      isWeekend: [0, 6].includes(moment(date).day()),
-    };
+    return { date, totalMeals: tMeals, totalCost: tCost, totalBreakfast: tB, totalLunch: tL, totalDinner: tD, totalFreeMeals: tFree, freeMealCostSaved: tFreeSaved, isWeekend: [0, 6].includes(moment(date).day()) };
   });
 
-  // Accumulate Grand Totals
-  dailyTotals.forEach(day => {
-    grandTotalMeals += day.totalMeals;
-    grandTotalCost += day.totalCost;
-    grandTotalBreakfast += day.totalBreakfast;
-    grandTotalLunch += day.totalLunch;
-    grandTotalDinner += day.totalDinner;
-    grandTotalFreeMeals += day.totalFreeMeals;
-    grandTotalFreeMealCostSaved += day.freeMealCostSaved;
+  dailyTotals.forEach(d => {
+    grandTotalMeals += d.totalMeals;
+    grandTotalCost += d.totalCost;
+    grandTotalBreakfast += d.totalBreakfast;
+    grandTotalLunch += d.totalLunch;
+    grandTotalDinner += d.totalDinner;
+    grandTotalFreeMeals += d.totalFreeMeals;
+    grandTotalFreeMealCostSaved += d.freeMealCostSaved;
   });
 
-  // 6. Generate Student-Specific Data
-  const sheetData = students.map(student => {
-    const studentAttendance = dates.map(date => {
-      const key = `${student._id.toString()}_${date}`;
-      const attendance = attendanceMap.get(key);
-      const meals = attendance?.totalMeals || 0;
-      const isFree = attendance?.isFreeMeal || false;
+  const sheetData = persons.map(person => {
+    const norm = normalise(person);
+    const pid = person._id.toString();
+
+    const attendance = dates.map(date => {
+      const att = attendanceMap.get(`${pid}_${date}`);
+      const breakfast = att?.breakfast || false;
+      const lunch = att?.lunch || false;
+      const dinner = att?.dinner || false;
+      const meals = att?.totalMeals ?? [breakfast, lunch, dinner].filter(Boolean).length;
+      const isFree = att?.isFreeMeal || false;
+
+      // Per-meal rates: use the rate stored on the record, otherwise default
+      const breakfastRate = att?.breakfastRate ?? DEFAULT_BREAKFAST_RATE;
+      const lunchRate = att?.lunchRate ?? DEFAULT_LUNCH_RATE;
+      const dinnerRate = att?.dinnerRate ?? DEFAULT_DINNER_RATE;
+      const grossCost = (breakfast ? breakfastRate : 0) + (lunch ? lunchRate : 0) + (dinner ? dinnerRate : 0);
 
       return {
         date,
-        breakfast: attendance?.breakfast || false,
-        lunch: attendance?.lunch || false,
-        dinner: attendance?.dinner || false,
+        breakfast,
+        lunch,
+        dinner,
         totalMeals: meals,
-        // ✅ Free meal days cost 0 — use stored mealCost (which is already 0 if free)
-        mealCost: isFree ? 0 : (attendance?.mealCost ?? meals * MEAL_RATE),
+        breakfastRate,
+        lunchRate,
+        dinnerRate,
+        mealCost: isFree ? 0 : (att?.mealCost ?? grossCost),
         isFreeMeal: isFree,
-        isHoliday: attendance?.isHoliday || false,
-        isAbsent: attendance?.isAbsent || false,
+        isHoliday: att?.isHoliday || false,
+        isAbsent: att?.isAbsent || false,
       };
     });
 
-    const studentTotalMeals = studentAttendance.reduce((sum, day) => sum + day.totalMeals, 0);
-    // ✅ Sum actual per-day cost (0 on free-meal days) instead of totalMeals * MEAL_RATE
-    const studentMealCost = studentAttendance.reduce((sum, day) => sum + day.mealCost, 0);
-    const studentFreeMealsCount = studentAttendance.filter(d => d.isFreeMeal).length;
-    const studentFreeMealCostSaved = studentAttendance
-      .filter(d => d.isFreeMeal)
-      .reduce((sum, d) => sum + d.totalMeals * MEAL_RATE, 0);
+    const totalMeals = attendance.reduce((s, d) => s + d.totalMeals, 0);
+    const mealCost = attendance.reduce((s, d) => s + d.mealCost, 0);
+    const freeMealsCount = attendance.filter(d => d.isFreeMeal).length;
+    const freeMealCostSaved = attendance.filter(d => d.isFreeMeal).reduce((s, d) => s + d.totalMeals * AVERAGE_MEAL_RATE, 0);
 
     return {
-      student: {
-        id: student._id,
-        studentId: student.studentId,
-        name: student.name,
-        nameBangla: student.nameBangla,
-        roll: student.studentClassRoll,
-        type: student.studentType,
-        class: student.className || student.class,
-      },
-      attendance: studentAttendance,
-      totalMeals: studentTotalMeals,
-      mealCost: studentMealCost,
-      freeMealsCount: studentFreeMealsCount,
-      freeMealCostSaved: studentFreeMealCostSaved,
+      person: { id: person._id, ...norm },
+      // legacy compat for frontend
+      student: personType === 'student' ? { id: person._id, ...norm } : null,
+      attendance,
+      totalMeals,
+      mealCost,
+      freeMealsCount,
+      freeMealCostSaved,
     };
   });
 
-  // 7. Return Full Response
   return {
     month,
     academicYear,
-    className: className || 'All Classes',
+    personType,
+    className: personType === 'student' ? (className || 'All Classes') : undefined,
     dates,
-    students: sheetData,
-    mealRate: MEAL_RATE,
+    students: sheetData,   // kept for backward compat
+    persons: sheetData,
+    mealRates: DEFAULT_MEAL_RATES, // { breakfast: 40, lunch: 45, dinner: 80 }
     totalStudents: sheetData.length,
     grandTotalMeals,
     grandTotalCost,
@@ -437,934 +555,224 @@ const getMonthlyAttendanceSheet = async (className: string | undefined, month: s
   };
 };
 
-// ============================================================
-// ✅ UPDATED: getMonthlySummary — Free-Meal aware
-// ============================================================
-const getMonthlySummary = async (className: string, month: string, academicYear: string) => {
-  const sheetData = await getMonthlyAttendanceSheet(className, month, academicYear);
-
-  const summary = sheetData.students.map(student => {
-    const isResidential = student.student.type === 'Residential' || student.student.type === 'hostel';
-    const monthlyMealFee = isResidential ? 5000 : 0;
-    const adjustment = monthlyMealFee - student.mealCost;
-
-    return {
-      studentName: student.student.name,
-      studentNameBangla: student.student.nameBangla,
-      studentRoll: student.student.roll,
-      studentId: student.student.studentId,
-      studentType: student.student.type,
-      totalMeals: student.totalMeals,
-      actualMealCost: student.mealCost, // already excludes free-meal days
-      freeMealsCount: student.freeMealsCount,
-      freeMealCostSaved: student.freeMealCostSaved,
-      monthlyMealFee,
-      adjustment,
-      netPayable: student.mealCost > monthlyMealFee ? student.mealCost - monthlyMealFee : 0,
-      refund: monthlyMealFee > student.mealCost ? monthlyMealFee - student.mealCost : 0,
-    };
-  });
-
-  summary.sort((a, b) => {
-    const rollA = parseInt(a.studentRoll as string) || 0;
-    const rollB = parseInt(b.studentRoll as string) || 0;
-    return rollA - rollB;
-  });
-
-  const totalMeals = summary.reduce((sum, s) => sum + s.totalMeals, 0);
-  const totalMealCost = summary.reduce((sum, s) => sum + s.actualMealCost, 0);
-  const totalMonthlyFee = summary.reduce((sum, s) => sum + s.monthlyMealFee, 0);
-  const totalNetPayable = summary.reduce((sum, s) => sum + s.netPayable, 0);
-  const totalRefund = summary.reduce((sum, s) => sum + s.refund, 0);
-  const totalFreeMeals = summary.reduce((sum, s) => sum + s.freeMealsCount, 0);
-  const totalFreeMealCostSaved = summary.reduce((sum, s) => sum + s.freeMealCostSaved, 0);
-
-  return {
-    month,
-    academicYear,
-    className,
-    summary,
-    statistics: {
-      totalStudents: summary.length,
-      totalMeals,
-      totalMealCost,
-      totalMonthlyFee,
-      totalNetPayable,
-      totalRefund,
-      totalFreeMeals,
-      totalFreeMealCostSaved,
-      averageMealsPerStudent: (totalMeals / summary.length).toFixed(2),
-      mealRate: MEAL_RATE,
-    },
-  };
-};
-
-const getAttendanceByDateRangeForAllStudents = async (startDate: string, endDate: string, academicYear: string) => {
-  if (!startDate || !endDate) throw new AppError(httpStatus.BAD_REQUEST, 'Start date and end date are required');
-  if (!academicYear) throw new AppError(httpStatus.BAD_REQUEST, 'Academic year is required');
-
-  const startDateObj = moment(startDate, 'YYYY-MM-DD', true);
-  const endDateObj = moment(endDate, 'YYYY-MM-DD', true);
-
-  if (!startDateObj.isValid()) throw new AppError(httpStatus.BAD_REQUEST, 'Invalid startDate format. Use YYYY-MM-DD');
-  if (!endDateObj.isValid()) throw new AppError(httpStatus.BAD_REQUEST, 'Invalid endDate format. Use YYYY-MM-DD');
-  if (startDateObj.isAfter(endDateObj)) throw new AppError(httpStatus.BAD_REQUEST, 'startDate cannot be after endDate');
-
-  const students = await Student.find({ admissionStatus: 'enrolled', status: 'active' })
-    .select('_id studentId name nameBangla studentClassRoll studentType class className');
-
-  if (!students.length) throw new AppError(httpStatus.NOT_FOUND, 'No students found');
-
-  const formattedStartDate = startDateObj.format('YYYY-MM-DD');
-  const formattedEndDate = endDateObj.format('YYYY-MM-DD');
-
-  const attendances = await MealAttendance.find({
-    date: { $gte: formattedStartDate, $lte: formattedEndDate },
-    academicYear,
-  });
-
-  const attendanceMap = new Map();
-  attendances.forEach(att => {
-    const key = `${att.student.toString()}_${moment(att.date).format('YYYY-MM-DD')}`;
-    attendanceMap.set(key, att);
-  });
-
-  const dateRange: string[] = [];
-  const currentDate = startDateObj.clone();
-  const end = endDateObj.clone();
-  while (currentDate <= end) {
-    dateRange.push(currentDate.format('YYYY-MM-DD'));
-    currentDate.add(1, 'day');
-  }
-
-  const result = students.map(student => {
-    const attendanceData = dateRange.map(date => {
-      const key = `${student._id.toString()}_${date}`;
-      const attendance = attendanceMap.get(key);
-      return {
-        date,
-        breakfast: attendance?.breakfast || false,
-        lunch: attendance?.lunch || false,
-        dinner: attendance?.dinner || false,
-        totalMeals: attendance?.totalMeals || 0,
-        mealCost: attendance?.mealCost || 0,
-        isHoliday: attendance?.isHoliday || false,
-        isAbsent: attendance?.isAbsent || false,
-      };
-    });
-
-    const totalMeals = attendanceData.reduce((sum, day) => sum + day.totalMeals, 0);
-    const totalCost = attendanceData.reduce((sum, day) => sum + day.mealCost, 0);
-    const presentDays = attendanceData.filter(day => day.totalMeals > 0).length;
-
-    return {
-      student: {
-        id: student._id,
-        studentId: student.studentId,
-        name: student.name,
-        nameBangla: student.nameBangla,
-        roll: student.studentClassRoll,
-        type: student.studentType,
-        class: student.className || student.class,
-      },
-      attendance: attendanceData,
-      summary: {
-        totalMeals,
-        totalCost,
-        presentDays,
-        absentDays: dateRange.length - presentDays,
-        attendancePercentage: ((presentDays / dateRange.length) * 100).toFixed(2),
-      }
-    };
-  });
-
-  return {
-    startDate: formattedStartDate,
-    endDate: formattedEndDate,
-    academicYear,
-    dateRange,
-    totalDays: dateRange.length,
-    students: result,
-    grandTotal: {
-      totalStudents: result.length,
-      totalMeals: result.reduce((sum, s) => sum + s.summary.totalMeals, 0),
-      totalCost: result.reduce((sum, s) => sum + s.summary.totalCost, 0),
-      totalPresentDays: result.reduce((sum, s) => sum + s.summary.presentDays, 0),
-      averageAttendancePercentage: (result.reduce((sum, s) => sum + parseFloat(s.summary.attendancePercentage), 0) / result.length).toFixed(2),
-    }
-  };
-};
-
-const getStudentMealReport = async (studentId: string, startDate: string, endDate: string) => {
-  const student = await Student.findById(studentId).select('_id studentId name nameBangla studentClassRoll studentType');
-  if (!student) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
-
-  const start = moment(startDate, 'YYYY-MM-DD');
-  const end = moment(endDate, 'YYYY-MM-DD');
-
-  if (!start.isValid() || !end.isValid()) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid date format. Use YYYY-MM-DD');
-  }
-
-  const attendances = await MealAttendance.find({
-    student: new Types.ObjectId(studentId),
-    date: { $gte: start.toDate(), $lte: end.toDate() },
-  }).sort({ date: 1 });
-
-  const totalMeals = attendances.reduce((sum, att) => sum + att.totalMeals, 0);
-  const totalCost = attendances.reduce((sum, att) => sum + att.mealCost, 0);
-  const presentDays = attendances.filter(att => att.totalMeals > 0).length;
-  const totalDays = end.diff(start, 'days') + 1;
-
-  return {
-    student: {
-      id: student._id,
-      studentId: student.studentId,
-      name: student.name,
-      nameBangla: student.nameBangla,
-      roll: student.studentClassRoll,
-      type: student.studentType,
-    },
-    period: {
-      startDate: start.format('YYYY-MM-DD'),
-      endDate: end.format('YYYY-MM-DD'),
-      totalDays,
-    },
-    attendances,
-    summary: {
-      totalMeals,
-      totalCost,
-      totalBreakfast: attendances.filter(a => a.breakfast).length,
-      totalLunch: attendances.filter(a => a.lunch).length,
-      totalDinner: attendances.filter(a => a.dinner).length,
-      presentDays,
-      absentDays: totalDays - presentDays,
-      attendancePercentage: ((presentDays / totalDays) * 100).toFixed(2),
-      averageMealsPerDay: (totalMeals / totalDays).toFixed(2),
-    }
-  };
-}
+// ─────────────────────────────────────────────
+// List / Report helpers
+// ─────────────────────────────────────────────
 
 const getAllAttendanceRecords = async (
-  page: number = 1,
-  limit: number = 10,
-  search: string = '',
-  className: string = '',
-  date: string = '',
-  month: string = '',
+  page = 1,
+  limit = 10,
+  search = '',
+  personType: PersonType = 'student',
+  date = '',
+  month = '',
   academicYear: string,
-  sortColumn: string = 'date',
-  sortDirection: 'asc' | 'desc' = 'desc'
+  sortColumn = 'date',
+  sortDirection: 'asc' | 'desc' = 'desc',
+  className = '',
 ) => {
   const skip = (page - 1) * limit;
+  const matchStage: any = { academicYear, personType };
+  if (date) matchStage.date = date;
+  if (month) matchStage.month = month;
 
-  let studentIds: Types.ObjectId[] = [];
-
-  if (className) {
+  if (personType === 'student' && className) {
     const { Class } = require('../class/class.model');
-    const classes = await Class.find({ className: className });
+    const classes = await Class.find({ className });
     const classIds = classes.map((c: any) => c._id);
-
-    const students = await Student.find({
-      className: { $in: classIds },
-      admissionStatus: 'enrolled',
-      status: 'active'
-    }).select('_id');
-
-    studentIds = students.map((s: any) => s._id);
-
-    if (studentIds.length === 0) {
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-        totalMeals: 0,
-        totalCost: 0,
-        uniqueStudents: 0,
-      };
-    }
+    const students = await Student.find({ className: { $in: classIds }, admissionStatus: 'enrolled', status: 'active' }).select('_id');
+    if (!students.length) return { data: [], total: 0, page, limit, totalPages: 0, totalMeals: 0, totalCost: 0, uniquePersons: 0 };
+    matchStage.student = { $in: students.map(s => s._id) };
   }
 
-  const matchStage: any = {};
-
-  if (academicYear) {
-    matchStage.academicYear = academicYear;
-  }
-
-  if (date) {
-    matchStage.date = date;
-  }
-
-  if (month) {
-    matchStage.month = month;
-  }
-
-  if (studentIds.length > 0) {
-    matchStage.student = { $in: studentIds };
-  }
+  const populatePath = getPopulatePath(personType);
+  const populateFields = personType === 'student'
+    ? 'name nameBangla studentId studentClassRoll studentType className'
+    : personType === 'teacher'
+      ? 'name nameBangla teacherId designation department'
+      : 'name nameBangla staffId staffDepartment';
 
   const sortObj: any = {};
   sortObj[sortColumn] = sortDirection === 'asc' ? 1 : -1;
 
-  let query = MealAttendance.find(matchStage)
-    .populate('student', 'name nameBangla studentId studentClassRoll studentType className')
-    .sort(sortObj);
+  let records = await MealAttendance.find(matchStage)
+    .populate(populatePath, populateFields)
+    .sort(sortObj)
+    .skip(skip)
+    .limit(limit)
+    .lean();
 
-  let totalCount = await MealAttendance.countDocuments(matchStage);
-  query = query.skip(skip).limit(limit);
-  let attendanceRecords = await query.lean();
+  let total = await MealAttendance.countDocuments(matchStage);
 
-  if (search && attendanceRecords.length > 0) {
-    const searchRegex = new RegExp(search, 'i');
-    attendanceRecords = attendanceRecords.filter(record => {
-      const student = record.student as any;
-      return (
-        student?.name?.match(searchRegex) ||
-        student?.nameBangla?.match(searchRegex) ||
-        student?.studentId?.match(searchRegex) ||
-        student?.studentClassRoll?.toString().match(searchRegex)
-      );
+  if (search) {
+    const rx = new RegExp(search, 'i');
+    records = records.filter(r => {
+      const p = (r as any)[populatePath];
+      return p?.name?.match(rx) || p?.nameBangla?.match(rx);
     });
-    totalCount = attendanceRecords.length;
+    total = records.length;
   }
 
-  const totalMeals = attendanceRecords.reduce((sum, record) => sum + (record.totalMeals || 0), 0);
-  const totalCost = attendanceRecords.reduce((sum, record) => sum + (record.mealCost || 0), 0);
-  const uniqueStudents = new Set(attendanceRecords.map(r => (r.student as any)?._id?.toString())).size;
+  const totalMeals = records.reduce((s, r) => s + (r.totalMeals || 0), 0);
+  const totalCost = records.reduce((s, r) => s + (r.mealCost || 0), 0);
+  const uniquePersons = new Set(records.map(r => (r as any)[populatePath]?._id?.toString())).size;
+
+  return { data: records, total, page, limit, totalPages: Math.ceil(total / limit), totalMeals, totalCost, uniquePersons };
+};
+
+// ─────────────────────────────────────────────
+// Util
+// ─────────────────────────────────────────────
+
+const generateMonthDates = (month: string): string[] => {
+  const dates: string[] = [];
+  const cur = moment(`${month}-01`);
+  const end = cur.clone().endOf('month');
+  while (cur <= end) { dates.push(cur.format('YYYY-MM-DD')); cur.add(1, 'day'); }
+  return dates;
+};
+
+const emptySheet = (month: string, academicYear: string, personType: PersonType) => ({
+  month, academicYear, personType,
+  dates: [], students: [], persons: [],
+  mealRates: DEFAULT_MEAL_RATES, totalStudents: 0,
+  grandTotalMeals: 0, grandTotalCost: 0,
+  grandTotalBreakfast: 0, grandTotalLunch: 0, grandTotalDinner: 0,
+  grandTotalFreeMeals: 0, grandTotalFreeMealCostSaved: 0,
+  dailyTotals: [],
+});
+
+// ─────────────────────────────────────────────
+// Legacy: student-only helpers (kept for compat)
+// ─────────────────────────────────────────────
+
+const getAttendanceByStudentAndMonth = async (studentId: string, month: string, academicYear: string) => {
+  const student = await Student.findById(studentId).select('_id studentId name nameBangla studentClassRoll studentType');
+  if (!student) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  if (!moment(month, 'YYYY-MM', true).isValid()) throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
+
+  const attendances = await MealAttendance.find({ student: new Types.ObjectId(studentId), month, academicYear }).sort({ date: 1 });
+  const totalMeals = attendances.reduce((s, a) => s + a.totalMeals, 0);
+  const totalCost = attendances.reduce((s, a) => s + a.mealCost, 0);
+  const presentDays = attendances.filter(a => a.totalMeals > 0).length;
+  const totalDays = moment(month, 'YYYY-MM').daysInMonth();
 
   return {
-    data: attendanceRecords,
-    total: totalCount,
-    page,
-    limit,
-    totalPages: Math.ceil(totalCount / limit),
-    totalMeals,
-    totalCost,
-    uniqueStudents,
+    student: { id: student._id, studentId: student.studentId, name: student.name, nameBangla: student.nameBangla, roll: student.studentClassRoll, type: student.studentType },
+    month, academicYear, attendances,
+    summary: { totalMeals, totalCost, totalBreakfast: attendances.filter(a => a.breakfast).length, totalLunch: attendances.filter(a => a.lunch).length, totalDinner: attendances.filter(a => a.dinner).length, presentDays, absentDays: totalDays - presentDays, attendancePercentage: ((presentDays / totalDays) * 100).toFixed(2) },
   };
 };
 
-const getAttendanceById = async (id: string) => {
-  if (!id) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
-  }
+const getMonthlySummary = async (personType: PersonType = 'student', month: string, academicYear: string, className?: string) => {
+  const sheetData = await getMonthlyAttendanceSheet(personType, month, academicYear, className);
 
-  const attendance = await MealAttendance.findById(id)
-    .populate('student', 'name nameBangla studentId studentClassRoll studentType className email mobile gender')
-    .lean();
-
-  if (!attendance) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
-  }
-
-  const student = attendance.student as any;
+  const summary = sheetData.persons.map(p => {
+    const isResidential = p.person.type === 'Residential' || p.person.type === 'hostel';
+    const monthlyFee = isResidential ? 5000 : 0;
+    return {
+      personName: p.person.name,
+      personNameBangla: p.person.nameBangla,
+      personRoll: p.person.roll,
+      personId: p.person.personId,
+      personType: p.person.type,
+      department: p.person.department,
+      totalMeals: p.totalMeals,
+      actualMealCost: p.mealCost,
+      freeMealsCount: p.freeMealsCount,
+      freeMealCostSaved: p.freeMealCostSaved,
+      monthlyFee,
+      netPayable: p.mealCost > monthlyFee ? p.mealCost - monthlyFee : 0,
+      refund: monthlyFee > p.mealCost ? monthlyFee - p.mealCost : 0,
+    };
+  });
 
   return {
-    _id: attendance._id,
-    student: {
-      _id: student?._id,
-      studentId: student?.studentId,
-      name: student?.name,
-      nameBangla: student?.nameBangla,
-      roll: student?.studentClassRoll,
-      studentType: student?.studentType,
-      className: student?.className,
-      email: student?.email,
-      mobile: student?.mobile,
-      gender: student?.gender,
+    month, academicYear, personType,
+    summary,
+    statistics: {
+      totalPersons: summary.length,
+      totalMeals: summary.reduce((s, p) => s + p.totalMeals, 0),
+      totalMealCost: summary.reduce((s, p) => s + p.actualMealCost, 0),
+      totalFreeMeals: summary.reduce((s, p) => s + p.freeMealsCount, 0),
+      totalFreeMealCostSaved: summary.reduce((s, p) => s + p.freeMealCostSaved, 0),
+      mealRates: DEFAULT_MEAL_RATES,
     },
-    date: attendance.date,
-    month: attendance.month,
-    academicYear: attendance.academicYear,
-    breakfast: attendance.breakfast,
-    lunch: attendance.lunch,
-    dinner: attendance.dinner,
-    totalMeals: attendance.totalMeals,
-    mealCost: attendance.mealCost,
-    mealRate: attendance.mealRate,
-    isHoliday: attendance.isHoliday || false,
-    isAbsent: attendance.isAbsent || false,
-    remarks: attendance.remarks || '',
-  };
-};
-
-const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePayload>) => {
-  if (!id) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
-  }
-
-  const existingAttendance = await MealAttendance.findById(id);
-  if (!existingAttendance) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
-  }
-
-  const {
-    student,
-    date,
-    academicYear,
-    breakfast,
-    lunch,
-    dinner,
-    mealRate = MEAL_RATE,
-    remarks
-  } = payload;
-
-  if (student) {
-    const studentExists = await Student.findById(student).select('_id studentId name className admissionStatus status');
-    if (!studentExists) throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
-    if (studentExists.admissionStatus !== 'enrolled') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not enrolled');
-    if (studentExists.status !== 'active') throw new AppError(httpStatus.BAD_REQUEST, 'Student is not active');
-  }
-
-  const finalStudent = student || existingAttendance.student;
-  const finalDate = date || existingAttendance.date;
-  const finalAcademicYear = academicYear || existingAttendance.academicYear;
-  const finalBreakfast = breakfast !== undefined ? breakfast : existingAttendance.breakfast;
-  const finalLunch = lunch !== undefined ? lunch : existingAttendance.lunch;
-  const finalDinner = dinner !== undefined ? dinner : existingAttendance.dinner;
-  const finalRemarks = remarks !== undefined ? remarks : existingAttendance.remarks;
-
-  const dateObj = moment(finalDate);
-  const formattedDate = dateObj.format('YYYY-MM-DD');
-  const month = dateObj.format('YYYY-MM');
-  const { totalMeals, mealCost: calculatedMealCost } = calculateMealStats(
-    finalBreakfast,
-    finalLunch,
-    finalDinner,
-    mealRate
-  );
-
-  const updateData = {
-    student: new Types.ObjectId(finalStudent as string),
-    date: formattedDate,
-    month,
-    academicYear: finalAcademicYear,
-    breakfast: finalBreakfast,
-    lunch: finalLunch,
-    dinner: finalDinner,
-    totalMeals,
-    mealCost: calculatedMealCost,
-    mealRate,
-    remarks: finalRemarks,
-  };
-
-  const result = await MealAttendance.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true
-  }).populate('student', 'name nameBangla studentId studentClassRoll studentType className email mobile gender');
-
-  return result;
-};
-
-const bulkUpdateAttendance = async (payload: IBulkUpdateAttendancePayload) => {
-  const { updates } = payload;
-
-  if (!updates || !updates.length) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'No update data provided');
-  }
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const results = {
-      total: updates.length,
-      modified: 0,
-      failed: 0,
-      details: [] as any[],
-      errors: [] as any[]
-    };
-
-    for (const update of updates) {
-      try {
-        const { id, data } = update;
-
-        const existingAttendance = await MealAttendance.findById(id).session(session);
-        if (!existingAttendance) {
-          results.failed++;
-          results.errors.push({
-            id,
-            error: 'Attendance record not found'
-          });
-          continue;
-        }
-
-        const {
-          student,
-          date,
-          academicYear,
-          breakfast,
-          lunch,
-          dinner,
-          mealRate = MEAL_RATE,
-          remarks
-        } = data;
-
-        const finalStudent = student || existingAttendance.student.toString();
-        const finalDate = date || existingAttendance.date;
-        const finalAcademicYear = academicYear || existingAttendance.academicYear;
-        const finalBreakfast = breakfast !== undefined ? breakfast : existingAttendance.breakfast;
-        const finalLunch = lunch !== undefined ? lunch : existingAttendance.lunch;
-        const finalDinner = dinner !== undefined ? dinner : existingAttendance.dinner;
-        const finalRemarks = remarks !== undefined ? remarks : existingAttendance.remarks;
-
-        if (student && student !== existingAttendance.student.toString()) {
-          const studentExists = await Student.findById(student).session(session);
-          if (!studentExists) {
-            results.failed++;
-            results.errors.push({
-              id,
-              error: 'Student not found'
-            });
-            continue;
-          }
-        }
-
-        const dateObj = moment(finalDate);
-        const formattedDate = dateObj.format('YYYY-MM-DD');
-        const month = dateObj.format('YYYY-MM');
-        const { totalMeals, mealCost: calculatedMealCost } = calculateMealStats(
-          finalBreakfast,
-          finalLunch,
-          finalDinner,
-          mealRate
-        );
-
-        const updateData = {
-          student: new Types.ObjectId(finalStudent),
-          date: formattedDate,
-          month,
-          academicYear: finalAcademicYear,
-          breakfast: finalBreakfast,
-          lunch: finalLunch,
-          dinner: finalDinner,
-          totalMeals,
-          mealCost: calculatedMealCost,
-          mealRate,
-          remarks: finalRemarks,
-        };
-
-        const result = await MealAttendance.findByIdAndUpdate(id, updateData, {
-          new: true,
-          runValidators: true,
-          session
-        }).populate('student', 'name nameBangla studentId studentClassRoll studentType');
-
-        results.modified++;
-        results.details.push({
-          id,
-          success: true,
-          data: result
-        });
-
-      } catch (error: any) {
-        results.failed++;
-        results.errors.push({
-          id: update.id,
-          error: error.message
-        });
-      }
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return {
-      success: true,
-      message: `Bulk update completed: ${results.modified} modified, ${results.failed} failed`,
-      data: results
-    };
-
-  } catch (error: any) {
-    await session.abortTransaction();
-    session.endSession();
-    throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, error.message);
-  }
-};
-
-const bulkGetAttendance = async (query: IBulkGetQueryPayload) => {
-  const {
-    studentIds,
-    classNames,
-    startDate,
-    endDate,
-    month,
-    academicYear,
-    mealStatus = 'all',
-    breakfast,
-    lunch,
-    dinner
-  } = query;
-
-  if (!academicYear) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Academic year is required');
-  }
-
-  const matchStage: any = { academicYear };
-
-  if (studentIds && studentIds.length > 0) {
-    matchStage.student = { $in: studentIds.map(id => new Types.ObjectId(id)) };
-  }
-
-  if (classNames && classNames.length > 0) {
-    const { Class } = require('../class/class.model');
-    const allClassIds: Types.ObjectId[] = [];
-
-    for (const className of classNames) {
-      const classes = await Class.find({ className });
-      const classIds = classes.map((c: any) => c._id);
-      allClassIds.push(...classIds);
-    }
-
-    if (allClassIds.length > 0) {
-      const students = await Student.find({
-        className: { $in: allClassIds },
-        admissionStatus: 'enrolled',
-        status: 'active'
-      }).select('_id');
-
-      const studentObjectIds = students.map(s => s._id);
-      if (studentObjectIds.length > 0) {
-        if (matchStage.student) {
-          matchStage.student = { $in: [...matchStage.student.$in, ...studentObjectIds] };
-        } else {
-          matchStage.student = { $in: studentObjectIds };
-        }
-      }
-    }
-  }
-
-  if (startDate && endDate) {
-    const start = moment(startDate, 'YYYY-MM-DD');
-    const end = moment(endDate, 'YYYY-MM-DD');
-
-    if (!start.isValid() || !end.isValid()) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid date format. Use YYYY-MM-DD');
-    }
-
-    matchStage.date = {
-      $gte: new Date(start.format('YYYY-MM-DD')),
-      $lte: new Date(end.format('YYYY-MM-DD'))
-    };
-  }
-
-  if (month) {
-    if (!moment(month, 'YYYY-MM', true).isValid()) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
-    }
-    matchStage.month = month;
-  }
-
-  if (mealStatus === 'taken') {
-    matchStage.totalMeals = { $gt: 0 };
-  } else if (mealStatus === 'not_taken') {
-    matchStage.totalMeals = 0;
-  }
-
-  if (breakfast !== undefined) matchStage.breakfast = breakfast;
-  if (lunch !== undefined) matchStage.lunch = lunch;
-  if (dinner !== undefined) matchStage.dinner = dinner;
-
-  const attendances = await MealAttendance.find(matchStage)
-    .populate('student', 'name nameBangla studentId studentClassRoll studentType className class email mobile')
-    .sort({ date: 1, 'student.name': 1 });
-
-  const groupedByStudent = new Map();
-
-  attendances.forEach(attendance => {
-    const studentId = (attendance.student as any)._id.toString();
-    if (!groupedByStudent.has(studentId)) {
-      groupedByStudent.set(studentId, {
-        student: attendance.student,
-        attendances: [],
-        summary: {
-          totalMeals: 0,
-          totalCost: 0,
-          totalBreakfast: 0,
-          totalLunch: 0,
-          totalDinner: 0,
-          totalDays: 0,
-          presentDays: 0
-        }
-      });
-    }
-
-    const studentData = groupedByStudent.get(studentId);
-    studentData.attendances.push(attendance);
-    studentData.summary.totalMeals += attendance.totalMeals;
-    studentData.summary.totalCost += attendance.mealCost;
-    studentData.summary.totalBreakfast += attendance.breakfast ? 1 : 0;
-    studentData.summary.totalLunch += attendance.lunch ? 1 : 0;
-    studentData.summary.totalDinner += attendance.dinner ? 1 : 0;
-    studentData.summary.totalDays++;
-    if (attendance.totalMeals > 0) {
-      studentData.summary.presentDays++;
-    }
-  });
-
-  const overallStats = {
-    totalStudents: groupedByStudent.size,
-    totalAttendanceRecords: attendances.length,
-    totalMeals: attendances.reduce((sum, a) => sum + a.totalMeals, 0),
-    totalCost: attendances.reduce((sum, a) => sum + a.mealCost, 0),
-    totalBreakfast: attendances.filter(a => a.breakfast).length,
-    totalLunch: attendances.filter(a => a.lunch).length,
-    totalDinner: attendances.filter(a => a.dinner).length,
-  };
-
-  return {
-    success: true,
-    message: 'Bulk attendance data retrieved successfully',
-    data: {
-      query: {
-        studentIds,
-        classNames,
-        dateRange: startDate && endDate ? { startDate, endDate } : undefined,
-        month,
-        academicYear,
-        mealStatus,
-        breakfast,
-        lunch,
-        dinner
-      },
-      overallStats,
-      students: Array.from(groupedByStudent.values())
-    }
-  };
-};
-
-const bulkGetByDateRange = async (
-  startDate: string,
-  endDate: string,
-  academicYear: string,
-  page: number = 1,
-  limit: number = 50,
-  className?: string,
-  studentType?: string
-) => {
-  if (!startDate || !endDate) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Start date and end date are required');
-  }
-
-  const start = moment(startDate, 'YYYY-MM-DD');
-  const end = moment(endDate, 'YYYY-MM-DD');
-
-  if (!start.isValid() || !end.isValid()) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid date format. Use YYYY-MM-DD');
-  }
-
-  const studentFilter: any = {
-    admissionStatus: 'enrolled',
-    status: 'active'
-  };
-
-  if (className) {
-    const { Class } = require('../class/class.model');
-    const classes = await Class.find({ className });
-    const classIds = classes.map((c: any) => c._id);
-    if (classIds.length > 0) {
-      studentFilter.className = { $in: classIds };
-    } else {
-      studentFilter.class = className;
-    }
-  }
-
-  if (studentType) {
-    studentFilter.studentType = studentType;
-  }
-
-  const students = await Student.find(studentFilter)
-    .select('_id studentId name nameBangla studentClassRoll studentType className class')
-    .lean();
-
-  if (!students.length) {
-    return {
-      success: true,
-      data: {
-        students: [],
-        totalStudents: 0,
-        totalAttendanceRecords: 0,
-        summary: {
-          totalMeals: 0,
-          totalCost: 0
-        }
-      }
-    };
-  }
-
-  const formattedStartDate = start.format('YYYY-MM-DD');
-  const formattedEndDate = end.format('YYYY-MM-DD');
-
-  const attendances = await MealAttendance.find({
-    student: { $in: students.map(s => s._id) },
-    date: { $gte: formattedStartDate, $lte: formattedEndDate },
-    academicYear
-  }).sort({ date: 1 });
-
-  const attendanceMap = new Map();
-  attendances.forEach(att => {
-    const key = `${att.student.toString()}_${att.date}`;
-    attendanceMap.set(key, att);
-  });
-
-  const dateRange: string[] = [];
-  const currentDate = start.clone();
-  while (currentDate <= end) {
-    dateRange.push(currentDate.format('YYYY-MM-DD'));
-    currentDate.add(1, 'day');
-  }
-
-  const skip = (page - 1) * limit;
-  const paginatedStudents = students.slice(skip, skip + limit);
-
-  const result = paginatedStudents.map(student => {
-    const attendanceData = dateRange.map(date => {
-      const key = `${student._id.toString()}_${date}`;
-      const attendance = attendanceMap.get(key);
-      return {
-        date,
-        breakfast: attendance?.breakfast || false,
-        lunch: attendance?.lunch || false,
-        dinner: attendance?.dinner || false,
-        totalMeals: attendance?.totalMeals || 0,
-        mealCost: attendance?.mealCost || 0,
-        isHoliday: attendance?.isHoliday || false,
-        isAbsent: attendance?.isAbsent || false,
-      };
-    });
-
-    const totalMeals = attendanceData.reduce((sum, day) => sum + day.totalMeals, 0);
-    const totalCost = attendanceData.reduce((sum, day) => sum + day.mealCost, 0);
-    const presentDays = attendanceData.filter(day => day.totalMeals > 0).length;
-
-    return {
-      student: {
-        id: student._id,
-        studentId: student.studentId,
-        name: student.name,
-        nameBangla: student.nameBangla,
-        roll: student.studentClassRoll,
-        type: student.studentType,
-        class: student.className || student.class,
-      },
-      attendance: attendanceData,
-      summary: {
-        totalMeals,
-        totalCost,
-        presentDays,
-        absentDays: dateRange.length - presentDays,
-        attendancePercentage: ((presentDays / dateRange.length) * 100).toFixed(2),
-      }
-    };
-  });
-
-  const totalMealsAll = students.reduce((sum, student) => {
-    const key = student._id.toString();
-    const studentAttendances = attendances.filter(a => a.student.toString() === key);
-    return sum + studentAttendances.reduce((s, a) => s + a.totalMeals, 0);
-  }, 0);
-
-  const totalCostAll = students.reduce((sum, student) => {
-    const key = student._id.toString();
-    const studentAttendances = attendances.filter(a => a.student.toString() === key);
-    return sum + studentAttendances.reduce((s, a) => s + a.mealCost, 0);
-  }, 0);
-
-  return {
-    success: true,
-    message: 'Bulk attendance by date range retrieved successfully',
-    data: {
-      dateRange: {
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-        totalDays: dateRange.length
-      },
-      academicYear,
-      pagination: {
-        page,
-        limit,
-        totalStudents: students.length,
-        totalPages: Math.ceil(students.length / limit)
-      },
-      summary: {
-        totalAttendanceRecords: attendances.length,
-        totalMeals: totalMealsAll,
-        totalCost: totalCostAll,
-        averageMealsPerDay: (totalMealsAll / dateRange.length).toFixed(2)
-      },
-      students: result
-    }
   };
 };
 
 const deleteMonthlyAttendance = async (
-  className: string | undefined,
+  personType: PersonType = 'student',
   month: string,
-  academicYear: string
+  academicYear: string,
+  className?: string,
 ) => {
-  if (!month || !academicYear) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
-  }
+  if (!month || !academicYear) throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
 
-  let studentQuery: any = {
-    admissionStatus: 'enrolled',
-    status: 'active'
-  };
+  let personIds: Types.ObjectId[] = [];
+  const personField = personType === 'teacher' ? 'teacher' : personType === 'staff' ? 'staff' : 'student';
 
-  if (className && className !== 'ALL') {
-    const classIds = await getClassIdsByClassName(className);
-    if (classIds.length === 0) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
-    }
-    studentQuery.className = { $in: classIds };
-  }
-
-  const students = await Student.find(studentQuery).select('_id');
-
-  if (students.length === 0) {
+  if (personType === 'student') {
+    const query: any = { admissionStatus: 'enrolled', status: 'active' };
     if (className && className !== 'ALL') {
-      throw new AppError(httpStatus.NOT_FOUND, 'No active students found in this class');
+      const classIds = await getClassIdsByClassName(className);
+      if (!classIds.length) throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
+      query.className = { $in: classIds };
     }
-    throw new AppError(httpStatus.NOT_FOUND, 'No active students found');
+    const students = await Student.find(query).select('_id');
+    personIds = students.map(s => s._id as Types.ObjectId);
+  } else if (personType === 'teacher') {
+    const teachers = await getAllActiveTeachers();
+    personIds = teachers.map(t => t._id);
+  } else {
+    const staffList = await getAllActiveStaff();
+    personIds = staffList.map(s => s._id);
   }
 
-  const studentIds = students.map(s => s._id);
+  if (!personIds.length) throw new AppError(httpStatus.NOT_FOUND, 'No persons found');
 
-  const startDate = moment(month, 'YYYY-MM').startOf('month').startOf('day').toDate();
-  const endDate = moment(month, 'YYYY-MM').endOf('month').endOf('day').toDate();
+  const startDate = moment(month, 'YYYY-MM').startOf('month').toDate();
+  const endDate = moment(month, 'YYYY-MM').endOf('month').toDate();
 
-  const deleteResult = await MealAttendance.deleteMany({
-    student: { $in: studentIds },
+  const toDelete = await MealAttendance.find({
+    personType,
+    [personField]: { $in: personIds },
     date: { $gte: startDate, $lte: endDate },
-    academicYear
+    academicYear,
+  }).select(`_id ${personField}`);
+
+  if (!toDelete.length) throw new AppError(httpStatus.NOT_FOUND, 'No attendance records found for this month');
+
+  const result = await MealAttendance.deleteMany({
+    _id: { $in: toDelete.map(d => d._id) },
   });
 
-  if (deleteResult.deletedCount === 0) {
-    throw new AppError(httpStatus.NOT_FOUND, 'No attendance records found for this month');
-  }
+  // Pull the removed references out of each person's mealAttendances array
+  const { PersonModel } = resolvePersonModel(personType);
+  const pullOps = toDelete.map(d => ({
+    updateOne: {
+      filter: { _id: (d as any)[personField] },
+      update: { $pull: { mealAttendances: d._id } },
+    },
+  }));
+  if (pullOps.length) await PersonModel.bulkWrite(pullOps);
 
-  return {
-    deletedCount: deleteResult.deletedCount,
-    message: `Successfully deleted ${deleteResult.deletedCount} records for ${className || 'All Classes'} in ${month}`
-  };
+  return { deletedCount: result.deletedCount, message: `Deleted ${result.deletedCount} records for ${personType}s in ${month}` };
 };
 
+// ─────────────────────────────────────────────
+// Exports
+// ─────────────────────────────────────────────
+
 export const mealAttendanceServices = {
-  createOrUpdateAttendance,
   bulkCreateAttendance,
-  bulkUpdateAttendance,
-  bulkGetAttendance,
-  bulkGetByDateRange,
-  getAttendanceByStudentAndMonth,
-  getMonthlyAttendanceSheet,
-  getMonthlySummary,
-  getAttendanceByDateRangeForAllStudents,
-  deleteAttendance,
-  getStudentMealReport,
-  getAllAttendanceRecords,
   getAttendanceById,
   updateAttendance,
-  deleteMonthlyAttendance
+  deleteAttendance,
+  getMonthlyAttendanceSheet,
+  getMonthlySummary,
+  getAllAttendanceRecords,
+  getAttendanceByStudentAndMonth,
+  deleteMonthlyAttendance,
+  validatePerson,
 };

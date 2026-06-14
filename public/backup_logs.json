@@ -1,47 +1,11 @@
 [
   {
-    "status": "successful",
-    "error": null,
+    "status": "failed",
+    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
     "code": null,
     "signal": null,
-    "backupStartTime": "2026-04-25T18:00:00.612Z",
-    "backupEndTime": "2026-04-25T18:00:00.688Z",
-    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "successful",
-    "error": null,
-    "code": null,
-    "signal": null,
-    "backupStartTime": "2026-04-27T18:00:00.693Z",
-    "backupEndTime": "2026-04-27T18:00:00.766Z",
-    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "successful",
-    "error": null,
-    "code": null,
-    "signal": null,
-    "backupStartTime": "2026-04-28T18:00:00.362Z",
-    "backupEndTime": "2026-04-28T18:00:00.446Z",
-    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "successful",
-    "error": null,
-    "code": null,
-    "signal": null,
-    "backupStartTime": "2026-04-29T18:00:00.285Z",
-    "backupEndTime": "2026-04-29T18:00:00.364Z",
-    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
-  },
-  {
-    "status": "successful",
-    "error": null,
-    "code": null,
-    "signal": null,
-    "backupStartTime": "2026-04-30T18:00:00.897Z",
-    "backupEndTime": "2026-04-30T18:00:00.946Z",
-    "archivePath": "/home/softypy/project/craft/backend/public/sarabelanews.gzip"
+    "backupStartTime": "2026-06-13T18:00:00.572Z",
+    "backupEndTime": "2026-06-13T18:00:00.601Z",
+    "archivePath": "/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip"
   }
 ]

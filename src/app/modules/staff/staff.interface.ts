@@ -1,3 +1,4 @@
+import { ObjectId, Types } from "mongoose";
 
 export interface IAddress {
   address?: string;
@@ -65,6 +66,7 @@ export interface IStaff {
   educationalQualifications?: IEducation[];
   certifications?: ICertification[];
   workExperience?: IExperience[];
+  mealAttendances?: Types.ObjectId[];
 
   status: 'Active' | 'Inactive';
 }
