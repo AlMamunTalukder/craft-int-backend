@@ -45,7 +45,6 @@ const getSingleStaff = catchAsync(async (req: Request, res: Response) => {
 // Update staff
 const updateStaff = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  console.log(id, req.body);
   const updatedStaff = await staffServices.updateStaff(id, req.body);
 
   sendResponse(res, {

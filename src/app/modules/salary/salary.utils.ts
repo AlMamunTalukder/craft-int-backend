@@ -15,7 +15,6 @@ export const clearSalaryCache = async () => {
 
     if (allKeys.length > 0) {
       await redis.del(...allKeys);
-      console.log(`🧹 Cleared ${allKeys.length} salary cache entries`);
     }
   } catch (error) {
     console.error("❌ Error clearing salary cache:", error);

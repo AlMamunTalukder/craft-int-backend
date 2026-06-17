@@ -41,7 +41,7 @@ const updateDailyClassReport = async (
   id: string,
   payload: Partial<TDailyClassReport>,
 ) => {
-  console.log(payload);
+
   const result = await DailyClassReport.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,

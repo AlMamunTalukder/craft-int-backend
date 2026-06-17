@@ -106,3 +106,23 @@ export const debugAttendance = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
+export const getStudentMealBalance = async (req: Request, res: Response) => {
+    try {
+        const { studentId } = req.params;
+        const result = await mealFeeBalanceService.getStudentMealBalance(studentId);
+        res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getAllStudentsMealBalance = async (req: Request, res: Response) => {
+    try {
+        const result = await mealFeeBalanceService.getAllStudentsMealBalance();
+        res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

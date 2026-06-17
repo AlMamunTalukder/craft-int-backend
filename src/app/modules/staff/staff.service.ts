@@ -3,7 +3,7 @@ import { AppError } from '../../error/AppError';
 import { Staff } from './staff.model';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { IStaff } from './staff.interface';
-import { generateStaffId } from './staff.utils';
+import { generateStaffId, getStaffPopulations } from './staff.utils';
 import { staffSearchableFields } from './staff.constant';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
@@ -54,6 +54,8 @@ const createStaff = async (payload: Partial<IStaff>): Promise<IStaff> => {
     session.endSession();
   }
 };
+// Helper function for staff populations (reusable)
+
 
 const getAllStaffs = async (query: Record<string, unknown>) => {
   // If no sort parameter is provided, default to -updatedAt
@@ -61,12 +63,31 @@ const getAllStaffs = async (query: Record<string, unknown>) => {
     query.sort = '-updatedAt';
   }
 
+  // Parse populate parameters from query
+  // Usage: ?populate=meals or ?populateAll=true
+  const populateOptions = {
+    withMeals: query.populate === 'meals' || query.withMeals === 'true',
+    withAll: query.populateAll === 'true',
+    limit: query.populateLimit ? Number(query.populateLimit) : 30,
+    selectFields: {
+      mealAttendances: query.mealFields as string
+    }
+  };
+
+  // Get population configurations
+  const populations = getStaffPopulations(populateOptions);
+
   const staffQuery = new QueryBuilder(Staff.find(), query)
     .search(staffSearchableFields)
     .filter()
     .sort()
     .paginate()
     .fields();
+
+  // Apply all populations
+  populations.forEach(populateConfig => {
+    staffQuery.modelQuery = staffQuery.modelQuery.populate(populateConfig);
+  });
 
   const meta = await staffQuery.countTotal();
   const data = await staffQuery.modelQuery;
@@ -77,8 +98,27 @@ const getAllStaffs = async (query: Record<string, unknown>) => {
   };
 };
 
-const getSingleStaff = async (id: string): Promise<IStaff> => {
-  const staff = await Staff.findById(id);
+const getSingleStaff = async (id: string, options?: {
+  populateMeals?: boolean;
+  mealLimit?: number;
+}): Promise<IStaff> => {
+  let query = Staff.findById(id);
+
+  const { populateMeals = true, mealLimit = 30 } = options || {};
+
+  // Populate meal attendances if requested
+  if (populateMeals) {
+    query = query.populate({
+      path: 'mealAttendances',
+      select: 'date mealType status breakfast lunch dinner totalMeals mealCost month academicYear isAbsent isHoliday',
+      options: {
+        sort: { date: -1 },
+        limit: mealLimit
+      }
+    });
+  }
+
+  const staff = await query;
 
   if (!staff) {
     throw new AppError(httpStatus.NOT_FOUND, 'Staff not found');

@@ -7,7 +7,7 @@ import sendResponse from '../../../utils/sendResponse';
 import { catchAsync } from '../../../utils/catchAsync';
 
 const createSalary = catchAsync(async (req, res, next) => {
-  console.log('from body ', req.body);
+
   const result = await salaryServices.createSalary(req.body);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,

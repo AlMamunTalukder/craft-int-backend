@@ -126,8 +126,11 @@ const studentSchema = new Schema<IStudent>(
 
     mealAttendances: {
       type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
-      select: false,
-    }
+      // select: false,
+    },
+
+
+    mealCurrentBalance: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -143,4 +146,13 @@ studentSchema.virtual('mealAttendanceList', {
   justOne: false,
 });
 
+
+
+// ✅ NEW: Meal balance ledger relation (advance/due/history)
+studentSchema.virtual('mealBalance', {
+  ref: 'MealBalance',
+  localField: '_id',
+  foreignField: 'student',
+  justOne: true,
+});
 export const Student = model<IStudent>('Student', studentSchema);

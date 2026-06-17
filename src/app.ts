@@ -66,8 +66,6 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
 
-      console.log('Incoming Origin:', origin);
-
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {

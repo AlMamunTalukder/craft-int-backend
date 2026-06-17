@@ -5,7 +5,6 @@ import { weeklyReportServices } from './service';
 
 const createWeeklyReport = catchAsync(async (req, res) => {
 
-  console.log(req.body)
   const result = await weeklyReportServices.createWeeklyReport(req.body);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,

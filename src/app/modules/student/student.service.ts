@@ -187,6 +187,66 @@ const getAllStudents = async (query: Record<string, unknown>) => {
     data,
   };
 };
+// export const getSingleStudent = async (id: string): Promise<any> => {
+//   if (!mongoose.Types.ObjectId.isValid(id)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
+//   }
+
+//   const student = await Student.findById(id)
+//     .populate({
+//       path: 'fees',
+//     })
+//     .populate({
+//       path: 'className',
+//     })
+//     .populate({
+//       path: 'section',
+//     })
+//     .populate({
+//       path: 'payments',
+//       model: 'Payment',
+//     })
+//     .populate({
+//       path: 'receipts',
+//       model: 'Receipt',
+//     })
+//     .populate({
+//       path: 'mealAttendances',
+//       model: 'MealAttendance',
+//       options: { sort: { date: -1 } }
+//     });
+
+//   if (!student) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+//   }
+
+//   const mealAttendances = student.mealAttendances || [];
+//   const totalMeals = mealAttendances.reduce((sum: number, att: any) => sum + (att.totalMeals || 0), 0);
+//   const totalCost = mealAttendances.reduce((sum: number, att: any) => sum + (att.mealCost || 0), 0);
+//   const totalBreakfast = mealAttendances.filter((att: any) => att.breakfast).length;
+//   const totalLunch = mealAttendances.filter((att: any) => att.lunch).length;
+//   const totalDinner = mealAttendances.filter((att: any) => att.dinner).length;
+//   const totalPresentDays = mealAttendances.filter((att: any) => att.totalMeals > 0).length
+//   const studentObject = student.toObject();
+
+//   return {
+//     ...studentObject,
+//     mealStatistics: {
+//       totalMeals,
+//       totalCost,
+//       totalBreakfast,
+//       totalLunch,
+//       totalDinner,
+//       totalPresentDays,
+//       totalAbsentDays: mealAttendances.length - totalPresentDays,
+//       attendanceRate: mealAttendances.length > 0
+//         ? ((totalPresentDays / mealAttendances.length) * 100).toFixed(2)
+//         : '0',
+//     },
+//   };
+// };
+
+
 export const getSingleStudent = async (id: string): Promise<any> => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid student ID');
@@ -214,6 +274,13 @@ export const getSingleStudent = async (id: string): Promise<any> => {
       path: 'mealAttendances',
       model: 'MealAttendance',
       options: { sort: { date: -1 } }
+    })
+    .populate({
+      path: 'mealBalance',
+      populate: {
+        path: 'history.feeId',
+        select: 'month amount status dueMealAmount futureMonthMealAmount advanceMealAmount mealCount',
+      },
     });
 
   if (!student) {
@@ -226,8 +293,13 @@ export const getSingleStudent = async (id: string): Promise<any> => {
   const totalBreakfast = mealAttendances.filter((att: any) => att.breakfast).length;
   const totalLunch = mealAttendances.filter((att: any) => att.lunch).length;
   const totalDinner = mealAttendances.filter((att: any) => att.dinner).length;
-  const totalPresentDays = mealAttendances.filter((att: any) => att.totalMeals > 0).length
+  const totalPresentDays = mealAttendances.filter((att: any) => att.totalMeals > 0).length;
   const studentObject = student.toObject();
+
+  // Latest month first in balance history
+  if (studentObject.mealBalance?.history) {
+    studentObject.mealBalance.history = [...studentObject.mealBalance.history].reverse();
+  }
 
   return {
     ...studentObject,

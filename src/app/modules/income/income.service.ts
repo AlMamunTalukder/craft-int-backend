@@ -34,7 +34,6 @@ const getAllIncomes = async (query: Record<string, unknown>) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached incomes data');
       return JSON.parse(cached);
     }
   } catch (err) {
@@ -52,7 +51,7 @@ const getAllIncomes = async (query: Record<string, unknown>) => {
   const incomes = await queryBuilder.modelQuery.populate('category');
   try {
     await redis.setex(cacheKey, 300, JSON.stringify({ meta, incomes }));
-    console.log('✅ Cached incomes data');
+
   } catch (err) {
     console.error('Redis write error:', err);
   }
@@ -68,7 +67,6 @@ const getSingleIncome = async (id: string) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached single income');
       return JSON.parse(cached);
     }
   } catch (err) {
@@ -76,7 +74,7 @@ const getSingleIncome = async (id: string) => {
   }
 
   const income = await Income.findById(id).populate('category');
-    await clearIncomeCache();
+  await clearIncomeCache();
   if (!income) {
     throw new AppError(httpStatus.NOT_FOUND, 'Income not found');
   }
@@ -144,7 +142,7 @@ const getIncomeTotalsByCategory = async () => {
     },
     {
       $group: {
-        _id: "$categoryInfo.name", 
+        _id: "$categoryInfo.name",
         totalAmount: { $sum: "$totalAmount" },
         count: { $sum: 1 },
       },

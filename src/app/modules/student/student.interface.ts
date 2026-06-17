@@ -138,7 +138,8 @@ export interface IStudent extends Document {
     religiousInterest?: string;
     angerControl?: string;
   };
-
+  mealCurrentBalance?: number;
+  mealBalance?: any; // virtual populate
   // Terms acceptance – NEW
   termsAccepted?: boolean;
 

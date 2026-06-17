@@ -7,5 +7,14 @@
     "backupStartTime": "2026-06-13T18:00:00.572Z",
     "backupEndTime": "2026-06-13T18:00:00.601Z",
     "archivePath": "/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip"
+  },
+  {
+    "status": "failed",
+    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
+    "code": null,
+    "signal": null,
+    "backupStartTime": "2026-06-15T18:00:00.273Z",
+    "backupEndTime": "2026-06-15T18:00:00.298Z",
+    "archivePath": "/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip"
   }
 ]

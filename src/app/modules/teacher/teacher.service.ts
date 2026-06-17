@@ -8,10 +8,11 @@ import { generateTeacherId } from './teacher.utils';
 import { teacherSearchableFields } from './teacher.constant';
 import mongoose from 'mongoose';
 import { User } from '../user/user.model';
+import { getTeacherPopulations } from '../../../utils/teacher.population';
+
 
 const createTeacher = async (payload: Partial<ITeacher>): Promise<ITeacher> => {
   const { email, name } = payload;
-  console.log(payload);
   if (!email || !name) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Required fields are missing');
   }
@@ -57,10 +58,14 @@ const createTeacher = async (payload: Partial<ITeacher>): Promise<ITeacher> => {
 };
 
 const getAllTeachers = async (query: Record<string, unknown>) => {
-  // If no sort parameter is provided, default to -updatedAt
-  if (!query.sort) {
-    query.sort = '-updatedAt';
-  }
+  // Get population configurations based on query parameters
+  const populations = getTeacherPopulations({
+    withSchedule: query.withSchedule === 'true',
+    withAssignments: query.withAssignments === 'true',
+    withAttendance: query.withAttendance === 'true',
+    withMeals: query.withMeals === 'true',
+    limit: query.populateLimit ? Number(query.populateLimit) : 10
+  });
 
   const teacherQuery = new QueryBuilder(Teacher.find(), query)
     .search(teacherSearchableFields)
@@ -68,6 +73,31 @@ const getAllTeachers = async (query: Record<string, unknown>) => {
     .sort()
     .paginate()
     .fields();
+
+  // Apply collation for teacherSerial numeric sorting
+  if (
+    typeof query.sort === "string" &&
+    (query.sort === "teacherSerial" || query.sort === "-teacherSerial")
+  ) {
+    teacherQuery.modelQuery.collation({
+      locale: "en",
+      numericOrdering: true,
+    });
+  }
+
+  // Apply all populations
+  populations.forEach(populateConfig => {
+    if (populateConfig.populate) {
+      // Handle nested population
+      teacherQuery.modelQuery = teacherQuery.modelQuery.populate(populateConfig);
+    } else {
+      // Handle simple population
+      teacherQuery.modelQuery = teacherQuery.modelQuery.populate(
+        populateConfig.path,
+        populateConfig.select
+      );
+    }
+  });
 
   const meta = await teacherQuery.countTotal();
   const data = await teacherQuery.modelQuery;
@@ -79,8 +109,25 @@ const getAllTeachers = async (query: Record<string, unknown>) => {
 };
 
 
+
+
+// Usage in getSingleTeacher
 const getSingleTeacher = async (id: string): Promise<ITeacher> => {
-  const teacher = await Teacher.findById(id);
+  let query = Teacher.findById(id);
+
+  const populations = getTeacherPopulations({
+    withSchedule: true,
+    withAssignments: true,
+    withAttendance: true,
+    withMeals: true,
+    limit: 15
+  });
+
+  populations.forEach(populateConfig => {
+    query = query.populate(populateConfig);
+  });
+
+  const teacher = await query;
 
   if (!teacher) {
     throw new AppError(httpStatus.NOT_FOUND, 'Teacher not found');
@@ -93,7 +140,6 @@ const updateTeacher = async (
   id: string,
   payload: Partial<ITeacher>,
 ): Promise<ITeacher> => {
-  console.log(payload);
   const updatedTeacher = await Teacher.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,

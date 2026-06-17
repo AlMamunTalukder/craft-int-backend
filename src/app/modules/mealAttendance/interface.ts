@@ -26,7 +26,15 @@ export interface IMealAttendance {
   lunchRate: number;     // default 45
   dinnerRate: number;    // default 80
 
+  // mealCost = actual payable cost (0 if isFreeMeal)
   mealCost: number;
+
+  // grossCost = cost as if the meal were NOT free
+  grossCost: number;
+
+  // freeMealCostSaved = amount saved due to isFreeMeal
+  freeMealCostSaved: number;
+
   isFreeMeal: boolean;
   isHoliday: boolean;
   isAbsent: boolean;

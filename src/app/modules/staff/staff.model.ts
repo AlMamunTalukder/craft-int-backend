@@ -1,7 +1,5 @@
-import { Schema, model } from 'mongoose';
+import { Schema, Types, model } from 'mongoose';
 import { IStaff } from './staff.interface';
-
-// Address schema structure that matches both permanent and present address forms
 const addressSchema = new Schema(
   {
     address: String,
@@ -16,7 +14,7 @@ const addressSchema = new Schema(
   { _id: false },
 );
 
-// Education qualification schema
+
 const educationSchema = new Schema(
   {
     degree: String,
@@ -27,7 +25,7 @@ const educationSchema = new Schema(
   { _id: false },
 );
 
-// Certification schema
+
 const certificationSchema = new Schema(
   {
     certificateName: String,
@@ -38,7 +36,7 @@ const certificationSchema = new Schema(
   { _id: false },
 );
 
-// Work experience schema
+
 const experienceSchema = new Schema(
   {
     organization: String,
@@ -52,7 +50,7 @@ const experienceSchema = new Schema(
 
 const staffSchema = new Schema<IStaff>(
   {
-    // Basic Information (Step 1)
+
     staffId: {
       type: String,
     },
@@ -138,16 +136,15 @@ const staffSchema = new Schema<IStaff>(
       type: [experienceSchema],
     },
 
-    // Additional Information (Step 5)
+
     status: {
       type: String,
       enum: ['Active', 'Inactive'],
       default: 'Active',
     },
-    // ─── Meal attendance relation ───
     mealAttendances: {
-      type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
-      select: false,
+      type: [{ type: Types.ObjectId, ref: 'MealAttendance' }],
+
     },
 
   },

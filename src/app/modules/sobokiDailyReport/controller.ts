@@ -4,7 +4,6 @@ import { catchAsync } from '../../../utils/catchAsync';
 import { sobokiDailyReportServices } from './service';
 
 const createSobokiDailyReport = catchAsync(async (req, res) => {
-  console.log(req.body)
   const result = await sobokiDailyReportServices.createSobokiDailyReport(req.body, req.user?.id);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,

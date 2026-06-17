@@ -4,8 +4,6 @@ import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
 import { FeeCategory } from "../modules/feeCategory/model";
 
-const SKIP_FEE_TYPES = ['Meal Fee'];
-
 export class FeeGenerationService {
     private static instance: FeeGenerationService;
     private isRunning: boolean = false;
@@ -46,7 +44,6 @@ export class FeeGenerationService {
 
     async generateMonthlyFees(month: number, year: number) {
         if (this.isRunning) {
-            console.log('⚠️ Fee generation already running, skipping...');
             return { success: false, message: 'Already running' };
         }
 
@@ -119,8 +116,14 @@ export class FeeGenerationService {
                         let advanceBalance = studentWithBalance?.advanceBalance || 0;
 
                         for (const feeItem of feeCategory.feeItems) {
-                            if (SKIP_FEE_TYPES.includes(feeItem.feeType)) {
-                                console.log(`  ${student.name}: ${feeItem.feeType} skipped`);
+
+                            // ─────────────────────────────────────────────
+                            // ✅ Meal Fee এখন এখানে generate হয় না।
+                            // এটা month-end এ actual attendance থেকে
+                            // mealFeeBalanceService দিয়ে generate হয়, এবং
+                            // advance/due/future balance হিসাবও সেখানেই হয়।
+                            // ─────────────────────────────────────────────
+                            if (feeItem.feeType === 'Meal Fee') {
                                 continue;
                             }
 
@@ -131,7 +134,6 @@ export class FeeGenerationService {
                                     feeType: 'Admission Fee',
                                 });
                                 if (existingAdmission) {
-                                    console.log(`  ${student.name}: Admission Fee already exists, skipping`);
                                     continue;
                                 }
                             } else {
@@ -142,12 +144,11 @@ export class FeeGenerationService {
                                     feeType: feeItem.feeType,
                                 });
                                 if (existingFee) {
-                                    console.log(`  ${student.name}: ${feeItem.feeType} already exists for ${monthName}`);
                                     continue;
                                 }
                             }
 
-                            // --- Advance balance logic ---
+                            // --- Advance balance logic (non-meal fees) ---
                             const finalAmount = feeItem.amount;
                             let advanceUsed = 0;
                             let paidAmount = 0;
@@ -158,7 +159,6 @@ export class FeeGenerationService {
                                 advanceUsed = advanceToUse;
                                 paidAmount = advanceToUse;
                                 advanceBalance -= advanceToUse;
-                                console.log(`   💰 ${student.name}: Using ৳${advanceToUse} from advance for ${feeItem.feeType}`);
                             }
 
                             const dueAmount = finalAmount - paidAmount;
@@ -193,7 +193,6 @@ export class FeeGenerationService {
 
                             if (feeItem.feeType === 'Admission Fee') {
                                 admissionFeeCount++;
-                                console.log(` ✅ ${student.name}: ${feeItem.feeType} ৳${finalAmount} (One-time fee)`);
                             } else {
                                 console.log(` ✅ ${student.name}: ${feeItem.feeType} ৳${finalAmount} (${monthName} ${year})`);
                             }
@@ -253,16 +252,6 @@ export class FeeGenerationService {
 
             const totalAmount = generatedFees.reduce((s, st) => s + st.totalAmount, 0);
             const totalDue = generatedFees.reduce((s, st) => s + st.totalDue, 0);
-
-            console.log(`\n═══════════════════════════════════════════════════`);
-            console.log(`📊 মাসিক ফি জেনারেশন সম্পূর্ণ`);
-            console.log(`   জেনারেটেড রেকর্ড: ${generatedCount}`);
-            console.log(`   Admission Fee জেনারেটেড: ${admissionFeeCount}`);
-            console.log(`   Monthly Fees: ${generatedCount - admissionFeeCount}`);
-            console.log(`   স্কিপড: ${skippedCount} | ত্রুটি: ${errorCount}`);
-            console.log(`   মোট পরিমাণ: ৳${totalAmount.toLocaleString()}`);
-            console.log(`   বাকি পরিমাণ: ৳${totalDue.toLocaleString()}`);
-            console.log(`═══════════════════════════════════════════════════\n`);
 
             return {
                 success: true,

@@ -33,8 +33,6 @@ export const auth = (...requiredRoles: TUserRole[]) => {
         config.jwt_access_secret as string,
       ) as JwtPayload;
 
-      console.log('Decoded token:', decoded);
-
       const { role, userId, iat, email } = decoded;
 
       let user = await User.findOne({
@@ -45,12 +43,7 @@ export const auth = (...requiredRoles: TUserRole[]) => {
         user = await User.findById(userId);
       }
 
-      console.log(
-        'User found:',
-        user
-          ? { email: user.email, role: user.role, userId: user.userId }
-          : 'Not found',
-      );
+
 
       if (!user) {
         throw new AppError(httpStatus.NOT_FOUND, 'This user is not found');

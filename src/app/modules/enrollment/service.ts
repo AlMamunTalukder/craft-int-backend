@@ -789,7 +789,6 @@ export const updateEnrollment = async (id: string, payload: any) => {
       payload.fees.length > 0;
 
     if (isUpdatingFees) {
-      console.log('Processing fee update with paid-fee protection...');
 
       // ── 3.1 Get ALL existing fees and separate paid vs unpaid ─────────────
       const existingFees = await Fees.find({
@@ -805,10 +804,6 @@ export const updateEnrollment = async (id: string, payload: any) => {
 
       const paidFeeIds = paidFees.map((f) => f._id);
       const unpaidFeeIds = unpaidFees.map((f) => f._id);
-
-      console.log(
-        `Found ${paidFees.length} paid fees (locked) and ${unpaidFees.length} unpaid fees (replaceable)`,
-      );
 
       // Build a set of paid fee keys so we know what's already covered
       // Key format: "BaseFeeType_Month" for monthly, "BaseFeeType" for one-time
@@ -1051,9 +1046,7 @@ export const updateEnrollment = async (id: string, payload: any) => {
           enrollment: existingEnrollment._id,
         }).session(session);
 
-        console.log(
-          `Deleted ${unpaidFeeIds.length} unpaid fee documents (paid fees preserved)`,
-        );
+
       }
 
       // ── 3.4 Create new fee documents for the non-paid items ──────────────
@@ -1279,7 +1272,6 @@ export const updateEnrollment = async (id: string, payload: any) => {
 
     await session.commitTransaction();
     session.endSession();
-    console.log('=== updateEnrollment SUCCESS ===');
 
     const updatedEnrollment = await Enrollment.findById(id)
       .populate({
@@ -1803,22 +1795,22 @@ const getPromotionHistory = async (studentId: string) => {
 
     promotedFrom: enrollment.promotedFrom
       ? {
-          enrollmentId: enrollment.promotedFrom._id,
-          className: enrollment.promotedFrom.className?.[0]?.className || 'N/A',
-          roll: enrollment.promotedFrom.roll,
-          status: enrollment.promotedFrom.status,
-          admissionType: enrollment.promotedFrom.admissionType,
-        }
+        enrollmentId: enrollment.promotedFrom._id,
+        className: enrollment.promotedFrom.className?.[0]?.className || 'N/A',
+        roll: enrollment.promotedFrom.roll,
+        status: enrollment.promotedFrom.status,
+        admissionType: enrollment.promotedFrom.admissionType,
+      }
       : null,
 
     promotedTo: enrollment.promotedTo
       ? {
-          enrollmentId: enrollment.promotedTo._id,
-          className: enrollment.promotedTo.className?.[0]?.className || 'N/A',
-          roll: enrollment.promotedTo.roll,
-          status: enrollment.promotedTo.status,
-          admissionType: enrollment.promotedTo.admissionType,
-        }
+        enrollmentId: enrollment.promotedTo._id,
+        className: enrollment.promotedTo.className?.[0]?.className || 'N/A',
+        roll: enrollment.promotedTo.roll,
+        status: enrollment.promotedTo.status,
+        admissionType: enrollment.promotedTo.admissionType,
+      }
       : null,
   }));
 
@@ -1842,7 +1834,7 @@ const getPromotionEligibleStudents = async (classId: string) => {
   if (!classExists) {
     throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
   }
-  console.log('classExists', classExists);
+
 
   const eligibleEnrollments = await Enrollment.find({
     className: classId,
@@ -1855,7 +1847,6 @@ const getPromotionEligibleStudents = async (classId: string) => {
     .populate('className', 'className')
     .sort({ roll: 1 });
 
-  console.log('eligibleEnrollments', eligibleEnrollments);
 
   if (!eligibleEnrollments || eligibleEnrollments.length === 0) {
     return {

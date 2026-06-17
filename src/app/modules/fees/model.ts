@@ -12,6 +12,10 @@ const FeesSchema = new Schema<IFees>(
     dueAmount: { type: Number },
     discount: { type: Number, default: 0 },
     waiver: { type: Number, default: 0 },
+    advanceMealAmount: { type: Number, default: 0 },
+    dueMealAmount: { type: Number, default: 0 },
+    futureMonthMealAmount: { type: Number },
+
     feeType: { type: String },
     status: {
       type: String,
@@ -33,11 +37,9 @@ const FeesSchema = new Schema<IFees>(
   { timestamps: true },
 );
 
-// Indexes
+
 FeesSchema.index({ student: 1, month: 1, academicYear: 1 });
-// FeesSchema.index({ dueDate: 1 });
+
 FeesSchema.index({ status: 1 });
-// FeesSchema.index({ isLateFeeRecord: 1 });
-// FeesSchema.index({ originalFeeId: 1 });
 
 export const Fees = model<IFees>('Fees', FeesSchema);

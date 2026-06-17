@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import { Student } from "../modules/student/student.model";
 import { Fees } from "../modules/fees/model";
 import { MealAttendance } from "../modules/mealAttendance/model";
+import { MealBalance } from '../modules/mealAttendance/mealBalance.model';
+import { FeeCategory } from "../modules/feeCategory/model";
 
 export class MealFeeBalanceService {
     private static instance: MealFeeBalanceService;
@@ -15,13 +17,11 @@ export class MealFeeBalanceService {
         return MealFeeBalanceService.instance;
     }
 
-    // ✅ Convert month number to YYYY-MM format
     private getMonthFormat(month: number, year: number): string {
         const monthStr = month.toString().padStart(2, '0');
         return `${year}-${monthStr}`;
     }
 
-    // ✅ Convert month number to name (for display only)
     private getMonthName(month: number): string {
         const monthNames = [
             'January', 'February', 'March', 'April', 'May', 'June',
@@ -57,20 +57,15 @@ export class MealFeeBalanceService {
         session.startTransaction();
 
         try {
-            const monthFormat = this.getMonthFormat(month, year); // "2026-05"
+            const monthFormat = this.getMonthFormat(month, year);
             const monthName = this.getMonthName(month);
             const academicYear = year.toString();
 
-            console.log(`🔍 Searching attendance: student=${studentId}, month=${monthFormat}, year=${academicYear}`);
-
-            // ✅ Find attendance records using YYYY-MM format
             const mealAttendances = await MealAttendance.find({
                 student: studentId,
                 month: monthFormat,
                 academicYear: academicYear,
             }).session(session);
-
-            console.log(`   Found ${mealAttendances.length} attendance records`);
 
             if (!mealAttendances.length) {
                 await session.abortTransaction();
@@ -81,11 +76,8 @@ export class MealFeeBalanceService {
                 };
             }
 
-            // Calculate total meals and cost from attendance
             const totalMeals = mealAttendances.reduce((sum, a) => sum + (a.totalMeals || 0), 0);
             const totalMealCost = mealAttendances.reduce((sum, a) => sum + (a.mealCost || 0), 0);
-
-            console.log(`   Total Meals: ${totalMeals}, Total Cost: ৳${totalMealCost}`);
 
             if (totalMeals === 0) {
                 await session.abortTransaction();
@@ -96,7 +88,8 @@ export class MealFeeBalanceService {
                 };
             }
 
-            // Check if fee already exists
+            // Check if a "Meal Fee" record already exists for this month
+            // (e.g. created earlier by a legacy/manual run)
             const existingFee = await Fees.findOne({
                 student: studentId,
                 month: monthName,
@@ -104,12 +97,13 @@ export class MealFeeBalanceService {
                 feeType: 'Meal Fee',
             }).session(session);
 
-            if (existingFee) {
+            // If it already has actualCost reconciled (mealCount > 0 means already processed)
+            if (existingFee && existingFee.mealCount && existingFee.mealCount > 0) {
                 await session.abortTransaction();
                 session.endSession();
                 return {
                     success: false,
-                    message: `Meal fee already exists for ${monthName} ${year}`,
+                    message: `Meal fee already reconciled for ${monthName} ${year}`,
                     data: { feeId: existingFee._id, amount: existingFee.amount },
                 };
             }
@@ -127,12 +121,41 @@ export class MealFeeBalanceService {
             const dueDate = new Date(year, month - 1, 15);
             const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
-            // Handle advance balance
+            // ─────────────────────────────────────────────
+            // ✅ Meal balance / advance-bill calculation (moved here from
+            // feeGenerationService). The "advance bill" for the month is the
+            // FeeCategory's Meal Fee base amount, adjusted by whatever
+            // surplus/due balance is currently sitting in the meal ledger.
+            // ─────────────────────────────────────────────
+            let advanceMealAmount = existingFee?.advanceMealAmount || 0;
+
+            if (!advanceMealAmount) {
+                const studentCategory = (student as any).category || (student as any).studentType || 'Residential';
+
+                let feeCategory: any = await FeeCategory.findOne({
+                    categoryName: studentCategory,
+                    className: studentClass,
+                }).session(session);
+
+                if (!feeCategory) {
+                    feeCategory = await FeeCategory.findOne({
+                        categoryName: { $regex: new RegExp(`^${studentCategory}$`, 'i') },
+                        className: { $regex: new RegExp(`^${studentClass}$`, 'i') },
+                    }).session(session);
+                }
+
+                const mealFeeItem = feeCategory?.feeItems?.find((item: any) => item.feeType === 'Meal Fee');
+                const baseMealAmount = mealFeeItem?.amount || 0;
+
+                advanceMealAmount = await this.getAdvanceBillAmount(studentId, baseMealAmount, session);
+            }
+
+            // Handle advance balance (legacy generic advance, unrelated to meal ledger)
             const advanceBalance = student.advanceBalance || 0;
             let advanceUsed = 0;
             let paidAmount = 0;
             let finalDueAmount = totalMealCost;
-            let status = 'unpaid';
+            let status: 'paid' | 'partial' | 'unpaid' = 'unpaid';
 
             if (advanceBalance > 0) {
                 const advanceToUse = Math.min(advanceBalance, totalMealCost);
@@ -144,8 +167,6 @@ export class MealFeeBalanceService {
                     { _id: studentId },
                     { $inc: { advanceBalance: -advanceToUse } }
                 ).session(session);
-
-                console.log(`   💰 Advance used: ৳${advanceToUse}, Remaining due: ৳${finalDueAmount}`);
             }
 
             if (finalDueAmount <= 0) {
@@ -153,37 +174,69 @@ export class MealFeeBalanceService {
                 finalDueAmount = 0;
             }
 
-            // Create meal fee
-            const mealFee = new Fees({
-                student: studentId,
-                class: studentClass,
-                month: monthName,
-                amount: totalMealCost,
-                paidAmount: paidAmount,
-                advanceUsed: advanceUsed,
-                dueAmount: finalDueAmount,
-                discount: 0,
-                waiver: 0,
-                feeType: 'Meal Fee',
-                status: status,
-                academicYear: academicYear,
-                isCurrentMonth: isCurrentMonth,
-                dueDate: dueDate,
-                mealCount: totalMeals,
-                mealRate: mealRate,
-            });
+            let mealFee;
 
+            if (existingFee) {
+                // Update the existing record
+                existingFee.amount = totalMealCost;
+                existingFee.paidAmount = paidAmount;
+                existingFee.advanceUsed = advanceUsed;
+                existingFee.dueAmount = finalDueAmount;
+                existingFee.status = status;
+                existingFee.mealCount = totalMeals;
+                existingFee.mealRate = mealRate;
+                existingFee.class = studentClass;
+                existingFee.isCurrentMonth = isCurrentMonth;
+                existingFee.advanceMealAmount = advanceMealAmount;
+                mealFee = existingFee;
+                await mealFee.save({ session });
+            } else {
+                // No existing record — create a fresh one (normal flow now)
+                mealFee = new Fees({
+                    student: studentId,
+                    class: studentClass,
+                    month: monthName,
+                    amount: totalMealCost,
+                    paidAmount: paidAmount,
+                    advanceUsed: advanceUsed,
+                    dueAmount: finalDueAmount,
+                    discount: 0,
+                    waiver: 0,
+                    feeType: 'Meal Fee',
+                    status: status,
+                    academicYear: academicYear,
+                    isCurrentMonth: isCurrentMonth,
+                    dueDate: dueDate,
+                    mealCount: totalMeals,
+                    mealRate: mealRate,
+                    advanceMealAmount: advanceMealAmount,
+                });
+                await mealFee.save({ session });
+
+                await Student.updateOne(
+                    { _id: studentId },
+                    { $addToSet: { fees: mealFee._id } }
+                ).session(session);
+            }
+
+            // ✅ Reconcile balance ledger using the advance bill computed above
+            const { dueMealAmount, futureMonthMealAmount } =
+                await this.reconcileMealBalance(
+                    studentId,
+                    month,
+                    year,
+                    totalMealCost,
+                    advanceMealAmount,
+                    mealFee._id as mongoose.Types.ObjectId,
+                    session
+                );
+
+            mealFee.dueMealAmount = dueMealAmount;
+            mealFee.futureMonthMealAmount = futureMonthMealAmount;
             await mealFee.save({ session });
-
-            await Student.updateOne(
-                { _id: studentId },
-                { $addToSet: { fees: mealFee._id } }
-            ).session(session);
 
             await session.commitTransaction();
             session.endSession();
-
-            console.log(`✅ Generated: ${student.name} - ${totalMeals} meals = ৳${totalMealCost}`);
 
             return {
                 success: true,
@@ -196,9 +249,12 @@ export class MealFeeBalanceService {
                     year: year,
                     totalMeals: totalMeals,
                     totalMealCost: totalMealCost,
+                    advanceMealAmount: advanceMealAmount,
                     advanceUsed: advanceUsed,
                     paidAmount: paidAmount,
                     dueAmount: finalDueAmount,
+                    dueMealAmount: dueMealAmount,
+                    futureMonthMealAmount: futureMonthMealAmount,
                     feeId: mealFee._id,
                     status: status,
                     dueDate: dueDate,
@@ -214,6 +270,64 @@ export class MealFeeBalanceService {
     }
 
     /**
+     * ✅ Get a single student's full meal balance ledger (for profile page)
+     */
+    async getStudentMealBalance(studentId: string) {
+        const student = await Student.findById(studentId).select('name studentId class');
+        if (!student) throw new Error('Student not found');
+
+        const balanceDoc = await MealBalance.findOne({ student: studentId })
+            .populate('history.feeId', 'month amount status dueMealAmount futureMonthMealAmount advanceMealAmount');
+
+        const currentBalance = balanceDoc?.currentBalance || 0;
+
+        return {
+            studentId: studentId,
+            studentName: student.name,
+            studentCode: (student as any).studentId,
+            currentBalance: currentBalance,
+            balanceType: currentBalance > 0 ? 'surplus' : currentBalance < 0 ? 'due' : 'settled',
+            balanceLabel: currentBalance > 0
+                ? `Advance Credit: ৳${currentBalance}`
+                : currentBalance < 0
+                    ? `Due: ৳${Math.abs(currentBalance)}`
+                    : 'Settled',
+            history: (balanceDoc?.history || []).slice().reverse(), // latest first
+        };
+    }
+
+    /**
+     * ✅ Get meal balance for ALL students (admin overview)
+     */
+    async getAllStudentsMealBalance() {
+        const balances = await MealBalance.find({})
+            .populate('student', 'name studentId class className');
+
+        const data = balances.map(b => {
+            const lastEntry = b.history[b.history.length - 1];
+            return {
+                studentId: b.student,
+                currentBalance: b.currentBalance,
+                balanceType: b.currentBalance > 0 ? 'surplus' : b.currentBalance < 0 ? 'due' : 'settled',
+                lastMonth: lastEntry ? {
+                    month: lastEntry.monthName,
+                    academicYear: lastEntry.academicYear,
+                    advanceBill: lastEntry.advanceBill,
+                    actualCost: lastEntry.actualCost,
+                    closingBalance: lastEntry.closingBalance,
+                } : null,
+            };
+        });
+
+        return {
+            totalStudents: data.length,
+            totalSurplus: data.filter(d => d.balanceType === 'surplus').reduce((s, d) => s + d.currentBalance, 0),
+            totalDue: data.filter(d => d.balanceType === 'due').reduce((s, d) => s + Math.abs(d.currentBalance), 0),
+            students: data,
+        };
+    }
+
+    /**
      * Generate meal fees for all active students
      */
     async generateAllStudentsMealFee(month: number, year: number, mealRate: number = 55) {
@@ -221,7 +335,6 @@ export class MealFeeBalanceService {
         const monthFormat = this.getMonthFormat(month, year);
         const academicYear = year.toString();
 
-        // Get all active students
         const students = await Student.find({
             status: 'active',
             admissionStatus: 'enrolled',
@@ -235,7 +348,6 @@ export class MealFeeBalanceService {
 
         for (const student of students) {
             try {
-                // First check if student has attendance for this month
                 const attendanceCount = await MealAttendance.countDocuments({
                     student: student._id,
                     month: monthFormat,
@@ -249,7 +361,6 @@ export class MealFeeBalanceService {
                         studentName: student.name,
                         reason: `No meal attendance found for ${monthName} ${year}`,
                     });
-                    console.log(`❌ ${student.name}: No attendance records`);
                     continue;
                 }
 
@@ -263,9 +374,8 @@ export class MealFeeBalanceService {
                 if (result.success) {
                     successCount++;
                     results.push(result.data);
-                } else if (result.message?.includes('already exists')) {
+                } else if (result.message?.includes('already')) {
                     skippedCount++;
-                    console.log(`⏭️ ${student.name}: Already exists`);
                 } else {
                     errorCount++;
                     errors.push({
@@ -273,7 +383,6 @@ export class MealFeeBalanceService {
                         studentName: student.name,
                         reason: result.message,
                     });
-                    console.log(`❌ ${student.name}: ${result.message}`);
                 }
             } catch (error: any) {
                 errorCount++;
@@ -289,11 +398,6 @@ export class MealFeeBalanceService {
         const totalAmount = results.reduce((sum, r) => sum + r.totalMealCost, 0);
         const totalAdvanceUsed = results.reduce((sum, r) => sum + (r.advanceUsed || 0), 0);
         const totalDue = results.reduce((sum, r) => sum + (r.dueAmount || 0), 0);
-
-        console.log(`\n📊 ===== Summary =====`);
-        console.log(`✅ Success: ${successCount} | ⏭️ Skipped: ${skippedCount} | ❌ Errors: ${errorCount}`);
-        console.log(`💰 Total Amount: ৳${totalAmount.toLocaleString()}`);
-        console.log(`💵 Total Due: ৳${totalDue.toLocaleString()}\n`);
 
         return {
             success: true,
@@ -315,9 +419,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Get student's all meal fees
-     */
     async getStudentMealFees(studentId: string) {
         const student = await Student.findById(studentId).select('name studentId');
         if (!student) throw new Error('Student not found');
@@ -339,9 +440,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Get monthly meal fees summary
-     */
     async getMonthlyMealFees(month: number, year: number) {
         const monthName = this.getMonthName(month);
         const academicYear = year.toString();
@@ -367,9 +465,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Get meal attendance summary with fee comparison
-     */
     async getMealAttendanceSummary(month: number, year: number) {
         const monthName = this.getMonthName(month);
         const monthFormat = this.getMonthFormat(month, year);
@@ -382,7 +477,6 @@ export class MealFeeBalanceService {
 
         const details = await Promise.all(
             students.map(async (student) => {
-                // Get attendance records using YYYY-MM format
                 const attendances = await MealAttendance.find({
                     student: student._id,
                     month: monthFormat,
@@ -393,7 +487,6 @@ export class MealFeeBalanceService {
                 const totalCost = attendances.reduce((sum, a) => sum + (a.mealCost || 0), 0);
                 const attendanceDays = attendances.length;
 
-                // Check if fee exists
                 const existingFee = await Fees.findOne({
                     student: student._id,
                     month: monthName,
@@ -434,9 +527,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Debug student attendance
-     */
     async debugStudentAttendance(studentId: string, month: number, year: number) {
         const monthFormat = this.getMonthFormat(month, year);
         const monthName = this.getMonthName(month);
@@ -494,9 +584,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Delete single meal fee
-     */
     async deleteMealFee(feeId: string) {
         const fee = await Fees.findById(feeId);
         if (!fee) return { success: false, message: 'Fee not found' };
@@ -529,9 +616,6 @@ export class MealFeeBalanceService {
         };
     }
 
-    /**
-     * Delete monthly meal fees
-     */
     async deleteMonthlyMealFees(month: number, year: number) {
         const monthName = this.getMonthName(month);
         const academicYear = year.toString();
@@ -577,6 +661,83 @@ export class MealFeeBalanceService {
                 deletedCount: result.deletedCount,
             },
         };
+    }
+
+    async getAdvanceBillAmount(
+        studentId: mongoose.Types.ObjectId,
+        baseAmount: number,
+        session?: mongoose.ClientSession
+    ): Promise<number> {
+        const query = MealBalance.findOne({ student: studentId });
+        if (session) query.session(session);
+        const balanceDoc = await query;
+        const currentBalance = balanceDoc?.currentBalance || 0;
+
+        let advanceBill = baseAmount - currentBalance;
+        if (advanceBill < 0) advanceBill = 0;
+
+        return advanceBill;
+    }
+
+    async reconcileMealBalance(
+        studentId: mongoose.Types.ObjectId,
+        month: number,
+        year: number,
+        actualCost: number,
+        advanceBill: number,
+        feeId: mongoose.Types.ObjectId,
+        session: mongoose.ClientSession
+    ): Promise<{ dueMealAmount: number; futureMonthMealAmount: number }> {
+
+        const monthFormat = this.getMonthFormat(month, year);
+        const monthName = this.getMonthName(month);
+        const academicYear = year.toString();
+
+        let balanceDoc = await MealBalance.findOne({ student: studentId }).session(session);
+        const openingBalance = balanceDoc?.currentBalance || 0;
+
+        const closingBalance = advanceBill - actualCost;
+
+        let dueMealAmount = 0;
+        let futureMonthMealAmount = 0;
+
+        if (closingBalance < 0) {
+            dueMealAmount = Math.abs(closingBalance);
+        } else {
+            futureMonthMealAmount = closingBalance;
+        }
+
+        if (!balanceDoc) {
+            balanceDoc = new MealBalance({
+                student: studentId,
+                currentBalance: closingBalance,
+                history: [],
+            });
+        } else {
+            balanceDoc.currentBalance = closingBalance;
+        }
+
+        balanceDoc.history.push({
+            month: monthFormat,
+            monthName: monthName,
+            academicYear: academicYear,
+            openingBalance: openingBalance,
+            advanceBill: advanceBill,
+            actualCost: actualCost,
+            closingBalance: closingBalance,
+            feeId: feeId,
+            createdAt: new Date(),
+        });
+
+        await balanceDoc.save({ session });
+
+        // ✅ Sync snapshot to Student document for quick display
+        await Student.updateOne(
+            { _id: studentId },
+            { $set: { mealCurrentBalance: closingBalance } }
+        ).session(session);
+
+        return { dueMealAmount, futureMonthMealAmount };
     }
 }
 

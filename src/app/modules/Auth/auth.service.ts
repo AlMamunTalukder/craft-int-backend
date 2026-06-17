@@ -10,7 +10,6 @@ import { User } from '../user/user.model';
 
 const loginUser = async (payload: TLoginUser) => {
   const user = await User.isUserExistsByCredential(payload.credential);
-  console.log('check user ', user);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');

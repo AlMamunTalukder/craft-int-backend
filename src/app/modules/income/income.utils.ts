@@ -15,7 +15,6 @@ export const clearIncomeCache = async () => {
     const allKeys = [...keys, ...singleKeys]
     if (allKeys.length > 0) {
       await redis.del(...allKeys)
-      console.log(`🧹 Cleared ${allKeys.length} income cache entries`)
     }
   } catch (error) {
     console.error("❌ Error clearing income cache:", error)

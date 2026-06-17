@@ -60,7 +60,7 @@ const addRepayment = async (id: string, repaymentData: TRepaymentHistory) => {
   if (!loan) {
     throw new AppError(httpStatus.NOT_FOUND, 'Loan not found');
   }
-  console.log('loan', loan);
+
   const remainingBefore = loan.remainingBalance;
 
   if (repaymentData.amount > loan.remainingBalance) {
@@ -135,7 +135,7 @@ const calculateLoanAmortization = async (id: string) => {
   const end = loan.repayment_end_date > start ? loan.repayment_end_date : start;
 
   const months = Math.ceil((end.getTime() - start.getTime()) / (30 * 24 * 60 * 60 * 1000));
-console.log('month check this  ',months)
+
   if (months <= 0) {
     throw new AppError(httpStatus.BAD_REQUEST, "Repayment end date must be after start date");
   }
@@ -143,7 +143,7 @@ console.log('month check this  ',months)
   const monthlyPayment =
     loan.monthly_installment ||
     (loan.loan_amount * monthlyRate * Math.pow(1 + monthlyRate, months)) /
-      (Math.pow(1 + monthlyRate, months) - 1);
+    (Math.pow(1 + monthlyRate, months) - 1);
 
   for (let i = 0; i < months; i++) {
     const paymentDate = new Date(start);

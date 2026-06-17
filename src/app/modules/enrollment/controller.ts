@@ -30,7 +30,7 @@ import { enrollmentServices } from './service';
 //       }
 //     }
 
-//     console.log('conver class id this ', classIds);
+
 
 //     if (!classIds.length) throw new Error('At least one class is required');
 
@@ -519,7 +519,6 @@ const createEnrollment = catchAsync(async (req, res) => {
     req.body,
     applicationId,
   );
-  console.log('applicationId check this', applicationId);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -553,8 +552,7 @@ const updateEnrollment = catchAsync(async (req, res) => {
     req.params.id,
     req.body,
   );
-  console.log('pyaload check ', req.body);
-  console.log('id check', req.params.id);
+
 
   // Service returns { success, message, data } — surface errors properly
   if (!result.success) {
@@ -638,7 +636,6 @@ const getPromotionHistory = catchAsync(async (req, res) => {
 
 const getPromotionEligibleStudents = catchAsync(async (req, res) => {
   const { classId } = req.query;
-  console.log('this is class id ', classId);
 
   if (!classId) {
     return sendResponse(res, {

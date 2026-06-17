@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { ISection } from './section.interface';
 import QueryBuilder from '../../builder/QueryBuilder';
-import { sectionSearchableFields } from './section.constant'; 
+import { sectionSearchableFields } from './section.constant';
 import { Section } from './section.model';
 
 const createSection = async (payload: ISection) => {
@@ -14,7 +14,7 @@ const createSection = async (payload: ISection) => {
   }
 
   const result = await Section.create(payload);
- 
+
   return result;
 };
 
@@ -44,7 +44,6 @@ const getSingleSection = async (id: string) => {
 };
 
 const updateSection = async (id: string, payload: Partial<ISection>) => {
-    console.log('payload section data ', payload )
   const result = await Section.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,

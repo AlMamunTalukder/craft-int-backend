@@ -12,16 +12,13 @@ export const triggerFeeGeneration = async (req: Request, res: Response) => {
         let result;
 
         if (month && year) {
-            console.log(`📅 নির্দিষ্ট মাসের ফি জেনারেট করা হচ্ছে: ${month}/${year}`);
             result = await feeGenerationService.generateMonthlyFees(month, year);
         } else {
-            console.log(`📅 বর্তমান মাসের ফি জেনারেট করা হচ্ছে`);
             result = await feeGenerationService.generateCurrentMonthFees();
         }
 
         res.status(200).json(result);
     } catch (error: any) {
-        console.error('❌ ফি জেনারেশন এ ত্রুটি:', error);
         res.status(500).json({
             success: false,
             message: error.message,

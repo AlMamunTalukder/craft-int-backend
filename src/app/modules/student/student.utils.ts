@@ -46,6 +46,5 @@ export const generateStudentId = async (
   }
 
   const studentId = `${prefix}${sequenceNumber.toString().padStart(4, '0')}`;
-  console.log('Generated Student ID:', studentId);
   return studentId;
 };

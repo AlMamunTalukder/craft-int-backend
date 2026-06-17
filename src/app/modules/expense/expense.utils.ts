@@ -14,7 +14,6 @@ export const clearExpenseCache = async () => {
     const allKeys = [...keys, ...singleKeys];
     if (allKeys.length > 0) {
       await redis.del(...allKeys);
-      console.log(`🧹 Cleared ${allKeys.length} expense cache entries`);
     }
   } catch (error) {
     console.error("❌ Error clearing expense cache:", error);

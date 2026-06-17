@@ -25,17 +25,13 @@ export const getClassNameFromClassModel = async (
       .lean();
 
     if (!classDoc) {
-      console.log('Class document not found for ID:', classId);
       return '';
     }
-
-    console.log('Class document found:', classDoc);
 
     if (classDoc.className) {
       return classDoc.className;
     }
 
-    console.log('No className field found in class document');
     return '';
   } catch (error) {
     console.error('Error fetching class name from Class model:', error);

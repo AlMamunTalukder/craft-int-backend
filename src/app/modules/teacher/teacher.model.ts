@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, Types, model } from 'mongoose';
 import { ITeacher } from './teacher.interface';
 
 // Address schema structure that matches both permanent and present address forms
@@ -193,8 +193,8 @@ const teacherSchema = new Schema<ITeacher>(
       ref: 'Room',
     },
     mealAttendances: {
-      type: [{ type: Schema.Types.ObjectId, ref: 'MealAttendance' }],
-      select: false,
+      type: [{ type: Types.ObjectId, ref: 'MealAttendance' }],
+      // select: false,
     },
   },
   {

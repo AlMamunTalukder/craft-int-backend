@@ -5,13 +5,17 @@ export interface IFees extends Document {
   student: Types.ObjectId;
   class?: string;
   month?: string;
-  amount: number;
+
   paidAmount: number;
   advanceUsed: number;
   dueAmount: number;
   discount: number;
   waiver: number;
   feeType?: string;
+  amount: number;
+  advanceMealAmount: number;
+  dueMealAmount: number;
+  futureMonthMealAmount: number;
   status: 'paid' | 'partial' | 'unpaid';
   paymentMethod?: 'cash' | 'bkash' | 'bank' | 'online';
   transactionId?: string;

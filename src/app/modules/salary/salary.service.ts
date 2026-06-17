@@ -16,7 +16,7 @@ const redis = new Redis({
 });
 
 const createSalary = async (payload: ISalary) => {
-  console.log(payload);
+
   // Calculate allowances total
   const allowances =
     (payload.houseRent || 0) +
@@ -43,7 +43,6 @@ const createSalary = async (payload: ISalary) => {
   // Save to DB
   const result = await Salary.create(payload);
 
-  console.log(result)
   await clearSalaryCache();
   return result;
 };
@@ -54,7 +53,6 @@ const getAllSalaries = async (query: Record<string, unknown>) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached salaries data');
       return JSON.parse(cached);
     }
   } catch (err) {
@@ -75,7 +73,7 @@ const getAllSalaries = async (query: Record<string, unknown>) => {
 
   try {
     await redis.setex(cacheKey, 300, JSON.stringify({ meta, salaries }));
-    console.log('✅ Cached salaries data');
+
   } catch (err) {
     console.error('Redis write error:', err);
   }
@@ -91,7 +89,6 @@ const getSingleSalary = async (id: string) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached single salary');
       return JSON.parse(cached);
     }
   } catch (err) {

@@ -14,7 +14,6 @@ export const clearClassReportsCache = async () => {
     const keys = await redis.keys("class_reports:*")
     if (keys.length > 0) {
       await redis.del(...keys)
-      console.log(`Cleared ${keys.length} class reports cache entries`)
     }
   } catch (error) {
     console.error("Error clearing class reports cache:", error)
@@ -27,7 +26,6 @@ export const clearClassReportsCachePattern = async (pattern: any) => {
     const keys = await redis.keys(`class_reports:*${pattern}*`)
     if (keys.length > 0) {
       await redis.del(...keys)
-      console.log(`Cleared ${keys.length} class reports cache entries matching pattern: ${pattern}`)
     }
   } catch (error) {
     console.error("Error clearing class reports cache pattern:", error)

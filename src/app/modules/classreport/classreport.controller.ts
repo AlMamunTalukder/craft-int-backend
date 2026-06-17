@@ -18,7 +18,7 @@ const createClassReport = catchAsync(async (req, res) => {
 const getAllClassReports = catchAsync(async (req, res, next) => {
   try {
     const result = await classReportServices.getAllClassReports(req.query);
-    console.log('query', req.query)
+
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,

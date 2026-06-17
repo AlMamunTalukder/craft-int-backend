@@ -34,7 +34,6 @@ const getAllExpenses = async (query: Record<string, unknown>) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached expenses data');
       return JSON.parse(cached);
     }
   } catch (err) {
@@ -53,7 +52,7 @@ const getAllExpenses = async (query: Record<string, unknown>) => {
 
   try {
     await redis.setex(cacheKey, 300, JSON.stringify({ meta, expenses }));
-    console.log('✅ Cached expenses data');
+
   } catch (err) {
     console.error('Redis write error:', err);
   }
@@ -66,7 +65,6 @@ const getSingleExpense = async (id: string) => {
   try {
     const cached = await redis.get(cacheKey);
     if (cached) {
-      console.log('✅ Returning cached single expense');
       return JSON.parse(cached);
     }
   } catch (err) {
