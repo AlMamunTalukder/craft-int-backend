@@ -20,7 +20,6 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
       default: null,
     },
 
-
     personType: {
       type: String,
       enum: ['student', 'teacher', 'staff'],
@@ -35,7 +34,6 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
     month: {
       type: String,
       required: true,
-
     },
     academicYear: {
       type: String,
@@ -46,16 +44,13 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
     lunch: { type: Boolean, default: false },
     dinner: { type: Boolean, default: false },
 
-
     totalMeals: { type: Number, default: 0 },
     breakfastRate: { type: Number, default: DEFAULT_BREAKFAST_RATE },
     lunchRate: { type: Number, default: DEFAULT_LUNCH_RATE },
     dinnerRate: { type: Number, default: DEFAULT_DINNER_RATE },
 
     mealCost: { type: Number, default: 0 },
-
     grossCost: { type: Number, default: 0 },
-
     freeMealCostSaved: { type: Number, default: 0 },
 
     isFreeMeal: { type: Boolean, default: false },
@@ -71,37 +66,24 @@ const mealAttendanceSchema = new Schema<IMealAttendance>(
 );
 
 // ─── Indexes ───
-
 mealAttendanceSchema.index(
   { student: 1, date: 1, academicYear: 1 },
-  { unique: true, sparse: true },
+  // { unique: true, sparse: true },
 );
 mealAttendanceSchema.index(
   { teacher: 1, date: 1, academicYear: 1 },
-  { unique: true, sparse: true },
+  // { unique: true, sparse: true },
 );
 mealAttendanceSchema.index(
   { staff: 1, date: 1, academicYear: 1 },
-  { unique: true, sparse: true },
+  // { unique: true, sparse: true },
 );
-
 mealAttendanceSchema.index({ month: 1, academicYear: 1 });
 mealAttendanceSchema.index({ personType: 1, month: 1, academicYear: 1 });
-mealAttendanceSchema.pre('save', function (next) {
-  this.totalMeals = [this.breakfast, this.lunch, this.dinner].filter(Boolean).length;
 
-  const rawCost =
-    (this.breakfast ? this.breakfastRate : 0) +
-    (this.lunch ? this.lunchRate : 0) +
-    (this.dinner ? this.dinnerRate : 0);
-
-  this.grossCost = rawCost;
-
-  this.mealCost = this.isFreeMeal ? 0 : rawCost;
-
-  this.freeMealCostSaved = this.isFreeMeal ? rawCost : 0;
-
-  next();
-});
+// NOTE: No pre('save') hook here.
+// All cost calculations (totalMeals, mealCost, grossCost, freeMealCostSaved)
+// are done explicitly in the service layer via calculateMealStats().
+// bulkWrite() does NOT trigger pre('save'), so the hook was never running anyway.
 
 export const MealAttendance = model<IMealAttendance>('MealAttendance', mealAttendanceSchema);
