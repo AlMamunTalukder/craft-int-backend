@@ -55,7 +55,7 @@ export interface IStaff {
   permanentAddress: IAddress;
   currentAddress?: IAddress;
   sameAsPermanent?: boolean;
-
+  category: string;
   // Professional Information
   department: string;
   staffDepartment: string;

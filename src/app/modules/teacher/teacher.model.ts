@@ -106,6 +106,9 @@ const teacherSchema = new Schema<ITeacher>(
     nationalIdDoc: {
       type: String,
     },
+    category: {
+      type: String,
+    },
 
 
     permanentAddress: {

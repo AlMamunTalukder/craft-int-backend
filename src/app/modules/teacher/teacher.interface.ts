@@ -63,6 +63,7 @@ export interface ITeacher {
   joiningDate: Date;
   monthlySalary: number;
   staffType: 'Teacher' | 'Staff' | 'Other';
+  category: string;
 
   // Educational Information
   educationalQualifications?: IEducation[];

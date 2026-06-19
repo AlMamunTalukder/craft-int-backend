@@ -98,6 +98,10 @@ const staffSchema = new Schema<IStaff>(
     resumeDoc: {
       type: String,
     },
+    category: {
+      type: String,
+    },
+
     certificateDoc: {
       type: String,
     },
