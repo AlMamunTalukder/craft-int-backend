@@ -1,20 +1,20 @@
 import { Schema, model, Types } from 'mongoose';
 
 export interface IMealBalanceHistory {
-    month: string;        // 'YYYY-MM'
-    monthName: string;    // 'January'
+    month: string;
+    monthName: string;
     academicYear: string;
-    openingBalance: number;   // balance carried from previous month
-    advanceBill: number;      // amount billed at start of month
-    actualCost: number;       // real meal cost from attendance
-    closingBalance: number;   // advanceBill - actualCost (carried to next month)
-    feeId?: Types.ObjectId;    // reference to Fees record for that month
+    openingBalance: number;
+    advanceBill: number;
+    actualCost: number;
+    closingBalance: number;
+    feeId?: Types.ObjectId;
     createdAt: Date;
 }
 
 export interface IMealBalance {
     student: Types.ObjectId;
-    currentBalance: number; // >0 = credit (surplus), <0 = due
+    currentBalance: number;
     history: IMealBalanceHistory[];
 }
 

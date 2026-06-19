@@ -48,14 +48,14 @@ export interface IMealAttendance {
 // ─── Payload Types ───
 
 export interface IAttendanceRecord {
-  personId: string;       // studentId | teacherId | staffId
+  personId: string;
   personType: PersonType;
   date: string;
   breakfast: boolean;
   lunch: boolean;
   dinner: boolean;
   isFreeMeal?: boolean;
-  // Custom per-meal rates — fall back to defaults (40 / 45 / 80) if omitted
+
   breakfastRate?: number;
   lunchRate?: number;
   dinnerRate?: number;
@@ -69,7 +69,6 @@ export interface IBulkAttendancePayload {
 export interface ICreateAttendancePayload {
   personId?: string;
   personType?: PersonType;
-  // Legacy student field (backward compat)
   student?: string;
   date: string;
   academicYear: string;

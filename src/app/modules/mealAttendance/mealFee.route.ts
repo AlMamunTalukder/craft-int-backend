@@ -1,4 +1,3 @@
-// app/modules/mealAttendance/mealBalance.route.ts
 import express from 'express';
 import {
     generateMonthlyMealFees,
@@ -25,10 +24,10 @@ router.get('/summary', checkMealAttendanceSummary);
 router.get('/balance/student/:studentId', getStudentMealBalance);
 router.get('/balance/all', getAllStudentsMealBalance);
 
-// Debug routes
+
 router.get('/debug/attendance/:studentId', debugAttendance);
 
-// Delete routes
+
 router.delete('/delete-fee/:feeId', deleteMealFee);
 router.delete('/delete-month/:month/:year', deleteMonthlyMealFees);
 
