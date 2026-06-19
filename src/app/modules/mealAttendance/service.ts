@@ -30,16 +30,12 @@ const calculateMealStats = (
 ) => {
   const totalMeals = [breakfast, lunch, dinner].filter(Boolean).length;
 
-  // Gross cost = what it WOULD cost regardless of free status
   const grossCost =
     (breakfast ? breakfastRate : 0) +
     (lunch ? lunchRate : 0) +
     (dinner ? dinnerRate : 0);
 
-  // Payable (actual charge) cost = 0 if free, otherwise gross
   const mealCost = isFreeMeal ? 0 : grossCost;
-
-  // Amount saved because of free meal (only non-zero when isFreeMeal)
   const freeMealCostSaved = isFreeMeal ? grossCost : 0;
 
   return { totalMeals, mealCost, grossCost, freeMealCostSaved };
@@ -56,7 +52,6 @@ const getRecordCosts = (att: any) => {
   const lunchRate = att?.lunchRate ?? DEFAULT_LUNCH_RATE;
   const dinnerRate = att?.dinnerRate ?? DEFAULT_DINNER_RATE;
 
-  // Recalculate totalMeals to handle legacy data where it might be 0
   const totalMeals = [breakfast, lunch, dinner].filter(Boolean).length;
 
   const grossCost =
@@ -86,14 +81,12 @@ const resolvePersonModel = (personType: PersonType) => {
   }
 };
 
-/** Verify person exists and is active */
 const validatePerson = async (personId: string, personType: PersonType) => {
   const { PersonModel } = resolvePersonModel(personType);
   const person = await PersonModel.findById(personId).select('_id name status admissionStatus').lean();
   if (!person) {
     throw new AppError(httpStatus.NOT_FOUND, `${personType} not found`);
   }
-  // Students have admissionStatus; teachers/staff use status
   if (personType === 'student') {
     if ((person as any).admissionStatus !== 'enrolled')
       throw new AppError(httpStatus.BAD_REQUEST, 'Student is not enrolled');
@@ -106,19 +99,16 @@ const validatePerson = async (personId: string, personType: PersonType) => {
   return person;
 };
 
-/** Build the filter object for finding an attendance record by person */
 const buildPersonFilter = (personId: string, personType: PersonType) => {
   const { field } = resolvePersonModel(personType);
   return { [field]: new Types.ObjectId(personId), personType };
 };
 
-/** Build the $set object for upsert */
 const buildPersonSet = (personId: string, personType: PersonType) => {
   const { field } = resolvePersonModel(personType);
   return { [field]: new Types.ObjectId(personId), personType };
 };
 
-/** Populate path based on personType (for queries) */
 const getPopulatePath = (personType: PersonType) => {
   switch (personType) {
     case 'teacher': return 'teacher';
@@ -137,7 +127,6 @@ const getClassIdsByClassName = async (className: string): Promise<Types.ObjectId
   }
 };
 
-/** Fetch all enrolled students for a class (or all if no class given) */
 const getStudentsByClassName = async (className?: string): Promise<any[]> => {
   const query: any = { admissionStatus: 'enrolled', status: 'active' };
   if (className) {
@@ -150,7 +139,6 @@ const getStudentsByClassName = async (className?: string): Promise<any[]> => {
     .lean();
 };
 
-/** Fetch all active teachers */
 const getAllActiveTeachers = async (): Promise<any[]> => {
   const Teacher = getTeacherModel();
   return Teacher.find({ status: 'Active' })
@@ -158,7 +146,6 @@ const getAllActiveTeachers = async (): Promise<any[]> => {
     .lean();
 };
 
-/** Fetch all active staff */
 const getAllActiveStaff = async (): Promise<any[]> => {
   const StaffModel = getStaffModel();
   return StaffModel.find({ status: 'Active' })
@@ -166,7 +153,6 @@ const getAllActiveStaff = async (): Promise<any[]> => {
     .lean();
 };
 
-/** Normalise a teacher/staff record to a common shape for sheet generation */
 const normaliseTeacher = (t: any) => ({
   _id: t._id,
   personId: t.teacherId,
@@ -198,10 +184,7 @@ const normaliseStudent = (s: any) => ({
 });
 
 // ─────────────────────────────────────────────
-// Relation sync — keep Student/Teacher/Staff.mealAttendances current
-// ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// Relation sync — keep Student/Teacher/Staff.mealAttendances current
+// Relation sync
 // ─────────────────────────────────────────────
 
 const syncPersonMealAttendances = async (
@@ -209,7 +192,6 @@ const syncPersonMealAttendances = async (
 ) => {
   if (!persons.length) return;
 
-  // Group persons by type to minimize DB calls
   const grouped: Record<PersonType, Set<string>> = {
     student: new Set(),
     teacher: new Set(),
@@ -220,21 +202,17 @@ const syncPersonMealAttendances = async (
     if (grouped[personType]) grouped[personType].add(personId);
   });
 
-  // Process each group separately (Students, Teachers, Staff)
   for (const personType of Object.keys(grouped) as PersonType[]) {
     const ids = Array.from(grouped[personType]);
     if (!ids.length) continue;
 
     const { PersonModel, field } = resolvePersonModel(personType);
 
-    // 1. Fetch ALL attendances for ALL persons in this group in ONE query
-    // This avoids the N+1 problem (querying DB inside a loop)
     const attendances = await MealAttendance.find({
       personType: personType,
       [field]: { $in: ids.map(id => new Types.ObjectId(id)) },
     }).select(`_id ${field}`);
 
-    // 2. Map attendance IDs to their respective persons
     const personAttendanceMap = new Map<string, Types.ObjectId[]>();
 
     attendances.forEach((att: any) => {
@@ -247,7 +225,6 @@ const syncPersonMealAttendances = async (
       }
     });
 
-    // 3. Prepare bulk write operations
     const bulkOps = ids.map(personId => {
       const attendanceIds = personAttendanceMap.get(personId) || [];
       return {
@@ -258,12 +235,15 @@ const syncPersonMealAttendances = async (
       };
     });
 
-    // 4. Execute bulk update
     if (bulkOps.length > 0) {
       await PersonModel.bulkWrite(bulkOps);
     }
   }
 };
+
+// ─────────────────────────────────────────────
+// Bulk Create / Upsert
+// ─────────────────────────────────────────────
 
 const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   const { attendances, academicYear } = payload;
@@ -282,7 +262,10 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
     const dinner = att.dinner || false;
     const isFreeMeal = att.isFreeMeal || false;
 
-    // Custom-or-default per-meal rates
+    // ── KEY FIX: always use the rates sent from the frontend.
+    // The frontend now always sends breakfastRate/lunchRate/dinnerRate
+    // (equal to mealRates which is customRates ?? apiMealRates).
+    // Fall back to defaults only if somehow missing.
     const breakfastRate = att.breakfastRate ?? DEFAULT_BREAKFAST_RATE;
     const lunchRate = att.lunchRate ?? DEFAULT_LUNCH_RATE;
     const dinnerRate = att.dinnerRate ?? DEFAULT_DINNER_RATE;
@@ -327,7 +310,6 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
 
   const result = await MealAttendance.bulkWrite(bulkOperations);
 
-  // Keep Student/Teacher/Staff.mealAttendances reference arrays in sync
   await syncPersonMealAttendances(Array.from(touchedPersons.values()));
 
   return {
@@ -338,13 +320,16 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
   };
 };
 
+// ─────────────────────────────────────────────
+// Get by ID
+// ─────────────────────────────────────────────
+
 const getAttendanceById = async (id: string) => {
   if (!id) throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
 
   const attendance = await MealAttendance.findById(id).lean();
   if (!attendance) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
 
-  // Populate based on personType
   let personData: any = null;
   if (attendance.personType === 'teacher' && attendance.teacher) {
     const Teacher = getTeacherModel();
@@ -372,7 +357,6 @@ const getAttendanceById = async (id: string) => {
     _id: attendance._id,
     personType: attendance.personType,
     person: personData,
-    // Legacy compat
     student: attendance.personType === 'student' ? personData : null,
     date: attendance.date,
     month: attendance.month,
@@ -384,15 +368,19 @@ const getAttendanceById = async (id: string) => {
     breakfastRate,
     lunchRate,
     dinnerRate,
-    mealCost,           // payable (recomputed)
-    grossCost,          // recomputed
-    freeMealCostSaved,  // recomputed
+    mealCost,
+    grossCost,
+    freeMealCostSaved,
     isFreeMeal: attendance.isFreeMeal || false,
     isHoliday: attendance.isHoliday || false,
     isAbsent: attendance.isAbsent || false,
     remarks: attendance.remarks || '',
   };
 };
+
+// ─────────────────────────────────────────────
+// Update single record
+// ─────────────────────────────────────────────
 
 const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePayload>) => {
   if (!id) throw new AppError(httpStatus.BAD_REQUEST, 'Attendance ID is required');
@@ -442,13 +430,16 @@ const updateAttendance = async (id: string, payload: Partial<ICreateAttendancePa
   return result;
 };
 
+// ─────────────────────────────────────────────
+// Delete single record
+// ─────────────────────────────────────────────
+
 const deleteAttendance = async (id: string) => {
   const attendance = await MealAttendance.findById(id);
   if (!attendance) throw new AppError(httpStatus.NOT_FOUND, 'Meal attendance not found');
 
   const deleted = await MealAttendance.findByIdAndDelete(id);
 
-  // Keep the person's mealAttendances relation array in sync
   const { PersonModel, field } = resolvePersonModel(attendance.personType);
   const personId = (attendance as any)[field];
   if (personId) {
@@ -459,14 +450,14 @@ const deleteAttendance = async (id: string) => {
 };
 
 // ─────────────────────────────────────────────
-// Monthly Sheet (unified: students / teachers / staff)
+// Monthly Sheet
 // ─────────────────────────────────────────────
 
 const getMonthlyAttendanceSheet = async (
   personType: PersonType = 'student',
   month: string,
   academicYear: string,
-  className?: string, // only relevant for students
+  className?: string,
 ) => {
   if (!month || !academicYear)
     throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
@@ -507,14 +498,30 @@ const getMonthlyAttendanceSheet = async (
   // 4. Generate date list for the month
   const dates = generateMonthDates(month);
 
+  // ── KEY FIX: derive mealRates from actual saved DB records instead of
+  // always returning DEFAULT_MEAL_RATES. This lets the frontend show the
+  // correct rates after a save with custom rates.
+  // We pick the most recent attendance record that has non-zero rates.
+  const sampleAtt = attendances.find(
+    a =>
+      (a.breakfastRate && a.breakfastRate !== DEFAULT_BREAKFAST_RATE) ||
+      (a.lunchRate && a.lunchRate !== DEFAULT_LUNCH_RATE) ||
+      (a.dinnerRate && a.dinnerRate !== DEFAULT_DINNER_RATE),
+  ) || attendances[0];
+
+  const effectiveMealRates = {
+    breakfast: sampleAtt?.breakfastRate ?? DEFAULT_MEAL_RATES.breakfast,
+    lunch: sampleAtt?.lunchRate ?? DEFAULT_MEAL_RATES.lunch,
+    dinner: sampleAtt?.dinnerRate ?? DEFAULT_MEAL_RATES.dinner,
+  };
+
   // 5. Build per-person rows
   let grandTotalMeals = 0;
   let grandTotalGrossCost = 0;
-  let grandTotalCost = 0; // payable cost
+  let grandTotalCost = 0;
   let grandTotalBreakfast = 0, grandTotalLunch = 0, grandTotalDinner = 0;
   let grandTotalFreeMeals = 0, grandTotalFreeMealCostSaved = 0;
 
-  // ─── LOGIC SETTINGS ───
   const AVERAGE_MEAL_RATE = (DEFAULT_BREAKFAST_RATE + DEFAULT_LUNCH_RATE + DEFAULT_DINNER_RATE) / 3;
   const isNonPayingType = personType === 'teacher' || personType === 'staff';
 
@@ -524,30 +531,19 @@ const getMonthlyAttendanceSheet = async (
     attendances.forEach(att => {
       if (moment(att.date).format('YYYY-MM-DD') === date) {
         const { totalMeals: recordMeals, grossCost: recordGross } = getRecordCosts(att);
-
-        tMeals += recordMeals; // Use recalculated meals
+        tMeals += recordMeals;
         tGross += recordGross;
-
-        // Count free meal records
-        if (att.isFreeMeal) {
-          tFree++;
-        }
-
+        if (att.isFreeMeal) tFree++;
         if (att.breakfast) tB++;
         if (att.lunch) tL++;
         if (att.dinner) tD++;
       }
     });
 
-    // ─── FINANCIAL CALCULATION LOGIC ───
     if (isNonPayingType) {
-      // TEACHERS & STAFF: They do not pay.
-      // Payable Cost = 0.
-      // Saved Cost = Gross Cost (School pays full cost).
       tCost = 0;
       tFreeSaved = tGross;
     } else {
-      // STUDENTS: Use Average Rate logic for deductions.
       tFreeSaved = tFree * AVERAGE_MEAL_RATE;
       tCost = tGross - tFreeSaved;
     }
@@ -556,7 +552,7 @@ const getMonthlyAttendanceSheet = async (
       date,
       totalMeals: tMeals,
       grossCost: tGross,
-      totalCost: tCost, // payable
+      totalCost: tCost,
       totalBreakfast: tB,
       totalLunch: tL,
       totalDinner: tD,
@@ -586,7 +582,6 @@ const getMonthlyAttendanceSheet = async (
       const breakfast = att?.breakfast || false;
       const lunch = att?.lunch || false;
       const dinner = att?.dinner || false;
-
       const meals = [breakfast, lunch, dinner].filter(Boolean).length;
       const isFree = att?.isFreeMeal || false;
 
@@ -606,7 +601,7 @@ const getMonthlyAttendanceSheet = async (
         lunchRate,
         dinnerRate,
         grossCost,
-        mealCost,        // payable
+        mealCost,
         freeMealCostSaved,
         isFreeMeal: isFree,
         isHoliday: att?.isHoliday || false,
@@ -616,17 +611,15 @@ const getMonthlyAttendanceSheet = async (
 
     const totalMeals = attendance.reduce((s, d) => s + d.totalMeals, 0);
     const grossCost = attendance.reduce((s, d) => s + d.grossCost, 0);
+    const freeMealsCount = attendance.filter(d => d.isFreeMeal).length;
 
     let mealCost = 0;
     let freeMealCostSaved = 0;
-    const freeMealsCount = attendance.filter(d => d.isFreeMeal).length;
 
     if (isNonPayingType) {
-      // For Teachers/Staff rows: Payable is 0, Saved is Gross.
       mealCost = 0;
       freeMealCostSaved = grossCost;
     } else {
-      // For Student rows: Use Average Rate logic.
       const personFreeSaved = freeMealsCount * AVERAGE_MEAL_RATE;
       mealCost = grossCost - personFreeSaved;
       freeMealCostSaved = personFreeSaved;
@@ -638,9 +631,9 @@ const getMonthlyAttendanceSheet = async (
       attendance,
       totalMeals,
       grossCost,
-      mealCost,             // actual payable cost
+      mealCost,
       freeMealsCount,
-      freeMealCostSaved,    // amount saved
+      freeMealCostSaved,
     };
   });
 
@@ -652,17 +645,148 @@ const getMonthlyAttendanceSheet = async (
     dates,
     students: sheetData,
     persons: sheetData,
-    mealRates: DEFAULT_MEAL_RATES,
+    // ── Returns actual saved rates so the frontend displays them correctly
+    mealRates: effectiveMealRates,
     totalStudents: sheetData.length,
     grandTotalMeals,
-    grandTotalGrossCost,     // sum of gross cost
-    grandTotalCost,          // sum of payable cost (0 for teachers/staff)
+    grandTotalGrossCost,
+    grandTotalCost,
     grandTotalBreakfast,
     grandTotalLunch,
     grandTotalDinner,
     grandTotalFreeMeals,
-    grandTotalFreeMealCostSaved, // Gross Cost for teachers/staff, Deduction for students
+    grandTotalFreeMealCostSaved,
     dailyTotals,
+  };
+};
+
+// ─────────────────────────────────────────────
+// Combined Monthly Sheet — Student + Teacher + Staff totals merged
+// ─────────────────────────────────────────────
+
+const getCombinedMonthlySheet = async (
+  month: string,
+  academicYear: string,
+  className?: string, // only applied to the student portion
+) => {
+  if (!month || !academicYear)
+    throw new AppError(httpStatus.BAD_REQUEST, 'Month and Academic Year are required');
+  if (!moment(month, 'YYYY-MM', true).isValid())
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid month format. Use YYYY-MM');
+
+  // Fetch all three sheets in parallel (className only matters for students)
+  const [studentSheet, teacherSheet, staffSheet] = await Promise.all([
+    getMonthlyAttendanceSheet('student', month, academicYear, className),
+    getMonthlyAttendanceSheet('teacher', month, academicYear),
+    getMonthlyAttendanceSheet('staff', month, academicYear),
+  ]);
+
+  const dates = generateMonthDates(month);
+
+  // ── Merge daily totals across the three person types ──
+  const dailyTotals = dates.map(date => {
+    const sFind = studentSheet.dailyTotals.find(d => d.date === date);
+    const tFind = teacherSheet.dailyTotals.find(d => d.date === date);
+    const fFind = staffSheet.dailyTotals.find(d => d.date === date);
+
+    const pick = (d: any, key: string) => d?.[key] || 0;
+
+    return {
+      date,
+      totalMeals: pick(sFind, 'totalMeals') + pick(tFind, 'totalMeals') + pick(fFind, 'totalMeals'),
+      grossCost: pick(sFind, 'grossCost') + pick(tFind, 'grossCost') + pick(fFind, 'grossCost'),
+      totalCost: pick(sFind, 'totalCost') + pick(tFind, 'totalCost') + pick(fFind, 'totalCost'),
+      totalBreakfast: pick(sFind, 'totalBreakfast') + pick(tFind, 'totalBreakfast') + pick(fFind, 'totalBreakfast'),
+      totalLunch: pick(sFind, 'totalLunch') + pick(tFind, 'totalLunch') + pick(fFind, 'totalLunch'),
+      totalDinner: pick(sFind, 'totalDinner') + pick(tFind, 'totalDinner') + pick(fFind, 'totalDinner'),
+      totalFreeMeals: pick(sFind, 'totalFreeMeals') + pick(tFind, 'totalFreeMeals') + pick(fFind, 'totalFreeMeals'),
+      freeMealCostSaved: pick(sFind, 'freeMealCostSaved') + pick(tFind, 'freeMealCostSaved') + pick(fFind, 'freeMealCostSaved'),
+      isWeekend: [0, 6].includes(moment(date).day()),
+      // Per-type breakdown for that single day (handy for tooltips / drilldown)
+      breakdown: {
+        student: { totalMeals: pick(sFind, 'totalMeals'), totalCost: pick(sFind, 'totalCost') },
+        teacher: { totalMeals: pick(tFind, 'totalMeals'), totalCost: pick(tFind, 'totalCost') },
+        staff: { totalMeals: pick(fFind, 'totalMeals'), totalCost: pick(fFind, 'totalCost') },
+      },
+    };
+  });
+
+  // ── Merge grand totals ──
+  const grandTotalMeals = studentSheet.grandTotalMeals + teacherSheet.grandTotalMeals + staffSheet.grandTotalMeals;
+  const grandTotalGrossCost = studentSheet.grandTotalGrossCost + teacherSheet.grandTotalGrossCost + staffSheet.grandTotalGrossCost;
+  const grandTotalCost = studentSheet.grandTotalCost + teacherSheet.grandTotalCost + staffSheet.grandTotalCost;
+  const grandTotalBreakfast = studentSheet.grandTotalBreakfast + teacherSheet.grandTotalBreakfast + staffSheet.grandTotalBreakfast;
+  const grandTotalLunch = studentSheet.grandTotalLunch + teacherSheet.grandTotalLunch + staffSheet.grandTotalLunch;
+  const grandTotalDinner = studentSheet.grandTotalDinner + teacherSheet.grandTotalDinner + staffSheet.grandTotalDinner;
+  const grandTotalFreeMeals = studentSheet.grandTotalFreeMeals + teacherSheet.grandTotalFreeMeals + staffSheet.grandTotalFreeMeals;
+  const grandTotalFreeMealCostSaved = studentSheet.grandTotalFreeMealCostSaved + teacherSheet.grandTotalFreeMealCostSaved + staffSheet.grandTotalFreeMealCostSaved;
+
+  // ── Today's snapshot (merged) ──
+  const todayDate = moment().format('YYYY-MM-DD');
+  const todayEntry = dailyTotals.find(d => d.date === todayDate) || null;
+
+  // ── Per-type summary cards (so the frontend can still show "Students: 120 meals" etc. inside the combined view) ──
+  const byPersonType = {
+    student: {
+      totalPersons: studentSheet.totalStudents,
+      totalMeals: studentSheet.grandTotalMeals,
+      totalBreakfast: studentSheet.grandTotalBreakfast,
+      totalLunch: studentSheet.grandTotalLunch,
+      totalDinner: studentSheet.grandTotalDinner,
+      totalFreeMeals: studentSheet.grandTotalFreeMeals,
+      grossCost: studentSheet.grandTotalGrossCost,
+      freeMealCostSaved: studentSheet.grandTotalFreeMealCostSaved,
+      payableCost: studentSheet.grandTotalCost,
+    },
+    teacher: {
+      totalPersons: teacherSheet.totalStudents,
+      totalMeals: teacherSheet.grandTotalMeals,
+      totalBreakfast: teacherSheet.grandTotalBreakfast,
+      totalLunch: teacherSheet.grandTotalLunch,
+      totalDinner: teacherSheet.grandTotalDinner,
+      totalFreeMeals: teacherSheet.grandTotalFreeMeals,
+      grossCost: teacherSheet.grandTotalGrossCost,
+      freeMealCostSaved: teacherSheet.grandTotalFreeMealCostSaved,
+      payableCost: teacherSheet.grandTotalCost,
+    },
+    staff: {
+      totalPersons: staffSheet.totalStudents,
+      totalMeals: staffSheet.grandTotalMeals,
+      totalBreakfast: staffSheet.grandTotalBreakfast,
+      totalLunch: staffSheet.grandTotalLunch,
+      totalDinner: staffSheet.grandTotalDinner,
+      totalFreeMeals: staffSheet.grandTotalFreeMeals,
+      grossCost: staffSheet.grandTotalGrossCost,
+      freeMealCostSaved: staffSheet.grandTotalFreeMealCostSaved,
+      payableCost: staffSheet.grandTotalCost,
+    },
+  };
+
+  const totalPersons = studentSheet.totalStudents + teacherSheet.totalStudents + staffSheet.totalStudents;
+
+  return {
+    month,
+    academicYear,
+    className: className || 'All Classes',
+    dates,
+    totalPersons,
+    grandTotalMeals,
+    grandTotalGrossCost,
+    grandTotalCost,
+    grandTotalBreakfast,
+    grandTotalLunch,
+    grandTotalDinner,
+    grandTotalFreeMeals,
+    grandTotalFreeMealCostSaved,
+    dailyTotals,
+    today: todayEntry,
+    byPersonType,
+    // Individual mealRates per type, in case rates differ across types
+    mealRates: {
+      student: studentSheet.mealRates,
+      teacher: teacherSheet.mealRates,
+      staff: staffSheet.mealRates,
+    },
   };
 };
 
@@ -724,11 +848,9 @@ const getAllAttendanceRecords = async (
     total = records.length;
   }
 
-  // Recompute costs per record
   const recordsWithCosts = records.map(r => {
     const { totalMeals, grossCost, mealCost, freeMealCostSaved } = getRecordCosts(r);
 
-    // Adjust for Teachers/Staff in list view as well
     let finalMealCost = mealCost;
     let finalFreeSaved = freeMealCostSaved;
 
@@ -741,10 +863,9 @@ const getAllAttendanceRecords = async (
   });
 
   const totalMeals = recordsWithCosts.reduce((s, r) => s + (r.totalMeals || 0), 0);
-  const totalCost = recordsWithCosts.reduce((s, r) => s + r.mealCost, 0); // payable
+  const totalCost = recordsWithCosts.reduce((s, r) => s + r.mealCost, 0);
   const totalGrossCost = recordsWithCosts.reduce((s, r) => s + r.grossCost, 0);
   const totalFreeMealCostSaved = recordsWithCosts.reduce((s, r) => s + r.freeMealCostSaved, 0);
-
   const uniquePersons = new Set(records.map(r => (r as any)[populatePath]?._id?.toString())).size;
 
   return {
@@ -762,7 +883,7 @@ const getAllAttendanceRecords = async (
 };
 
 // ─────────────────────────────────────────────
-// Util
+// Utils
 // ─────────────────────────────────────────────
 
 const generateMonthDates = (month: string): string[] => {
@@ -784,7 +905,7 @@ const emptySheet = (month: string, academicYear: string, personType: PersonType)
 });
 
 // ─────────────────────────────────────────────
-// Legacy: student-only helpers (kept for compat)
+// Legacy: student-only helpers
 // ─────────────────────────────────────────────
 
 const getAttendanceByStudentAndMonth = async (studentId: string, month: string, academicYear: string) => {
@@ -861,7 +982,7 @@ const getMonthlySummary = async (personType: PersonType = 'student', month: stri
       totalMealCost: summary.reduce((s, p) => s + p.actualMealCost, 0),
       totalFreeMeals: summary.reduce((s, p) => s + p.freeMealsCount, 0),
       totalFreeMealCostSaved: summary.reduce((s, p) => s + p.freeMealCostSaved, 0),
-      mealRates: DEFAULT_MEAL_RATES,
+      mealRates: sheetData.mealRates,
     },
   };
 };
@@ -912,7 +1033,6 @@ const deleteMonthlyAttendance = async (
     _id: { $in: toDelete.map(d => d._id) },
   });
 
-  // Pull the removed references out of each person's mealAttendances array
   const { PersonModel } = resolvePersonModel(personType);
   const pullOps = toDelete.map(d => ({
     updateOne: {
@@ -935,6 +1055,7 @@ export const mealAttendanceServices = {
   updateAttendance,
   deleteAttendance,
   getMonthlyAttendanceSheet,
+  getCombinedMonthlySheet,
   getMonthlySummary,
   getAllAttendanceRecords,
   getAttendanceByStudentAndMonth,

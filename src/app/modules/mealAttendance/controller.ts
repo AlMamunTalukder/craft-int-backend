@@ -111,6 +111,22 @@ const getAttendanceByStudentAndMonth = catchAsync(async (req: Request, res: Resp
   sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Meal attendance retrieved successfully', data: result });
 });
 
+const getCombinedMonthlySheet = catchAsync(async (req, res) => {
+  const { month, academicYear, className } = req.query;
+
+  const result = await mealAttendanceServices.getCombinedMonthlySheet(
+    month as string,
+    academicYear as string,
+    className as string | undefined,
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Combined monthly meal attendance sheet (Student + Teacher + Staff) retrieved successfully',
+    data: result,
+  });
+});
 export const mealAttendanceControllers = {
   bulkCreateAttendance,
   getMonthlyAttendanceSheet,
@@ -121,4 +137,5 @@ export const mealAttendanceControllers = {
   deleteAttendance,
   deleteMonthlyAttendance,
   getAttendanceByStudentAndMonth,
+  getCombinedMonthlySheet
 };
