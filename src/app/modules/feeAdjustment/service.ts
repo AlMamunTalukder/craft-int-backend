@@ -21,36 +21,33 @@ const applyAdjustmentToFee = async (
 
   let adjustmentAmount = 0;
 
-  // Calculate adjustment amount based on type
   if (adjustmentData.adjustmentType === 'percentage') {
     adjustmentAmount = (fee.amount * adjustmentData.value) / 100;
   } else {
     adjustmentAmount = adjustmentData.value;
   }
 
-  // Apply adjustment based on type
   if (adjustmentData.type === 'discount') {
     fee.discount = (fee.discount || 0) + adjustmentAmount;
   } else if (adjustmentData.type === 'waiver') {
     fee.waiver = (fee.waiver || 0) + adjustmentAmount;
   }
 
-  // Ensure adjustments don't exceed fee amount
+  // ✅ FIX: Cap adjustments at fee.amount instead of throwing
   const totalAdjustments = (fee.discount || 0) + (fee.waiver || 0);
   if (totalAdjustments > fee.amount) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'Total adjustments cannot exceed fee amount',
-    );
+    // Proportionally scale down to fit within fee.amount
+    const ratio = fee.amount / totalAdjustments;
+    fee.discount = Math.round((fee.discount || 0) * ratio * 100) / 100;
+    fee.waiver = Math.round((fee.waiver || 0) * ratio * 100) / 100;
   }
 
   // Recalculate due amount
   fee.dueAmount = Math.max(
     0,
-    fee.amount - fee.paidAmount - fee.advanceUsed - fee.discount - fee.waiver,
+    fee.amount - fee.paidAmount - fee.advanceUsed - (fee.discount || 0) - (fee.waiver || 0),
   );
 
-  // Update status
   if (fee.dueAmount === 0) {
     fee.status = 'paid';
   } else if (fee.paidAmount + fee.advanceUsed > 0) {
@@ -74,27 +71,23 @@ const reverseAdjustmentFromFee = async (
 
   let adjustmentAmount = 0;
 
-  // Calculate adjustment amount
   if (adjustment.adjustmentType === 'percentage') {
     adjustmentAmount = (fee.amount * adjustment.value) / 100;
   } else {
     adjustmentAmount = adjustment.value;
   }
 
-  // Reverse adjustment
   if (adjustment.type === 'discount') {
     fee.discount = Math.max(0, (fee.discount || 0) - adjustmentAmount);
   } else if (adjustment.type === 'waiver') {
     fee.waiver = Math.max(0, (fee.waiver || 0) - adjustmentAmount);
   }
 
-  // Recalculate due amount
   fee.dueAmount = Math.max(
     0,
-    fee.amount - fee.paidAmount - fee.advanceUsed - fee.discount - fee.waiver,
+    fee.amount - fee.paidAmount - fee.advanceUsed - (fee.discount || 0) - (fee.waiver || 0),
   );
 
-  // Update status
   if (fee.dueAmount === 0) {
     fee.status = 'paid';
   } else if (fee.paidAmount + fee.advanceUsed > 0) {
@@ -113,7 +106,6 @@ const createFeeAdjustment = async (payload: IFeeAdjustment) => {
   session.startTransaction();
 
   try {
-    // Validate required fields
     if (!payload.student) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
     }
@@ -121,43 +113,32 @@ const createFeeAdjustment = async (payload: IFeeAdjustment) => {
       throw new AppError(httpStatus.BAD_REQUEST, 'Fee ID is required');
     }
     if (!payload.value || payload.value <= 0) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'Valid adjustment value is required',
-      );
+      throw new AppError(httpStatus.BAD_REQUEST, 'Valid adjustment value is required');
     }
 
-    // Check if fee exists
     const feeExists = await Fees.findById(payload.fee);
     if (!feeExists) {
       throw new AppError(httpStatus.NOT_FOUND, 'Fee not found');
     }
 
-    // Set default values
     const adjustmentData: any = {
       ...payload,
       type: payload.type || 'discount',
       adjustmentType: payload.adjustmentType || 'flat',
       reason: payload.reason || '',
       isActive: payload.isActive !== undefined ? payload.isActive : true,
-      isRecurring:
-        payload.isRecurring !== undefined ? payload.isRecurring : false,
+      isRecurring: payload.isRecurring !== undefined ? payload.isRecurring : false,
       academicYear: payload.academicYear || new Date().getFullYear().toString(),
       startMonth: payload.startMonth || feeExists.month,
       endMonth: payload.endMonth || payload.startMonth || feeExists.month,
     };
 
-    // Create adjustment record
-    const [adjustment] = await FeeAdjustment.create([adjustmentData], {
-      session,
-    });
+    const [adjustment] = await FeeAdjustment.create([adjustmentData], { session });
 
-    // Apply adjustment to fee
     await applyAdjustmentToFee(payload.fee.toString(), adjustment, session);
 
     await session.commitTransaction();
 
-    // Populate and return
     const populatedAdjustment = await FeeAdjustment.findById(adjustment._id)
       .populate('student')
       .populate('fee')
@@ -173,6 +154,7 @@ const createFeeAdjustment = async (payload: IFeeAdjustment) => {
   }
 };
 
+
 // Apply adjustments to all student fees
 const applyAdjustmentToStudentFees = async (
   studentId: string,
@@ -186,47 +168,47 @@ const applyAdjustmentToStudentFees = async (
       throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
     }
 
-    // Get all unpaid/partial fees for the student
     const studentFees = await Fees.find({
       student: new Types.ObjectId(studentId),
       status: { $in: ['unpaid', 'partial'] },
     }).session(session);
 
     if (studentFees.length === 0) {
-      throw new AppError(
-        httpStatus.NOT_FOUND,
-        'No fees found for this student',
-      );
+      throw new AppError(httpStatus.NOT_FOUND, 'No fees found for this student');
     }
 
     const adjustments = [];
 
     for (const fee of studentFees) {
+      // ✅ FIX: For flat adjustments, cap the value at the fee's remaining due amount
+      //         so we never try to apply more than is possible for this fee.
+      let effectiveValue = adjustmentData.value || 0;
+
+      if (adjustmentData.adjustmentType === 'flat') {
+        const maxAdjustable = fee.dueAmount || 0;
+        effectiveValue = Math.min(effectiveValue, maxAdjustable);
+      }
+      // For percentage, it's inherently capped at 100% so no issue there
+
+      if (effectiveValue <= 0) continue; // Skip fees already fully adjusted/paid
+
       const adjustmentPayload: IFeeAdjustment = {
         student: new Types.ObjectId(studentId),
         fee: fee._id as Types.ObjectId,
         type: adjustmentData.type || 'discount',
         adjustmentType: adjustmentData.adjustmentType || 'flat',
-        value: adjustmentData.value || 0,
+        value: effectiveValue, // ✅ Use capped value
         reason: adjustmentData.reason || 'Bulk adjustment',
         approvedBy: adjustmentData.approvedBy,
         approvedDate: adjustmentData.approvedDate || new Date(),
         startMonth: fee.month,
         endMonth: fee.month,
         academicYear: fee.academicYear,
-        isActive:
-          adjustmentData.isActive !== undefined
-            ? adjustmentData.isActive
-            : true,
-        isRecurring:
-          adjustmentData.isRecurring !== undefined
-            ? adjustmentData.isRecurring
-            : false,
+        isActive: adjustmentData.isActive !== undefined ? adjustmentData.isActive : true,
+        isRecurring: adjustmentData.isRecurring !== undefined ? adjustmentData.isRecurring : false,
       } as IFeeAdjustment;
 
-      const [adjustment] = await FeeAdjustment.create([adjustmentPayload], {
-        session,
-      });
+      const [adjustment] = await FeeAdjustment.create([adjustmentPayload], { session });
 
       await applyAdjustmentToFee(fee._id.toString(), adjustment, session);
       adjustments.push(adjustment);
@@ -234,7 +216,6 @@ const applyAdjustmentToStudentFees = async (
 
     await session.commitTransaction();
 
-    // Populate all adjustments
     const populatedAdjustments = await FeeAdjustment.find({
       _id: { $in: adjustments.map((adj) => adj._id) },
     })
@@ -251,6 +232,7 @@ const applyAdjustmentToStudentFees = async (
     session.endSession();
   }
 };
+
 
 // Apply auto adjustments
 const applyAutoAdjustments = async (
