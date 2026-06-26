@@ -461,9 +461,12 @@ export const getAllDueFees = async (query: Record<string, any>) => {
             discount: { $ifNull: ['$discount', 0] },
             waiver: { $ifNull: ['$waiver', 0] },
             advanceUsed: { $ifNull: ['$advanceUsed', 0] },
-            computedDue: '$computedDue',
+            dueAmount: { $ifNull: ['$dueAmount', 0] },
             status: '$status',
             paymentDate: '$paymentDate',
+            computedDue: '$computedDue',
+            academicYear: '$academicYear',
+            isCurrentMonth: { $ifNull: ['$isCurrentMonth', false] },
           },
         },
 

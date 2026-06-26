@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// feeAdjustment/service.ts
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import QueryBuilder from '../../builder/QueryBuilder';
@@ -8,19 +7,42 @@ import { IFeeAdjustment } from './interface';
 import { Fees } from '../fees/model';
 import mongoose, { Types } from 'mongoose';
 
-// Helper function to apply adjustment to a fee
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+
+const monthToIndex = (monthStr: string): number => {
+  const [month, year] = monthStr.split('-');
+  const monthIdx = MONTHS.indexOf(month);
+  if (monthIdx === -1 || !year) return -1;
+  return parseInt(year) * 12 + monthIdx;
+};
+
+
+const isMonthInRange = (
+  feeMonth: string,
+  startMonth: string,
+  endMonth: string,
+): boolean => {
+  const feeIdx = monthToIndex(feeMonth);
+  const startIdx = monthToIndex(startMonth);
+  const endIdx = monthToIndex(endMonth);
+  if (feeIdx === -1 || startIdx === -1 || endIdx === -1) return false;
+  return feeIdx >= startIdx && feeIdx <= endIdx;
+};
+
+
 const applyAdjustmentToFee = async (
   feeId: string,
   adjustmentData: IFeeAdjustment,
   session: mongoose.ClientSession,
 ) => {
   const fee = await Fees.findById(feeId).session(session);
-  if (!fee) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
-  }
+  if (!fee) throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
 
   let adjustmentAmount = 0;
-
   if (adjustmentData.adjustmentType === 'percentage') {
     adjustmentAmount = (fee.amount * adjustmentData.value) / 100;
   } else {
@@ -33,34 +55,27 @@ const applyAdjustmentToFee = async (
     fee.waiver = (fee.waiver || 0) + adjustmentAmount;
   }
 
-  // ✅ FIX: Cap adjustments at fee.amount instead of throwing
+
   const totalAdjustments = (fee.discount || 0) + (fee.waiver || 0);
   if (totalAdjustments > fee.amount) {
-    // Proportionally scale down to fit within fee.amount
     const ratio = fee.amount / totalAdjustments;
     fee.discount = Math.round((fee.discount || 0) * ratio * 100) / 100;
     fee.waiver = Math.round((fee.waiver || 0) * ratio * 100) / 100;
   }
 
-  // Recalculate due amount
   fee.dueAmount = Math.max(
     0,
     fee.amount - fee.paidAmount - fee.advanceUsed - (fee.discount || 0) - (fee.waiver || 0),
   );
 
-  if (fee.dueAmount === 0) {
-    fee.status = 'paid';
-  } else if (fee.paidAmount + fee.advanceUsed > 0) {
-    fee.status = 'partial';
-  } else {
-    fee.status = 'unpaid';
-  }
+  if (fee.dueAmount === 0) fee.status = 'paid';
+  else if (fee.paidAmount + fee.advanceUsed > 0) fee.status = 'partial';
+  else fee.status = 'unpaid';
 
   await fee.save({ session });
   return { fee, adjustmentAmount };
 };
 
-// Reverse adjustment from fee
 const reverseAdjustmentFromFee = async (
   feeId: string,
   adjustment: IFeeAdjustment,
@@ -70,7 +85,6 @@ const reverseAdjustmentFromFee = async (
   if (!fee) return;
 
   let adjustmentAmount = 0;
-
   if (adjustment.adjustmentType === 'percentage') {
     adjustmentAmount = (fee.amount * adjustment.value) / 100;
   } else {
@@ -88,38 +102,26 @@ const reverseAdjustmentFromFee = async (
     fee.amount - fee.paidAmount - fee.advanceUsed - (fee.discount || 0) - (fee.waiver || 0),
   );
 
-  if (fee.dueAmount === 0) {
-    fee.status = 'paid';
-  } else if (fee.paidAmount + fee.advanceUsed > 0) {
-    fee.status = 'partial';
-  } else {
-    fee.status = 'unpaid';
-  }
+  if (fee.dueAmount === 0) fee.status = 'paid';
+  else if (fee.paidAmount + fee.advanceUsed > 0) fee.status = 'partial';
+  else fee.status = 'unpaid';
 
   await fee.save({ session });
   return { fee, adjustmentAmount };
 };
 
-// Create fee adjustment
 const createFeeAdjustment = async (payload: IFeeAdjustment) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    if (!payload.student) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
-    }
-    if (!payload.fee) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Fee ID is required');
-    }
-    if (!payload.value || payload.value <= 0) {
+    if (!payload.student) throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
+    if (!payload.fee) throw new AppError(httpStatus.BAD_REQUEST, 'Fee ID is required');
+    if (!payload.value || payload.value <= 0)
       throw new AppError(httpStatus.BAD_REQUEST, 'Valid adjustment value is required');
-    }
 
     const feeExists = await Fees.findById(payload.fee);
-    if (!feeExists) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Fee not found');
-    }
+    if (!feeExists) throw new AppError(httpStatus.NOT_FOUND, 'Fee not found');
 
     const adjustmentData: any = {
       ...payload,
@@ -135,15 +137,23 @@ const createFeeAdjustment = async (payload: IFeeAdjustment) => {
 
     const [adjustment] = await FeeAdjustment.create([adjustmentData], { session });
 
-    await applyAdjustmentToFee(payload.fee.toString(), adjustment, session);
+    if (adjustmentData.isRecurring && adjustmentData.startMonth && adjustmentData.endMonth) {
+      await applyRecurringAdjustmentToRange(
+        payload.student.toString(),
+        adjustment,
+        adjustmentData.startMonth,
+        adjustmentData.endMonth,
+        adjustmentData.academicYear,
+        session,
+      );
+    } else {
+      await applyAdjustmentToFee(payload.fee.toString(), adjustment, session);
+    }
 
     await session.commitTransaction();
 
     const populatedAdjustment = await FeeAdjustment.findById(adjustment._id)
-      .populate('student')
-      .populate('fee')
-      .populate('enrollment')
-      .populate('approvedBy');
+      .populate('student').populate('fee').populate('enrollment').populate('approvedBy');
 
     return populatedAdjustment;
   } catch (error) {
@@ -155,7 +165,40 @@ const createFeeAdjustment = async (payload: IFeeAdjustment) => {
 };
 
 
-// Apply adjustments to all student fees
+
+const applyRecurringAdjustmentToRange = async (
+  studentId: string,
+  adjustment: IFeeAdjustment,
+  startMonth: string,
+  endMonth: string,
+  academicYear: string,
+  session: mongoose.ClientSession,
+) => {
+
+  const feesInYear = await Fees.find({
+    student: new Types.ObjectId(studentId),
+    academicYear,
+  }).session(session);
+
+  const feesInRange = feesInYear.filter((fee) =>
+    fee.month ? isMonthInRange(fee.month, startMonth, endMonth) : false,
+  );
+
+  let appliedCount = 0;
+  for (const fee of feesInRange) {
+    const perFeeAdjustment = {
+      ...adjustment.toObject(),
+      fee: fee._id,
+    } as IFeeAdjustment;
+
+    await applyAdjustmentToFee(fee._id.toString(), perFeeAdjustment, session);
+    appliedCount++;
+  }
+
+  return appliedCount;
+};
+// ─── Bulk adjustment (all unpaid fees for student) ───────────────────────────
+
 const applyAdjustmentToStudentFees = async (
   studentId: string,
   adjustmentData: Partial<IFeeAdjustment>,
@@ -164,40 +207,32 @@ const applyAdjustmentToStudentFees = async (
   session.startTransaction();
 
   try {
-    if (!studentId) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
-    }
+    if (!studentId) throw new AppError(httpStatus.BAD_REQUEST, 'Student ID is required');
 
     const studentFees = await Fees.find({
       student: new Types.ObjectId(studentId),
       status: { $in: ['unpaid', 'partial'] },
     }).session(session);
 
-    if (studentFees.length === 0) {
+    if (studentFees.length === 0)
       throw new AppError(httpStatus.NOT_FOUND, 'No fees found for this student');
-    }
 
     const adjustments = [];
 
     for (const fee of studentFees) {
-      // ✅ FIX: For flat adjustments, cap the value at the fee's remaining due amount
-      //         so we never try to apply more than is possible for this fee.
       let effectiveValue = adjustmentData.value || 0;
 
       if (adjustmentData.adjustmentType === 'flat') {
-        const maxAdjustable = fee.dueAmount || 0;
-        effectiveValue = Math.min(effectiveValue, maxAdjustable);
+        effectiveValue = Math.min(effectiveValue, fee.dueAmount || 0);
       }
-      // For percentage, it's inherently capped at 100% so no issue there
-
-      if (effectiveValue <= 0) continue; // Skip fees already fully adjusted/paid
+      if (effectiveValue <= 0) continue;
 
       const adjustmentPayload: IFeeAdjustment = {
         student: new Types.ObjectId(studentId),
         fee: fee._id as Types.ObjectId,
         type: adjustmentData.type || 'discount',
         adjustmentType: adjustmentData.adjustmentType || 'flat',
-        value: effectiveValue, // ✅ Use capped value
+        value: effectiveValue,
         reason: adjustmentData.reason || 'Bulk adjustment',
         approvedBy: adjustmentData.approvedBy,
         approvedDate: adjustmentData.approvedDate || new Date(),
@@ -205,26 +240,18 @@ const applyAdjustmentToStudentFees = async (
         endMonth: fee.month,
         academicYear: fee.academicYear,
         isActive: adjustmentData.isActive !== undefined ? adjustmentData.isActive : true,
-        isRecurring: adjustmentData.isRecurring !== undefined ? adjustmentData.isRecurring : false,
+        isRecurring: false, // bulk is never recurring
       } as IFeeAdjustment;
 
       const [adjustment] = await FeeAdjustment.create([adjustmentPayload], { session });
-
       await applyAdjustmentToFee(fee._id.toString(), adjustment, session);
       adjustments.push(adjustment);
     }
 
     await session.commitTransaction();
 
-    const populatedAdjustments = await FeeAdjustment.find({
-      _id: { $in: adjustments.map((adj) => adj._id) },
-    })
-      .populate('student')
-      .populate('fee')
-      .populate('enrollment')
-      .populate('approvedBy');
-
-    return populatedAdjustments;
+    return await FeeAdjustment.find({ _id: { $in: adjustments.map((a) => a._id) } })
+      .populate('student').populate('fee').populate('enrollment').populate('approvedBy');
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -233,97 +260,84 @@ const applyAdjustmentToStudentFees = async (
   }
 };
 
-
-// Apply auto adjustments
+// ─── Auto-apply recurring adjustments when a NEW fee record is created ───────
+/**
+ * Called from generateMonthlyFees / createSingleFee after each fee is created.
+ * Finds all active recurring adjustments whose range covers this fee's month
+ * and applies them automatically.
+ */
 const applyAutoAdjustments = async (
   feeId: string,
   studentId: string,
   academicYear: string,
 ) => {
-  const currentMonth = `${new Date().toLocaleString('en', { month: 'long' })}-${academicYear}`;
+  const fee = await Fees.findById(feeId);
+  if (!fee || !fee.month) return;
 
-  // Find active adjustments for the student
+  // Find ALL active recurring adjustments for this student/year
   const activeAdjustments = await FeeAdjustment.find({
     student: new Types.ObjectId(studentId),
     academicYear,
     isActive: true,
-    $or: [
-      { isRecurring: true },
-      {
-        startMonth: { $lte: currentMonth },
-        endMonth: { $gte: currentMonth },
-      },
-    ],
+    isRecurring: true,
   });
 
   if (activeAdjustments.length === 0) return;
 
-  const fee = await Fees.findById(feeId);
-  if (!fee) return;
+  // Filter: only those whose [startMonth, endMonth] range covers this fee's month
+  const applicable = activeAdjustments.filter((adj) =>
+    adj.startMonth && adj.endMonth
+      ? isMonthInRange(fee.month!, adj.startMonth, adj.endMonth)
+      : false,
+  );
 
-  // Reset existing adjustments from auto adjustments
+  if (applicable.length === 0) return;
+
+  // Reset then re-apply all applicable adjustments cleanly
   fee.discount = 0;
   fee.waiver = 0;
 
-  // Apply all active adjustments
-  for (const adjustment of activeAdjustments) {
-    let adjustmentAmount = 0;
-
+  for (const adjustment of applicable) {
+    let amount = 0;
     if (adjustment.adjustmentType === 'percentage') {
-      adjustmentAmount = (fee.amount * adjustment.value) / 100;
+      amount = (fee.amount * adjustment.value) / 100;
     } else {
-      adjustmentAmount = adjustment.value;
+      amount = adjustment.value;
     }
 
-    // Apply adjustment
-    if (adjustment.type === 'discount') {
-      fee.discount = (fee.discount || 0) + adjustmentAmount;
-    } else if (adjustment.type === 'waiver') {
-      fee.waiver = (fee.waiver || 0) + adjustmentAmount;
-    }
+    if (adjustment.type === 'discount') fee.discount = (fee.discount || 0) + amount;
+    else if (adjustment.type === 'waiver') fee.waiver = (fee.waiver || 0) + amount;
   }
 
-  // Ensure adjustments don't exceed amount
-  const totalAdjustments = (fee.discount || 0) + (fee.waiver || 0);
-  if (totalAdjustments > fee.amount) {
-    fee.discount = fee.amount * (fee.discount / totalAdjustments);
-    fee.waiver = fee.amount * (fee.waiver / totalAdjustments);
+  // Cap
+  const total = (fee.discount || 0) + (fee.waiver || 0);
+  if (total > fee.amount) {
+    const ratio = fee.amount / total;
+    fee.discount = Math.round((fee.discount || 0) * ratio * 100) / 100;
+    fee.waiver = Math.round((fee.waiver || 0) * ratio * 100) / 100;
   }
 
-  // Recalculate due amount
   fee.dueAmount = Math.max(
     0,
-    fee.amount - fee.paidAmount - fee.advanceUsed - fee.discount - fee.waiver,
+    fee.amount - fee.paidAmount - fee.advanceUsed - (fee.discount || 0) - (fee.waiver || 0),
   );
 
-  // Update status
-  if (fee.dueAmount === 0) {
-    fee.status = 'paid';
-  } else if (fee.paidAmount + fee.advanceUsed > 0) {
-    fee.status = 'partial';
-  } else {
-    fee.status = 'unpaid';
-  }
+  if (fee.dueAmount === 0) fee.status = 'paid';
+  else if (fee.paidAmount + fee.advanceUsed > 0) fee.status = 'partial';
+  else fee.status = 'unpaid';
 
   await fee.save();
 };
 
-// Validate adjustment for payment
-const validateAdjustmentForPayment = async (
-  feeId: string,
-  paymentAmount: number,
-) => {
+// ─── Validate before payment ──────────────────────────────────────────────────
+
+const validateAdjustmentForPayment = async (feeId: string, paymentAmount: number) => {
   const fee = await Fees.findById(feeId);
-  if (!fee) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
-  }
+  if (!fee) throw new AppError(httpStatus.NOT_FOUND, 'Fee record not found');
 
   const totalAdjustments = (fee.discount || 0) + (fee.waiver || 0);
   const netAmount = fee.amount - totalAdjustments;
-  const remainingDue = Math.max(
-    0,
-    netAmount - fee.paidAmount - fee.advanceUsed,
-  );
+  const remainingDue = Math.max(0, netAmount - fee.paidAmount - fee.advanceUsed);
 
   if (paymentAmount > remainingDue) {
     throw new AppError(
@@ -335,51 +349,24 @@ const validateAdjustmentForPayment = async (
   return { fee, netAmount, remainingDue };
 };
 
-// Update fee adjustment
-const updateFeeAdjustment = async (
-  id: string,
-  payload: Partial<IFeeAdjustment>,
-) => {
+// ─── CRUD ────────────────────────────────────────────────────────────────────
+
+const updateFeeAdjustment = async (id: string, payload: Partial<IFeeAdjustment>) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
-    const existingAdjustment =
-      await FeeAdjustment.findById(id).session(session);
-    if (!existingAdjustment) {
-      throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
-    }
+    const existing = await FeeAdjustment.findById(id).session(session);
+    if (!existing) throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
 
-    // Reverse old adjustment
-    await reverseAdjustmentFromFee(
-      existingAdjustment.fee.toString(),
-      existingAdjustment,
-      session,
-    );
-
-    // Update adjustment
-    Object.assign(existingAdjustment, payload);
-    existingAdjustment.updatedAt = new Date();
-
-    const updatedAdjustment = await existingAdjustment.save({ session });
-
-    // Apply new adjustment
-    await applyAdjustmentToFee(
-      existingAdjustment.fee.toString(),
-      updatedAdjustment,
-      session,
-    );
+    await reverseAdjustmentFromFee(existing.fee.toString(), existing, session);
+    Object.assign(existing, payload);
+    existing.updatedAt = new Date();
+    const updated = await existing.save({ session });
+    await applyAdjustmentToFee(existing.fee.toString(), updated, session);
 
     await session.commitTransaction();
-
-    // Populate and return
-    const populatedAdjustment = await FeeAdjustment.findById(id)
-      .populate('student')
-      .populate('fee')
-      .populate('enrollment')
-      .populate('approvedBy');
-
-    return populatedAdjustment;
+    return await FeeAdjustment.findById(id)
+      .populate('student').populate('fee').populate('enrollment').populate('approvedBy');
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -388,25 +375,14 @@ const updateFeeAdjustment = async (
   }
 };
 
-// Delete fee adjustment
 const deleteFeeAdjustment = async (id: string) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
     const adjustment = await FeeAdjustment.findById(id).session(session);
-    if (!adjustment) {
-      throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
-    }
+    if (!adjustment) throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
 
-    // Remove adjustment from fee
-    await reverseAdjustmentFromFee(
-      adjustment.fee.toString(),
-      adjustment,
-      session,
-    );
-
-    // Delete adjustment
+    await reverseAdjustmentFromFee(adjustment.fee.toString(), adjustment, session);
     await FeeAdjustment.findByIdAndDelete(id).session(session);
 
     await session.commitTransaction();
@@ -419,48 +395,19 @@ const deleteFeeAdjustment = async (id: string) => {
   }
 };
 
-// Get student active adjustments
-const getStudentActiveAdjustments = async (
-  studentId: string,
-  academicYear?: string,
-) => {
-  const query: any = {
-    student: new Types.ObjectId(studentId),
-    isActive: true,
-  };
-
-  if (academicYear) {
-    query.academicYear = academicYear;
-  }
-
-  const adjustments = await FeeAdjustment.find(query)
-    .populate('student')
-    .populate('fee')
-    .populate('enrollment')
-    .sort({ createdAt: -1 });
-
-  return adjustments;
+const getStudentActiveAdjustments = async (studentId: string, academicYear?: string) => {
+  const query: any = { student: new Types.ObjectId(studentId), isActive: true };
+  if (academicYear) query.academicYear = academicYear;
+  return FeeAdjustment.find(query)
+    .populate('student').populate('fee').populate('enrollment').sort({ createdAt: -1 });
 };
 
-// Get fee report with adjustments
-const getFeeReportWithAdjustments = async (
-  studentId: string,
-  academicYear: string,
-) => {
-  const fees = await Fees.find({
-    student: new Types.ObjectId(studentId),
-    academicYear,
-  })
-    .populate('student')
-    .populate('enrollment')
-    .sort({ month: 1 });
+const getFeeReportWithAdjustments = async (studentId: string, academicYear: string) => {
+  const fees = await Fees.find({ student: new Types.ObjectId(studentId), academicYear })
+    .populate('student').populate('enrollment').sort({ month: 1 });
 
-  const adjustments = await FeeAdjustment.find({
-    student: new Types.ObjectId(studentId),
-    academicYear,
-  })
-    .populate('fee')
-    .sort({ createdAt: -1 });
+  const adjustments = await FeeAdjustment.find({ student: new Types.ObjectId(studentId), academicYear })
+    .populate('fee').sort({ createdAt: -1 });
 
   const report = {
     student: fees[0]?.student || null,
@@ -468,81 +415,47 @@ const getFeeReportWithAdjustments = async (
       const feeAdjustments = adjustments.filter(
         (adj) => adj.fee && adj.fee._id.toString() === fee._id.toString(),
       );
-
       const totalAdjustments = feeAdjustments.reduce((sum, adj) => {
         let amount = adj.value;
-        if (adj.adjustmentType === 'percentage') {
-          amount = (fee.amount * adj.value) / 100;
-        }
+        if (adj.adjustmentType === 'percentage') amount = (fee.amount * adj.value) / 100;
         return sum + amount;
       }, 0);
-
       return {
-        _id: fee._id,
-        month: fee.month,
-        class: fee.class,
-        originalAmount: fee.amount,
-        adjustments: totalAdjustments,
-        netAmount: fee.amount - totalAdjustments,
-        paidAmount: fee.paidAmount,
-        advanceUsed: fee.advanceUsed,
-        dueAmount: fee.dueAmount,
-        status: fee.status,
-        adjustmentsDetail: feeAdjustments,
+        _id: fee._id, month: fee.month, class: fee.class,
+        originalAmount: fee.amount, adjustments: totalAdjustments,
+        netAmount: fee.amount - totalAdjustments, paidAmount: fee.paidAmount,
+        advanceUsed: fee.advanceUsed, dueAmount: fee.dueAmount,
+        status: fee.status, adjustmentsDetail: feeAdjustments,
       };
     }),
     summary: {
       totalFees: fees.length,
-      totalOriginalAmount: fees.reduce((sum, fee) => sum + fee.amount, 0),
-      totalAdjustments: fees.reduce(
-        (sum, fee) => sum + (fee.discount || 0) + (fee.waiver || 0),
-        0,
-      ),
-      totalPaid: fees.reduce((sum, fee) => sum + (fee.paidAmount || 0), 0),
-      totalAdvanceUsed: fees.reduce(
-        (sum, fee) => sum + (fee.advanceUsed || 0),
-        0,
-      ),
-      totalDue: fees.reduce((sum, fee) => sum + (fee.dueAmount || 0), 0),
+      totalOriginalAmount: fees.reduce((s, f) => s + f.amount, 0),
+      totalAdjustments: fees.reduce((s, f) => s + (f.discount || 0) + (f.waiver || 0), 0),
+      totalPaid: fees.reduce((s, f) => s + (f.paidAmount || 0), 0),
+      totalAdvanceUsed: fees.reduce((s, f) => s + (f.advanceUsed || 0), 0),
+      totalDue: fees.reduce((s, f) => s + (f.dueAmount || 0), 0),
     },
   };
-
   return report;
 };
 
-// Get all fee adjustments
 const getAllFeeAdjustments = async (query: Record<string, unknown>) => {
   const queryBuilder = new QueryBuilder(
     FeeAdjustment.find()
-      .populate('student')
-      .populate('fee')
-      .populate('enrollment')
-      .populate('approvedBy'),
+      .populate('student').populate('fee').populate('enrollment').populate('approvedBy'),
     query,
-  )
-    .search(['reason', 'type'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  ).search(['reason', 'type']).filter().sort().paginate().fields();
 
   const meta = await queryBuilder.countTotal();
   const data = await queryBuilder.modelQuery;
-
   return { meta, data };
 };
 
-// Get single fee adjustment
 const getSingleFeeAdjustment = async (id: string) => {
   const result = await FeeAdjustment.findById(id)
-    .populate('student')
-    .populate('fee')
-    .populate('enrollment')
-    .populate('approvedBy');
-
-  if (!result) {
-    throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
-  }
+    .populate('student').populate('fee').populate('enrollment').populate('approvedBy');
+  if (!result) throw new AppError(httpStatus.NOT_FOUND, 'FeeAdjustment not found');
   return result;
 };
 
@@ -559,4 +472,5 @@ export const feeAdjustmentServices = {
   getFeeReportWithAdjustments,
   applyAdjustmentToFee,
   reverseAdjustmentFromFee,
+  applyRecurringAdjustmentToRange,
 };
