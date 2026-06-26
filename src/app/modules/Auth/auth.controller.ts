@@ -28,6 +28,10 @@ const loginUser = catchAsync(async (req, res) => {
     domain: '.craftinternationalinstitute.com',
   });
 
+  console.log("=== LOGIN CONTROLLER HIT ===");
+
+  res.setHeader("X-Test-Header", "COOKIE-TEST-123");
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
