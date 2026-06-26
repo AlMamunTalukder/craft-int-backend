@@ -23,6 +23,7 @@ const createMonthlyFees = catchAsync(async (req, res) => {
   });
 });
 
+
 const createBulkMonthlyFees = catchAsync(async (req, res) => {
   const { feeData } = req.body;
   const result = await feesServices.generateBulkMonthlyFees(feeData);

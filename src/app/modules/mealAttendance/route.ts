@@ -23,6 +23,10 @@ router.get(
     '/student/:studentId/:month/:academicYear',
     mealAttendanceControllers.getAttendanceByStudentAndMonth,
 );
+router.get(
+    '/monthly-sheet/combined',
+    mealAttendanceControllers.getCombinedMonthlySheet,
+);
 
 // Single record CRUD
 router.get('/:id', mealAttendanceControllers.getAttendanceById);
