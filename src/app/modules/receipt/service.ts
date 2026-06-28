@@ -2,6 +2,7 @@
 import httpStatus from 'http-status';
 import { AppError } from '../../error/AppError';
 import { Receipt } from './model';
+import { numberToWords } from '../../../utils/numberToWords';
 
 const createReceipt = async (
   paymentData: any,
@@ -10,6 +11,13 @@ const createReceipt = async (
 ) => {
   try {
     const receiptNo = `RCP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // Calculate summary values
+    const subtotal = feeDetails.reduce((sum, fee) => sum + fee.originalAmount, 0);
+    const totalDiscount = feeDetails.reduce((sum, fee) => sum + (fee.discount || 0), 0);
+    const totalWaiver = feeDetails.reduce((sum, fee) => sum + (fee.waiver || 0), 0);
+    const totalNetAmount = feeDetails.reduce((sum, fee) => sum + fee.netAmount, 0);
+    const amountPaid = paymentData.totalAmount;
 
     const receiptData = {
       receiptNo,
@@ -35,27 +43,23 @@ const createReceipt = async (
       })),
       summary: {
         totalItems: feeDetails.length,
-        subtotal: feeDetails.reduce((sum, fee) => sum + fee.originalAmount, 0),
-        totalDiscount: feeDetails.reduce(
-          (sum, fee) => sum + (fee.discount || 0),
-          0,
-        ),
-        totalWaiver: feeDetails.reduce(
-          (sum, fee) => sum + (fee.waiver || 0),
-          0,
-        ),
-        totalNetAmount: feeDetails.reduce((sum, fee) => sum + fee.netAmount, 0),
-        amountPaid: paymentData.totalAmount,
+        subtotal: subtotal,
+        totalDiscount: totalDiscount,
+        totalWaiver: totalWaiver,
+        totalNetAmount: totalNetAmount,
+        amountPaid: amountPaid,
+        subtotalWord: numberToWords(subtotal),
+        totalNetAmountWord: numberToWords(totalNetAmount),
+        amountPaidWord: numberToWords(amountPaid)
       },
     };
 
     const receipt = await Receipt.create(receiptData);
-
     return receipt;
   } catch (error: any) {
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      'রিসিট তৈরি করতে সমস্যা হয়েছে',
+      'Failed to make receipt',
     );
   }
 };
@@ -86,7 +90,7 @@ const getReceiptByNumber = async (receiptNo: string) => {
     .lean();
 
   if (!receipt) {
-    throw new AppError(httpStatus.NOT_FOUND, 'রিসিট পাওয়া যায়নি');
+    throw new AppError(httpStatus.NOT_FOUND, 'Do not found money receipt!');
   }
 
   return receipt;
@@ -96,7 +100,7 @@ const getReceiptForPrint = async (receiptNo: string) => {
   const receipt = await Receipt.findOne({ receiptNo }).lean();
 
   if (!receipt) {
-    throw new AppError(httpStatus.NOT_FOUND, 'রিসিট পাওয়া যায়নি');
+    throw new AppError(httpStatus.NOT_FOUND, 'Do not found money receipt!');
   }
 
   const formattedReceipt = {
@@ -123,8 +127,8 @@ const createManualReceipt = async (receiptData: any) => {
 export const receiptServices = {
   createReceipt,
   getStudentReceipts,
-  getCompleteReceipts, // ← নতুন ফাংশন যোগ করুন
+  getCompleteReceipts,
   getReceiptByNumber,
   getReceiptForPrint,
-  createManualReceipt, // ← নতুন ফাংশন যোগ করুন
+  createManualReceipt,
 };

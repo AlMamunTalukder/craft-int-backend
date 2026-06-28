@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import { Fees } from '../fees/model';
 import { Student } from '../student/student.model';
 import { Receipt } from '../receipt/model';
+import { numberToWords } from '../../../utils/numberToWords';
 
 const createPayment = async (payload: IPayment) => {
   const result = await Payment.create(payload);
@@ -159,10 +160,9 @@ const createBulkPayment = async (payload: {
       );
     }
 
-    // Generate unique receipt number
     const receiptNo = `RCP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    // ✅ প্রথমে পেমেন্ট রেকর্ড তৈরি করুন
+
     const paymentData = {
       student: payload.studentId,
       fees: payload.feeIds,
@@ -236,6 +236,13 @@ const createBulkPayment = async (payload: {
       );
     }
 
+    // Calculate summary values
+    const subtotal = feeDetails.reduce((sum, fee) => sum + fee.originalAmount, 0);
+    const totalDiscount = feeDetails.reduce((sum, fee) => sum + (fee.discount || 0), 0);
+    const totalWaiver = feeDetails.reduce((sum, fee) => sum + (fee.waiver || 0), 0);
+    const totalNetAmount = feeDetails.reduce((sum, fee) => sum + fee.netAmount, 0);
+    const amountPaid = payload.amountPaid;
+
     const receiptDataForReceiptModel = {
       receiptNo: receiptNo,
       student: payload.studentId,
@@ -263,17 +270,14 @@ const createBulkPayment = async (payload: {
       })),
       summary: {
         totalItems: feeDetails.length,
-        subtotal: feeDetails.reduce((sum, fee) => sum + fee.originalAmount, 0),
-        totalDiscount: feeDetails.reduce(
-          (sum, fee) => sum + (fee.discount || 0),
-          0,
-        ),
-        totalWaiver: feeDetails.reduce(
-          (sum, fee) => sum + (fee.waiver || 0),
-          0,
-        ),
-        totalNetAmount: feeDetails.reduce((sum, fee) => sum + fee.netAmount, 0),
-        amountPaid: payload.amountPaid,
+        subtotal: subtotal,
+        totalDiscount: totalDiscount,
+        totalWaiver: totalWaiver,
+        totalNetAmount: totalNetAmount,
+        amountPaid: amountPaid,
+        subtotalWord: numberToWords(subtotal),
+        totalNetAmountWord: numberToWords(totalNetAmount),
+        amountPaidWord: numberToWords(amountPaid)
       },
       institute: {
         name: 'Craft International Institute',
@@ -286,18 +290,18 @@ const createBulkPayment = async (payload: {
       status: 'active',
     };
 
-    // রিসিট ডাটাবেজে সেভ করুন
+
     const receipt = await Receipt.create([receiptDataForReceiptModel], {
       session,
     });
 
-    // ✅ স্টুডেন্টে পেমেন্ট এবং রিসিট রেফারেন্স যোগ করুন
+
     await Student.findByIdAndUpdate(
       payload.studentId,
       {
         $push: {
           payments: payment[0]._id,
-          receipts: receipt[0]._id, // ✅ রিসিট রেফারেন্স যোগ করুন
+          receipts: receipt[0]._id,
         },
       },
       { session },

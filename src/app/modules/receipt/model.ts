@@ -34,6 +34,7 @@ const receiptSchema = new Schema<IReceipt>(
       type: Number,
       required: true,
     },
+
     paymentMethod: {
       type: String,
       enum: ['cash', 'bkash', 'nagad', 'bank', 'card'],
@@ -70,7 +71,9 @@ const receiptSchema = new Schema<IReceipt>(
       totalDiscount: Number,
       totalWaiver: Number,
       totalNetAmount: Number,
-      amountPaid: Number,
+      subtotalWord: String,
+      totalNetAmountWord: String,
+      amountPaidWord: String
     },
     institute: {
       name: { type: String, default: 'Craft International Institute' },

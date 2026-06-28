@@ -63,6 +63,7 @@ const createBulkPayment = catchAsync(async (req, res) => {
   });
 });
 
+
 const generateReceipt = catchAsync(async (req, res) => {
   const { paymentId } = req.params;
   const result = await paymentServices.generateReceiptData(paymentId);

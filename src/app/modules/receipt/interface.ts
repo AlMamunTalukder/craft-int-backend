@@ -10,6 +10,7 @@ export interface IReceiptFee {
   waiver?: number;
   netAmount: number;
   paidAmount: number;
+
 }
 
 /** Summary block */
@@ -20,9 +21,12 @@ export interface IReceiptSummary {
   totalWaiver: number;
   totalNetAmount: number;
   amountPaid: number;
+  amountPaidWord: string;
+  totalNetAmountWord: string;
+  subtotalWord: string;
 }
 
-/** Institute snapshot */
+
 export interface IReceiptInstitute {
   name: string;
   address: string;
