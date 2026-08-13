@@ -32,7 +32,22 @@ class QueryBuilder<T> {
     const excludeFields = ['searchTerm', 'sort', 'limit', 'page', 'fields'];
     excludeFields.forEach((el) => delete queryObj[el]);
 
-    this.modelQuery = this.modelQuery.find(queryObj as FilterQuery<T>);
+    const sanitize = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(sanitize);
+      if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          if (k.startsWith('$')) continue;
+          out[k] = sanitize(v);
+        }
+        return out;
+      }
+      return value;
+    };
+
+    this.modelQuery = this.modelQuery.find(
+      sanitize(queryObj) as FilterQuery<T>,
+    );
 
     return this;
   }

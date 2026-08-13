@@ -13,6 +13,8 @@ export const expenseSchema = z.object({
     expenseDate: z.string().min(1, 'Date is required'),
     paymentMethod: z.string().min(1, 'Payment method is required'),
     status: z.string().optional(),
+    buyer: z.string().optional(),
+    payer: z.string().optional(),
     expenseItems: z
       .array(expenseItemSchema)
       .min(1, 'At least one expense item is required'),

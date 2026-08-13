@@ -156,3 +156,5 @@ studentSchema.virtual('mealBalance', {
   justOne: true,
 });
 export const Student = model<IStudent>('Student', studentSchema);
+
+studentSchema.index({ className: 1 });

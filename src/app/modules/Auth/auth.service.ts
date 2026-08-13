@@ -116,19 +116,17 @@ const changePassword = async (
 
   const newHashedPassword = await bcrypt.hash(
     payload.newPassword,
-    Number(config.bcrypt_salt_round),
+    Number(config.bcrypt_salt_round) || 10,
   );
 
   const result = await User.findOneAndUpdate(
-    {
-      id: userData.userId,
-      role: userData.role,
-    },
+    { userId: userData.userId },
     {
       password: newHashedPassword,
-      needsPasswordChange: false,
-      passwordChangedAt: new Date(),
+      needPasswordChange: false,
+      passwordChangeAt: new Date(),
     },
+    { new: true },
   );
 
   return result;

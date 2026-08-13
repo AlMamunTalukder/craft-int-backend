@@ -14,4 +14,6 @@ export interface IExpense {
   status: string;
   expenseItems: ExpenseItem[];
   totalAmount: number;
+  buyer?: string;
+  payer?: string;
 }

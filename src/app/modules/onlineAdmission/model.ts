@@ -132,3 +132,5 @@ export const AdmissionApplication = model<TAdmissionApplication>(
   'AdmissionApplication',
   admissionSchema,
 );
+
+admissionSchema.index({ academicYear: 1, status: 1 });

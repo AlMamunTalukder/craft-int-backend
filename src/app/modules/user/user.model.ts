@@ -61,7 +61,12 @@ const userSchema = new Schema<TUser, UserModel>(
 
 userSchema.pre('save', async function (next) {
   const user = this;
-  user.password = await bcrypt.hash(user.password, Number(config.default_pass));
+  if (user.password && !user.password.startsWith('$2')) {
+    user.password = await bcrypt.hash(
+      user.password,
+      Number(config.bcrypt_salt_round) || 10,
+    );
+  }
   next();
 });
 
