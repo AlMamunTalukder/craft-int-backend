@@ -6,7 +6,6 @@ import { assetValidations } from "./validation";
 
 const router = express.Router();
 
-//asset routes
 router.get("/summary", assetControllers.getSummary);
 
 router.post(

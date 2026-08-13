@@ -12,60 +12,55 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install SSH Client
-        run: sudo apt-get update && sudo apt-get install -y openssh-client
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-      - name: Deploy to VPS using SSH
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend (tsc)
+        run: npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Sync build output to VPS
+        run: |
+          sudo apt-get update && sudo apt-get install -y rsync
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" dist/ "${{ secrets.USERNAME }}@${{ secrets.HOST }}:/var/www/html/craft/school/api/dist/"
+
+      - name: Restart app on VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
+          command_timeout: 15m
           script: |
             set -e
             echo "Starting deployment to VPS..."
 
-            # Navigate to the project directory
             cd /var/www/html/craft/school/api || exit
-
-            # Ensure Git is available
-            if ! command -v git &> /dev/null; then
-              echo "Git is not installed. Please install Git."
-              exit 1
-            fi
 
             echo "Fetching latest code from GitHub..."
             git fetch --all
             git reset --hard origin/main
 
-            echo "Setting up environment variables..."
             if [ ! -f .env ]; then
-              echo ".env file not found. Copying from .env.example..."
               cp .env.example .env
             fi
 
-            echo "Installing dependencies..."
-            npm install
+            echo "Installing production dependencies..."
+            npm install --omit=dev
 
-            echo "Building Next.js application..."
-            npm run build
-
-            # Restart application using PM2
-            if command -v pm2 &> /dev/null; then
-              echo "Restarting application using PM2..."
-              pm2 restart  management-api || pm2 start npm --name "management-api" -- run start
-            else
-              echo "PM2 not found. Please install it using 'npm install -g pm2'."
-              exit 1
-            fi
-
-            # Restart NGINX to apply changes
-            if sudo systemctl restart nginx; then
-              echo "NGINX restarted successfully."
-            else
-              echo "Failed to restart NGINX. Check for issues using 'sudo systemctl status nginx'."
-              exit 1
-            fi
+            echo "Restarting application using PM2..."
+            pm2 restart management-api || pm2 start npm --name "management-api" -- run start
 
             echo "Deployment completed successfully!"
