@@ -47,24 +47,4 @@ jobs:
           done
           [ "$ok" = "1" ] || exit 1
 
-          ssh $SSH_OPTS "$DEST" 'bash -s' <<'EOF'
-            set -e
-            echo "Starting deployment to VPS..."
-            cd /var/www/html/craft/school/api || exit
-
-            echo "Fetching latest code from GitHub..."
-            git fetch --all
-            git reset --hard origin/main
-
-            if [ ! -f .env ]; then
-              cp .env.example .env
-            fi
-
-            echo "Installing production dependencies..."
-            npm install --omit=dev
-
-            echo "Restarting application using PM2..."
-            pm2 restart management-api || pm2 start npm --name "management-api" -- run start
-
-            echo "Deployment completed successfully!"
-EOF
+          ssh $SSH_OPTS "$DEST" 'cd /var/www/html/craft/school/api && git fetch --all && git reset --hard origin/main && if [ ! -f .env ]; then cp .env.example .env; fi && npm install --omit=dev && (pm2 restart management-api || pm2 start npm --name "management-api" -- run start) && echo "Deployment completed successfully!"'
