@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.QaidaDailyReportRoutes = void 0;
+const express_1 = require("express");
+const controller_1 = require("./controller");
+const router = (0, express_1.Router)();
+router.post("/", controller_1.qaidaDailyReportControllers.createQaidaDailyReport);
+router.get("/", controller_1.qaidaDailyReportControllers.getAllQaidaDailyReports);
+router.get("/:id", controller_1.qaidaDailyReportControllers.getSingleQaidaDailyReport);
+router.patch("/:id", controller_1.qaidaDailyReportControllers.updateQaidaDailyReport);
+router.delete("/:id", controller_1.qaidaDailyReportControllers.deleteQaidaDailyReport);
+exports.QaidaDailyReportRoutes = router;

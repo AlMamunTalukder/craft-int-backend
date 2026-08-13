@@ -1,4 +1,4 @@
-name: Node.js Deployment with NGINX and SSL
+name: Deploy Backend
 
 on:
   push:
@@ -12,33 +12,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build backend (tsc)
-        run: npm run build
-
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Deploy to VPS (with retry)
+      - name: Pull and restart on VPS (with retry)
         run: |
           set -e
-          sudo apt-get update && sudo apt-get install -y rsync
           SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=25"
           DEST="${{ secrets.USERNAME }}@${{ secrets.HOST }}"
           ok=0
           for i in 1 2 3 4 5; do
-            if rsync -az --delete -e "ssh $SSH_OPTS" dist/ "$DEST:/var/www/html/craft/school/api/dist/"; then
+            if ssh $SSH_OPTS "$DEST" 'cd /var/www/html/craft/school/api && git fetch --all && git reset --hard origin/main && if [ ! -f .env ]; then cp .env.example .env; fi && npm install --omit=dev && (pm2 restart management-api || pm2 start npm --name "management-api" -- run start)'; then
               ok=1
               break
             fi
@@ -46,5 +33,4 @@ jobs:
             sleep 30
           done
           [ "$ok" = "1" ] || exit 1
-
-          ssh $SSH_OPTS "$DEST" 'cd /var/www/html/craft/school/api && git fetch --all && git reset --hard origin/main && if [ ! -f .env ]; then cp .env.example .env; fi && npm install --omit=dev && (pm2 restart management-api || pm2 start npm --name "management-api" -- run start) && echo "Deployment completed successfully!"'
+          echo "Deployment completed successfully!"
