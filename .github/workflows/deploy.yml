@@ -30,23 +30,26 @@ jobs:
           echo "${{ secrets.PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Sync build output to VPS
+      - name: Deploy to VPS (with retry)
         run: |
+          set -e
           sudo apt-get update && sudo apt-get install -y rsync
-          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" dist/ "${{ secrets.USERNAME }}@${{ secrets.HOST }}:/var/www/html/craft/school/api/dist/"
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=25"
+          DEST="${{ secrets.USERNAME }}@${{ secrets.HOST }}"
+          ok=0
+          for i in 1 2 3 4 5; do
+            if rsync -az --delete -e "ssh $SSH_OPTS" dist/ "$DEST:/var/www/html/craft/school/api/dist/"; then
+              ok=1
+              break
+            fi
+            echo "Connection attempt $i/5 failed, retrying in 30s..."
+            sleep 30
+          done
+          [ "$ok" = "1" ] || exit 1
 
-      - name: Restart app on VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.PRIVATE_KEY }}
-          port: ${{ secrets.PORT }}
-          command_timeout: 15m
-          script: |
+          ssh $SSH_OPTS "$DEST" 'bash -s' <<'EOF'
             set -e
             echo "Starting deployment to VPS..."
-
             cd /var/www/html/craft/school/api || exit
 
             echo "Fetching latest code from GitHub..."
@@ -64,3 +67,4 @@ jobs:
             pm2 restart management-api || pm2 start npm --name "management-api" -- run start
 
             echo "Deployment completed successfully!"
+EOF
