@@ -5,7 +5,7 @@ import { assetControllers } from "./controller";
 import { assetValidations } from "./validation";
 
 const router = express.Router();
-
+//routes
 router.get("/summary", assetControllers.getSummary);
 
 router.post(
