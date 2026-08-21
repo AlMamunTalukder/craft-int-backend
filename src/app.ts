@@ -57,6 +57,7 @@ const allowedOrigins = [
   'https://www.craftinternationalinstitute.com',
   'https://admin.craftinternationalinstitute.com',
   'https://server.craftinternationalinstitute.com',
+  'https://craft.janataautosolution.com',
   'http://localhost:3000',
   'http://localhost:3001',
 ];

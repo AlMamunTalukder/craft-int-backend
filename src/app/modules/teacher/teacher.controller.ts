@@ -69,7 +69,6 @@ const deleteTeacher = catchAsync(async (req: Request, res: Response) => {
   });
 });
 const syncTeacherUsers = catchAsync(async (req: Request, res: Response) => {
-  // ব্যাকগ্রাউন্ডে সিন্ক রান করুন
   syncTeachersWithUsers()
     .then(() => {
       console.log('Teacher sync completed');
