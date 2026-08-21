@@ -48,6 +48,13 @@ import { receiptRoutes } from '../modules/receipt/route';
 import { admissionApplicationRoutes } from '../modules/onlineAdmission/route';
 import { mealAttendanceRoutes } from '../modules/mealAttendance/route';
 import { mealFeeRoute } from '../modules/mealAttendance/mealFee.route';
+import { examRoutes } from '../modules/exam/route';
+import { routineRoutes } from '../modules/routine/route';
+import { certificateRoutes } from '../modules/certificate/route';
+import { assetRoutes } from '../modules/asset/route';
+import { leaveRoutes } from '../modules/leave/route';
+import { payslipRoutes } from '../modules/payslip/route';
+import { admissionAnalyticsRoutes } from '../modules/admissionAnalytics/route';
 const router = Router();
 
 const moduleRoutes = [
@@ -240,6 +247,34 @@ const moduleRoutes = [
     path: '/meal-fee',
     route: mealFeeRoute
 
+  },
+  {
+    path: '/exam',
+    route: examRoutes,
+  },
+  {
+    path: '/routine',
+    route: routineRoutes,
+  },
+  {
+    path: '/certificate',
+    route: certificateRoutes,
+  },
+  {
+    path: '/asset',
+    route: assetRoutes,
+  },
+  {
+    path: '/leave',
+    route: leaveRoutes,
+  },
+  {
+    path: '/payslip',
+    route: payslipRoutes,
+  },
+  {
+    path: '/admission-stats',
+    route: admissionAnalyticsRoutes,
   },
   {
     path: '/meta',

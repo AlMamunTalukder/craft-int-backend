@@ -1,0 +1,22 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.examRoutes = void 0;
+const express_1 = __importDefault(require("express"));
+const validateRequest_1 = require("../../middlewares/validateRequest");
+const auth_1 = require("../../middlewares/auth");
+const controller_1 = require("./controller");
+const validation_1 = require("./validation");
+const router = express_1.default.Router();
+router.post('/', (0, auth_1.auth)('admin', 'super_admin', 'class_teacher'), (0, validateRequest_1.validateRequest)(validation_1.examValidations.createExamValidation), controller_1.examControllers.createExam);
+router.get('/', controller_1.examControllers.getAllExams);
+router.get('/marks', controller_1.examControllers.getMarks);
+router.get('/result/:examId', controller_1.examControllers.getResults);
+router.post('/marks/bulk', (0, auth_1.auth)('admin', 'super_admin', 'class_teacher'), (0, validateRequest_1.validateRequest)(validation_1.examValidations.upsertMarksValidation), controller_1.examControllers.upsertMarks);
+router.get('/:id', controller_1.examControllers.getSingleExam);
+router.patch('/:id/publish', (0, auth_1.auth)('admin', 'super_admin'), (0, validateRequest_1.validateRequest)(validation_1.examValidations.publishExamValidation), controller_1.examControllers.publishExam);
+router.patch('/:id', (0, auth_1.auth)('admin', 'super_admin', 'class_teacher'), (0, validateRequest_1.validateRequest)(validation_1.examValidations.updateExamValidation), controller_1.examControllers.updateExam);
+router.delete('/:id', (0, auth_1.auth)('admin', 'super_admin'), controller_1.examControllers.deleteExam);
+exports.examRoutes = router;

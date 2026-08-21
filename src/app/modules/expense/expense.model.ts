@@ -25,6 +25,8 @@ const ExpenseSchema = new Schema<IExpense>(
     status: { type: String, default: 'Pending' },
     expenseItems: { type: [ExpenseItemSchema] },
     totalAmount: { type: Number },
+    buyer: { type: String },
+    payer: { type: String },
   },
   { timestamps: true }
 );

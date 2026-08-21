@@ -1,0 +1,121 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AdmissionApplication = void 0;
+const mongoose_1 = require("mongoose");
+const getCurrentAcademicYear_1 = require("../../../utils/getCurrentAcademicYear");
+const admissionSchema = new mongoose_1.Schema({
+    applicationId: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    academicYear: {
+        type: String,
+        required: true,
+        default: () => (0, getCurrentAcademicYear_1.getCurrentAcademicYear)(),
+    },
+    studentInfo: {
+        nameBangla: { type: String, required: true },
+        nameEnglish: { type: String, required: true },
+        dateOfBirth: { type: Date, required: true },
+        age: { type: Number, required: true },
+        gender: {
+            type: String,
+            enum: ['male', 'female', 'other'],
+        },
+        department: { type: String, required: true },
+        class: { type: String, required: true },
+        session: { type: String, required: true },
+        nidBirth: String,
+        bloodGroup: String,
+        nationality: String,
+        studentPhoto: String,
+    },
+    academicInfo: {
+        previousSchool: String,
+        previousClass: String,
+        gpa: String,
+    },
+    parentInfo: {
+        father: {
+            nameBangla: { type: String, required: true },
+            nameEnglish: { type: String, required: true },
+            profession: String,
+            education: String,
+            mobile: { type: String, required: true },
+            whatsapp: String,
+        },
+        mother: {
+            nameBangla: { type: String, required: true },
+            nameEnglish: { type: String, required: true },
+            profession: String,
+            education: String,
+            mobile: String,
+            whatsapp: String,
+        },
+        guardian: {
+            nameBangla: String,
+            nameEnglish: String,
+            relation: String,
+            mobile: String,
+            whatsapp: String,
+            profession: String,
+            address: String,
+        },
+    },
+    familyEnvironment: {
+        halalIncome: String,
+        parentsPrayer: String,
+        addiction: String,
+        tv: String,
+        quranRecitation: String,
+        purdah: String,
+    },
+    behaviorSkills: {
+        mobileUsage: String,
+        generalBehavior: String,
+        obedience: String,
+        elderBehavior: String,
+        youngerBehavior: String,
+        lyingStubbornness: String,
+        studyInterest: String,
+        religiousInterest: String,
+        angerControl: String,
+    },
+    address: {
+        present: {
+            village: String,
+            postOffice: String,
+            postCode: String,
+            policeStation: String,
+            district: String,
+        },
+        permanent: {
+            village: { type: String, required: true },
+            postOffice: { type: String, required: true },
+            postCode: String,
+            policeStation: { type: String, required: true },
+            district: { type: String, required: true },
+        },
+    },
+    documents: {
+        photographs: Boolean,
+        birthCertificate: Boolean,
+        markSheet: Boolean,
+        transferCertificate: Boolean,
+        characterCertificate: Boolean,
+    },
+    termsAccepted: {
+        type: Boolean,
+        required: true,
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected', 'enrolled'],
+        default: 'pending',
+    },
+}, {
+    timestamps: true,
+});
+exports.AdmissionApplication = (0, mongoose_1.model)('AdmissionApplication', admissionSchema);
+admissionSchema.index({ academicYear: 1, status: 1 });
