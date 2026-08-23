@@ -1,4 +1,6 @@
 node_modules
+dist
 !.env.example
-config.bat
 .env
+config.bat
+*.log
