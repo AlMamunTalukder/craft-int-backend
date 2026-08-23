@@ -61,10 +61,11 @@ const allowedOrigins = [
     'https://www.craftinternationalinstitute.com',
     'https://admin.craftinternationalinstitute.com',
     'https://server.craftinternationalinstitute.com',
+    'https://craft.janataautosolution.com',
     'http://localhost:3000',
     'http://localhost:3001',
 ];
-app.use((0, cors_1.default)({
+const corsOptions = {
     origin: (origin, callback) => {
         if (!origin)
             return callback(null, true);
@@ -73,14 +74,15 @@ app.use((0, cors_1.default)({
         }
         else {
             console.error('Blocked by CORS:', origin);
-            callback(null, false);
+            callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-app.options('*', (0, cors_1.default)());
+};
+app.use((0, cors_1.default)(corsOptions));
+app.options('*', (0, cors_1.default)(corsOptions));
 // Health Check
 app.get('/health', (req, res) => {
     res.json({
