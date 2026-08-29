@@ -117,6 +117,11 @@ const admissionSchema = new Schema<TAdmissionApplication>(
       required: true,
     },
 
+    category: {
+      type: String,
+      default: 'Residential',
+    },
+
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected', 'enrolled'],

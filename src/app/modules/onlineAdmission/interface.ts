@@ -101,6 +101,8 @@ export interface TAdmissionApplication {
 
   termsAccepted: boolean;
 
+  category?: string;
+
   status: TAdmissionStatus;
 
   createdAt?: Date;

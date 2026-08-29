@@ -109,6 +109,10 @@ const admissionSchema = new mongoose_1.Schema({
         type: Boolean,
         required: true,
     },
+    category: {
+        type: String,
+        default: 'Residential',
+    },
     status: {
         type: String,
         enum: ['pending', 'approved', 'rejected', 'enrolled'],
