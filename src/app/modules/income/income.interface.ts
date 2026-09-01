@@ -13,5 +13,12 @@ export interface IIncome {
   paymentMethod: string;
   status: string;
   incomeItems: IncomeItem[];
-  totalAmount:number
+  totalAmount:number;
+  student?: ObjectId;
+  studentName?: string;
+  studentId?: string;
+  studentRoll?: string;
+  accountNo?: string;
+  transactionId?: string;
+  referenceNo?: string;
 }

@@ -48,7 +48,7 @@ const getAllIncomes = async (query: Record<string, unknown>) => {
 
   const meta = await queryBuilder.countTotal();
 
-  const incomes = await queryBuilder.modelQuery.populate('category');
+  const incomes = await queryBuilder.modelQuery.populate('category').populate('student', 'name studentId className');
   try {
     await redis.setex(cacheKey, 300, JSON.stringify({ meta, incomes }));
 
@@ -73,7 +73,7 @@ const getSingleIncome = async (id: string) => {
     console.error('Redis read error:', err);
   }
 
-  const income = await Income.findById(id).populate('category');
+  const income = await Income.findById(id).populate('category').populate('student', 'name studentId className');
   await clearIncomeCache();
   if (!income) {
     throw new AppError(httpStatus.NOT_FOUND, 'Income not found');

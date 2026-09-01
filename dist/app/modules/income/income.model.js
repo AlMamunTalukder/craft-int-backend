@@ -47,5 +47,12 @@ const IncomeSchema = new mongoose_1.Schema({
     status: { type: String, default: 'Pending' },
     incomeItems: { type: [IncomeItemSchema] },
     totalAmount: { type: Number },
+    student: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Student' },
+    studentName: { type: String },
+    studentId: { type: String },
+    studentRoll: { type: String },
+    accountNo: { type: String },
+    transactionId: { type: String },
+    referenceNo: { type: String },
 }, { timestamps: true });
 exports.Income = mongoose_1.default.model("Income", IncomeSchema);

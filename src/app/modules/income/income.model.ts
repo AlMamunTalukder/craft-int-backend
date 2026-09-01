@@ -24,6 +24,13 @@ const IncomeSchema = new Schema<IIncome>(
     status: { type: String,default:'Pending'  },
     incomeItems: { type: [IncomeItemSchema]},
     totalAmount: { type: Number   },
+    student: { type: Schema.Types.ObjectId, ref: 'Student' },
+    studentName: { type: String },
+    studentId: { type: String },
+    studentRoll: { type: String },
+    accountNo: { type: String },
+    transactionId: { type: String },
+    referenceNo: { type: String },
   },
   { timestamps: true }
 );

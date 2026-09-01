@@ -50,7 +50,7 @@ const getAllIncomes = (query) => __awaiter(void 0, void 0, void 0, function* () 
         .paginate()
         .fields();
     const meta = yield queryBuilder.countTotal();
-    const incomes = yield queryBuilder.modelQuery.populate('category');
+    const incomes = yield queryBuilder.modelQuery.populate('category').populate('student', 'name studentId className');
     try {
         yield redis.setex(cacheKey, 300, JSON.stringify({ meta, incomes }));
     }
@@ -73,7 +73,7 @@ const getSingleIncome = (id) => __awaiter(void 0, void 0, void 0, function* () {
     catch (err) {
         console.error('Redis read error:', err);
     }
-    const income = yield income_model_1.Income.findById(id).populate('category');
+    const income = yield income_model_1.Income.findById(id).populate('category').populate('student', 'name studentId className');
     yield (0, income_utils_1.clearIncomeCache)();
     if (!income) {
         throw new AppError_1.AppError(http_status_1.default.NOT_FOUND, 'Income not found');
