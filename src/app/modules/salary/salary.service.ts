@@ -121,19 +121,23 @@ const updateSalary = async (id: string, payload: Partial<ISalary>) => {
     payload.providentFund !== undefined ||
     payload.otherDeductions !== undefined
   ) {
+    // merge with stored values — partial updates must NOT zero out missing fields
+    const existing = await Salary.findById(id).lean();
+    const pick = (key: keyof ISalary) =>
+      payload[key] !== undefined ? Number(payload[key]) : Number((existing as any)?.[key]) || 0;
     const allowances =
-      (payload.houseRent || 0) +
-      (payload.medicalAllowance || 0) +
-      (payload.transportAllowance || 0) +
-      (payload.foodAllowance || 0) +
-      (payload.otherAllowances || 0);
+      pick("houseRent") +
+      pick("medicalAllowance") +
+      pick("transportAllowance") +
+      pick("foodAllowance") +
+      pick("otherAllowances");
 
     const deductions =
-      (payload.incomeTax || 0) +
-      (payload.providentFund || 0) +
-      (payload.otherDeductions || 0);
+      pick("incomeTax") +
+      pick("providentFund") +
+      pick("otherDeductions");
 
-    payload.grossSalary = (payload.basicSalary || 0) + allowances;
+    payload.grossSalary = pick("basicSalary") + allowances;
     payload.netSalary = payload.grossSalary - deductions;
   }
 

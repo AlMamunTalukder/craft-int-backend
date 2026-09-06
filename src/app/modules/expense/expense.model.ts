@@ -19,6 +19,7 @@ const ExpenseItemSchema = new Schema<IExpenseItem>(
 const ExpenseSchema = new Schema<IExpense>(
   {
     category: { type: Schema.Types.ObjectId, ref: 'ExpenseCategory' },
+    expenseType: { type: String, trim: true, default: 'office' },
     note: { type: String },
     expenseDate: { type: Date },
     paymentMethod: { type: String },

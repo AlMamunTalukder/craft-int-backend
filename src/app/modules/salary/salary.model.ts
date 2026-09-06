@@ -10,6 +10,11 @@ const SalarySchema = new Schema<ISalary>(
       trim: true,
       // ref: "Employee",
     },
+    employeeType: {
+      type: String,
+      trim: true,
+      default: "teacher",
+    },
     effectiveDate: {
       type: String,
       required: [true, "Effective date is required"],
@@ -78,6 +83,41 @@ const SalarySchema = new Schema<ISalary>(
     },
     netSalary: { 
       type: Number
+    },
+    advanceGiven: {
+      type: Number,
+      default: 0,
+      min: [0, "Advance cannot be negative"],
+    },
+    advanceDate: {
+      type: String,
+      trim: true,
+    },
+    paidAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Paid amount cannot be negative"],
+    },
+    paidDate: {
+      type: String,
+      trim: true,
+    },
+    // Per-entry ledger: bonus / advance / deducted / paid can each happen
+    // many times in one month — every dialog appends one entry here
+    transactions: {
+      type: [
+        {
+          kind: {
+            type: String,
+            required: true,
+            enum: ["bonus", "advance", "deducted", "paid"],
+          },
+          amount: { type: Number, required: true, min: 0 },
+          date: { type: String },
+          reason: { type: String, trim: true },
+        },
+      ],
+      default: [],
     },
   },
   {

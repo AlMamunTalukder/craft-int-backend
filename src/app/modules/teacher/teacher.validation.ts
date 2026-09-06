@@ -85,9 +85,7 @@ const createTeacherValidation = z.object({
     joiningDate: z.coerce.date({
       required_error: 'Joining date is required',
     }),
-    monthlySalary: z.number({
-      required_error: 'Monthly salary is required',
-    }),
+    monthlySalary: z.number().optional(),
     staffType: z.enum(['Teacher', 'Staff', 'Other'], {
       required_error: 'Staff type is required',
     }),

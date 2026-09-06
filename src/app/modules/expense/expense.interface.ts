@@ -8,6 +8,7 @@ export interface ExpenseItem {
 
 export interface IExpense {
   category: ObjectId;
+  expenseType?: string;
   note: string;
   expenseDate: Date;
   paymentMethod: string;

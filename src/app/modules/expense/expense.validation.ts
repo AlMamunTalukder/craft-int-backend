@@ -9,6 +9,7 @@ export const expenseItemSchema = z.object({
 export const expenseSchema = z.object({
   body: z.object({
     category: z.string().optional(),
+    expenseType: z.string().optional().default('office'),
     note: z.string().optional(),
     expenseDate: z.string().min(1, 'Date is required'),
     paymentMethod: z.string().min(1, 'Payment method is required'),

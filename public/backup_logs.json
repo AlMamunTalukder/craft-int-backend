@@ -1,11 +1,11 @@
 [
   {
     "status": "failed",
-    "error": "Command failed: mongodump --db=craft-international --archive=/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip --gzip\n/bin/sh: 1: mongodump: not found\n",
+    "error": "Command failed: mongodump --db=craft-international --archive=C:\\projects\\schoolLTS\\craft-int-backend\\public\\sarabelanews.gzip --gzip\n'mongodump' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n",
     "code": null,
     "signal": null,
-    "backupStartTime": "2026-06-30T18:00:00.800Z",
-    "backupEndTime": "2026-06-30T18:00:00.834Z",
-    "archivePath": "/home/ibrahim-sikder/project/personal/craft/backend/public/sarabelanews.gzip"
+    "backupStartTime": "2026-09-06T18:00:00.460Z",
+    "backupEndTime": "2026-09-06T18:00:00.526Z",
+    "archivePath": "C:\\projects\\schoolLTS\\craft-int-backend\\public\\sarabelanews.gzip"
   }
 ]
