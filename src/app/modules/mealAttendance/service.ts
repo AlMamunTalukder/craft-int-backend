@@ -128,7 +128,15 @@ const getClassIdsByClassName = async (className: string): Promise<Types.ObjectId
 };
 
 const getStudentsByClassName = async (className?: string): Promise<any[]> => {
-  const query: any = { admissionStatus: 'enrolled', status: 'active' };
+  // Only residential students pay for meals — match frontend allStudents filter
+  const query: any = {
+    admissionStatus: 'enrolled',
+    status: 'active',
+    $or: [
+      { category: { $in: ['Residential', 'Non-Residential One Meal'] } },
+      { studentType: 'Residential' },
+    ],
+  };
   if (className) {
     const classIds = await getClassIdsByClassName(className);
     if (classIds.length > 0) query.className = { $in: classIds };
@@ -260,7 +268,8 @@ const bulkCreateAttendance = async (payload: IBulkAttendancePayload) => {
     const breakfast = att.breakfast || false;
     const lunch = att.lunch || false;
     const dinner = att.dinner || false;
-    const isFreeMeal = att.isFreeMeal || false;
+    // Teacher/staff meals are always free — cost 0 but meals still count
+    const isFreeMeal = att.isFreeMeal || personType === 'teacher' || personType === 'staff';
 
     // ── KEY FIX: always use the rates sent from the frontend.
     // The frontend now always sends breakfastRate/lunchRate/dinnerRate
