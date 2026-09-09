@@ -702,6 +702,7 @@ const getCombinedMonthlySheet = async (
 
     return {
       date,
+      totalPersons: pick(sFind, 'totalPersons') + pick(tFind, 'totalPersons') + pick(fFind, 'totalPersons'),
       totalMeals: pick(sFind, 'totalMeals') + pick(tFind, 'totalMeals') + pick(fFind, 'totalMeals'),
       grossCost: pick(sFind, 'grossCost') + pick(tFind, 'grossCost') + pick(fFind, 'grossCost'),
       totalCost: pick(sFind, 'totalCost') + pick(tFind, 'totalCost') + pick(fFind, 'totalCost'),
@@ -1008,7 +1009,11 @@ const deleteMonthlyAttendance = async (
   const personField = personType === 'teacher' ? 'teacher' : personType === 'staff' ? 'staff' : 'student';
 
   if (personType === 'student') {
-    const query: any = { admissionStatus: 'enrolled', status: 'active' };
+    const query: any = {
+    admissionStatus: 'enrolled',
+    status: 'active',
+    $or: [{ category: { $in: ['Residential', 'Non-Residential One Meal'] } }, { studentType: 'Residential' }],
+  };
     if (className && className !== 'ALL') {
       const classIds = await getClassIdsByClassName(className);
       if (!classIds.length) throw new AppError(httpStatus.NOT_FOUND, 'Class not found');
