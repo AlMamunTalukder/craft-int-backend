@@ -25,5 +25,14 @@
     "backupStartTime": "2026-09-08T18:00:00.997Z",
     "backupEndTime": "2026-09-08T18:00:01.022Z",
     "archivePath": "C:\\projects\\schoolLTS\\craft-int-backend\\public\\sarabelanews.gzip"
+  },
+  {
+    "status": "failed",
+    "error": "Command failed: mongodump --db=craft-international --archive=E:\\schoolLTS\\craft-int-backend\\public\\sarabelanews.gzip --gzip\n'mongodump' is not recognized as an internal or external command,\r\noperable program or batch file.\r\n",
+    "code": null,
+    "signal": null,
+    "backupStartTime": "2026-09-11T18:00:00.857Z",
+    "backupEndTime": "2026-09-11T18:00:00.890Z",
+    "archivePath": "E:\\schoolLTS\\craft-int-backend\\public\\sarabelanews.gzip"
   }
 ]
